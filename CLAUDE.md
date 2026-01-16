@@ -46,11 +46,11 @@ Criar um banco de dados estruturado de **leilões públicos municipais** do Bras
 ### Fase 3 - Persistência (EM ANDAMENTO)
 - [x] Supabase configurado
 - [x] Freios de segurança ativos
-- [ ] Migração dos 198 editais
-- [ ] Miner V10 logando no Supabase
+- [x] Miner V10 com integração Supabase (16/01/2026)
+- [ ] Migração dos 198 editais existentes
 
 ### Fase 4 - Automação (PENDENTE)
-- [ ] Cron job para execução diária
+- [ ] Cron job / Task Scheduler para Miner V10
 - [ ] Alertas de novos editais
 - [ ] Monitoramento de erros
 
@@ -63,26 +63,37 @@ Criar um banco de dados estruturado de **leilões públicos municipais** do Bras
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Miner V9   │────▶│   Database  │────▶│ Auditor V13 │
+│ Miner V10   │────▶│   Database  │────▶│ Auditor V13 │
 │  (coleta)   │     │  (PDFs)     │     │  (parsing)  │
-└─────────────┘     └─────────────┘     └──────┬──────┘
-                                               │
-                                               ▼
-                                        ┌─────────────┐
-                                        │  Supabase   │
-                                        │ PostgreSQL  │
-                                        └─────────────┘
+└──────┬──────┘     └─────────────┘     └──────┬──────┘
+       │                                       │
+       │         ┌─────────────────────────────┘
+       │         │
+       ▼         ▼
+  ┌─────────────────┐
+  │    Supabase     │
+  │   PostgreSQL    │
+  │  - editais      │
+  │  - execucoes    │
+  └─────────────────┘
 ```
+
+**Fluxo do Miner V10:**
+1. Coleta editais da API PNCP
+2. Salva localmente (backup)
+3. Insere no Supabase (editais_leilao)
+4. Registra execução (execucoes_miner)
 
 ## Arquivos Principais
 
 ### Scripts de Produção
 | Arquivo | Função |
 |---------|--------|
+| `ache_sucatas_miner_v10.py` | **Miner V10** - coleta + Supabase integrado |
 | `local_auditor_v13.py` | Auditor principal - extrai dados dos PDFs |
-| `ache_sucatas_miner_v9_cron.py` | Miner - coleta editais da API PNCP |
 | `supabase_repository.py` | Repositório Supabase com freios de segurança |
 | `migrar_v13_robusto.py` | Script de migração em lote |
+| `ache_sucatas_miner_v9_cron.py` | Miner V9 (legado, sem Supabase) |
 
 ### Scripts de Segurança
 | Arquivo | Função |
@@ -127,12 +138,17 @@ PNCP_API_URL=https://pncp.gov.br/api/consulta/v1
 
 ## Comandos Úteis
 
+### Executar Miner V10 (com Supabase)
+```bash
+python ache_sucatas_miner_v10.py
+```
+
 ### Executar Auditor V13
 ```bash
 python local_auditor_v13.py
 ```
 
-### Migrar editais para Supabase
+### Migrar editais existentes para Supabase
 ```bash
 python migrar_v13_robusto.py
 ```
@@ -172,6 +188,7 @@ python desligar_supabase.py
 | Supabase | Schema criado, RLS ativo |
 | Segurança | Freios $50 USD configurados |
 | GitHub | Repo privado sincronizado |
+| **Miner V10** | Integração Supabase completa (16/01/2026) |
 
 ### Em Andamento
 | Item | Progresso | Bloqueio |
@@ -182,16 +199,18 @@ python desligar_supabase.py
 | Item | Prioridade | Dependência |
 |------|------------|-------------|
 | Completar migração | Alta | Nenhuma |
-| Miner V10 + Supabase | Média | Migração |
-| Cron/Agendamento | Média | Miner V10 |
+| Cron/Task Scheduler | Alta | Nenhuma |
 | Dashboard | Baixa | Dados no Supabase |
 
 ## Próximos Passos
 
-1. **Imediato:** Executar `python migrar_v13_robusto.py` para migrar 198 editais
-2. **Depois:** Integrar Miner V10 com Supabase (tabela execucoes_miner)
-3. **Depois:** Configurar agendamento automático (cron ou Task Scheduler)
-4. **Futuro:** Considerar dashboard de visualização
+1. **Imediato:** Executar `python migrar_v13_robusto.py` para migrar 193 editais restantes
+2. **Depois:** Configurar agendamento automático do Miner V10 (cron ou Task Scheduler)
+3. **Futuro:** Considerar dashboard de visualização
+
+### Agendamento Recomendado (Miner V10)
+- **Windows:** Task Scheduler - 3x/dia (00:00, 08:00, 16:00)
+- **Linux:** Crontab: `0 0,8,16 * * * cd /path && python ache_sucatas_miner_v10.py`
 
 ## Convenções de Código
 
@@ -276,8 +295,8 @@ Esta pasta contém 198 subpastas com PDFs dos editais. **NÃO está no Git** (mu
 
 **Como obter os PDFs:**
 ```bash
-# Opção 1: Executar o Miner para coletar novamente
-python ache_sucatas_miner_v9_cron.py
+# Opção 1: Executar o Miner V10 para coletar novamente
+python ache_sucatas_miner_v10.py
 
 # Opção 2: Solicitar backup ao proprietário do projeto
 # Os PDFs podem estar em backup externo (perguntar ao usuário)
@@ -322,7 +341,7 @@ cp .env.example .env
 # Editar .env com credenciais Supabase reais
 
 # 4. Obter PDFs dos editais (escolha uma opção):
-#    a) Executar Miner: python ache_sucatas_miner_v9_cron.py
+#    a) Executar Miner V10: python ache_sucatas_miner_v10.py
 #    b) Restaurar de backup externo (se disponível)
 
 # 5. Verificar conexão Supabase
@@ -375,6 +394,41 @@ Solução:
   3. Ou deletar editais antigos/duplicados
 ```
 
+## Miner V10 - Detalhes Técnicos
+
+### Funcionalidades
+- Coleta editais da API PNCP (igual V9)
+- **Insere editais automaticamente no Supabase**
+- **Registra execuções na tabela execucoes_miner**
+- Mantém salvamento local como backup
+- Feature flag `ENABLE_SUPABASE` para desativar
+
+### Métodos Adicionados ao supabase_repository.py
+```python
+iniciar_execucao_miner(versao, janela, termos, paginas) -> int
+    # Registra início da execução (status=RUNNING)
+
+finalizar_execucao_miner(exec_id, metricas, status, erro) -> bool
+    # Atualiza execução com métricas finais (SUCCESS/FAILED)
+
+inserir_edital_miner(edital_model_data) -> bool
+    # Insere edital vindo do Miner (mapeia EditalModel -> V13)
+
+_mapear_edital_model_para_v13(edital) -> dict
+    # Converte campos do Miner para schema Supabase
+```
+
+### Verificar Execuções no Supabase
+```bash
+python -c "
+from supabase_repository import SupabaseRepository
+r = SupabaseRepository()
+resp = r.client.table('execucoes_miner').select('*').order('execution_start', desc=True).limit(5).execute()
+for e in resp.data:
+    print(f\"[{e['status']}] {e['versao_miner']} - {e['editais_novos']} novos\")
+"
+```
+
 ## Decisões de Arquitetura
 
 | Decisão | Motivo |
@@ -386,6 +440,7 @@ Solução:
 | Dual storage (Supabase + CSV) | Backup local caso Supabase falhe |
 | Script robusto com try/except | Continua migração mesmo com PDFs problemáticos |
 | V13 (não V12) | V13 adiciona integração Supabase ao V12 |
+| Miner V10 fail-safe | Supabase offline não bloqueia coleta local |
 
 ## Estado Atual do Banco (verificar sempre)
 

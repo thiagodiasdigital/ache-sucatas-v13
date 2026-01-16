@@ -339,6 +339,258 @@ class SupabaseRepository:
             logger.error("Erro ao listar editais: %s", e)
             return []
 
+    # =========================================================================
+    # MÉTODOS PARA MINER V10 - Execuções e Editais direto do Miner
+    # =========================================================================
+
+    def iniciar_execucao_miner(
+        self,
+        versao_miner: str,
+        janela_temporal: int,
+        termos: int,
+        paginas: int,
+    ) -> Optional[int]:
+        """
+        Registra início de execução do Miner no Supabase.
+
+        Args:
+            versao_miner: Versão do miner (ex: "V10_CRON")
+            janela_temporal: Janela temporal em horas (ex: 24)
+            termos: Número de termos de busca
+            paginas: Páginas por termo
+
+        Returns:
+            ID da execução (BIGSERIAL) ou None se erro
+        """
+        if not self.enable_supabase:
+            logger.debug("Supabase desabilitado - skip iniciar_execucao")
+            return None
+
+        try:
+            data = {
+                "execution_start": datetime.now().isoformat(),
+                "status": "RUNNING",
+                "versao_miner": versao_miner,
+                "janela_temporal_horas": janela_temporal,
+                "termos_buscados": termos,
+                "paginas_por_termo": paginas,
+                "editais_analisados": 0,
+                "editais_novos": 0,
+                "editais_duplicados": 0,
+                "downloads": 0,
+                "downloads_sucesso": 0,
+                "downloads_falha": 0,
+            }
+
+            response = self.client.table("execucoes_miner").insert(data).execute()
+
+            if response.data:
+                exec_id = response.data[0]["id"]
+                logger.info("Execução Miner iniciada: ID=%d", exec_id)
+                return exec_id
+
+            return None
+
+        except Exception as e:
+            logger.error("Erro ao iniciar execução miner: %s", e)
+            return None
+
+    def finalizar_execucao_miner(
+        self,
+        execucao_id: int,
+        metricas: dict,
+        status: str = "SUCCESS",
+        erro: str = None,
+    ) -> bool:
+        """
+        Finaliza execução do Miner com métricas.
+
+        Args:
+            execucao_id: ID retornado por iniciar_execucao_miner
+            metricas: Dict com métricas do MetricsTracker
+            status: "SUCCESS" ou "FAILED"
+            erro: Mensagem de erro (se status=FAILED)
+
+        Returns:
+            True se sucesso
+        """
+        if not self.enable_supabase or not execucao_id:
+            return False
+
+        try:
+            # Preparar snapshot do checkpoint (últimos 100 IDs)
+            pncp_ids = metricas.get("pncp_ids_processados", [])
+            checkpoint_snapshot = {
+                "pncp_ids_count": len(pncp_ids),
+                "last_ids": pncp_ids[-100:] if pncp_ids else [],
+            }
+
+            data = {
+                "execution_end": datetime.now().isoformat(),
+                "duration_seconds": metricas.get("duration_seconds", 0),
+                "editais_analisados": metricas.get("editais_analisados", 0),
+                "editais_novos": metricas.get("editais_novos", 0),
+                "editais_duplicados": metricas.get("editais_duplicados", 0),
+                "taxa_deduplicacao": metricas.get("taxa_deduplicacao", 0.0),
+                "downloads": metricas.get("downloads", 0),
+                "downloads_sucesso": metricas.get("downloads_sucesso", 0),
+                "downloads_falha": metricas.get("downloads_falha", 0),
+                "status": status,
+                "erro": erro[:500] if erro else None,
+                "checkpoint_snapshot": checkpoint_snapshot,
+            }
+
+            response = (
+                self.client.table("execucoes_miner")
+                .update(data)
+                .eq("id", execucao_id)
+                .execute()
+            )
+
+            logger.info(
+                "Execução #%d finalizada: %s (%d novos editais)",
+                execucao_id,
+                status,
+                metricas.get("editais_novos", 0),
+            )
+            return True
+
+        except Exception as e:
+            logger.error("Erro ao finalizar execução %d: %s", execucao_id, e)
+            return False
+
+    def inserir_edital_miner(self, edital_model_data: dict) -> bool:
+        """
+        Insere edital vindo diretamente do Miner (EditalModel).
+
+        Faz mapeamento EditalModel -> editais_leilao schema V13.
+        Campos não disponíveis no Miner serão preenchidos pelo Auditor.
+
+        Args:
+            edital_model_data: Dict com dados do EditalModel do Miner
+
+        Returns:
+            True se inserido/atualizado com sucesso
+        """
+        if not self.enable_supabase:
+            return False
+
+        try:
+            # Mapear EditalModel para schema V13
+            dados_v13 = self._mapear_edital_model_para_v13(edital_model_data)
+
+            # Usar método inserir_edital existente (tem upsert e freio)
+            return self.inserir_edital(dados_v13)
+
+        except Exception as e:
+            logger.error(
+                "Erro ao inserir edital miner %s: %s",
+                edital_model_data.get("pncp_id"),
+                e,
+            )
+            return False
+
+    def _mapear_edital_model_para_v13(self, edital: dict) -> dict:
+        """
+        Mapeia EditalModel do Miner V10 para schema editais_leilao.
+
+        Campos do Miner (EditalModel):
+        - pncp_id, orgao_nome, orgao_cnpj, uf, municipio
+        - titulo, descricao, objeto
+        - data_publicacao, data_atualizacao, data_inicio_propostas
+        - score, link_pncp, files_url
+        - ano_compra, numero_sequencial, modalidade
+
+        Campos V13 que o Auditor preenche depois:
+        - link_leiloeiro, valor_estimado, quantidade_itens, nome_leiloeiro
+        """
+        # Extrair dados básicos
+        uf = str(edital.get("uf", "XX")).upper()[:2]
+        cidade = str(edital.get("municipio", "DESCONHECIDA")).upper().replace(" ", "_")
+        cidade = cidade[:30]  # Limitar tamanho
+        pncp_id = edital.get("pncp_id", "")
+
+        # Gerar id_interno: UF_CIDADE_PNCP_ID
+        id_interno = f"{uf}_{cidade}_{pncp_id}"
+
+        # Formatar data_publicacao
+        data_pub = edital.get("data_publicacao")
+        if data_pub:
+            if hasattr(data_pub, "strftime"):
+                data_pub_str = data_pub.strftime("%Y-%m-%d")
+            elif hasattr(data_pub, "isoformat"):
+                data_pub_str = str(data_pub).split("T")[0]
+            else:
+                data_pub_str = str(data_pub).split("T")[0]
+        else:
+            data_pub_str = datetime.now().strftime("%Y-%m-%d")
+
+        # Formatar data_atualizacao
+        data_atual = edital.get("data_atualizacao")
+        if data_atual:
+            if hasattr(data_atual, "isoformat"):
+                data_atual_str = str(data_atual).split("T")[0]
+            else:
+                data_atual_str = str(data_atual).split("T")[0] if data_atual else None
+        else:
+            data_atual_str = None
+
+        # Formatar data_leilao (data_inicio_propostas)
+        data_leilao = edital.get("data_inicio_propostas")
+        if data_leilao:
+            if hasattr(data_leilao, "isoformat"):
+                data_leilao_str = data_leilao.isoformat()
+            else:
+                data_leilao_str = str(data_leilao)
+        else:
+            data_leilao_str = None
+
+        # Gerar n_edital e n_pncp
+        seq = edital.get("numero_sequencial", "")
+        ano = edital.get("ano_compra", "")
+        cnpj = edital.get("orgao_cnpj", "")
+
+        n_edital = f"{seq}/{ano}" if seq and ano else pncp_id
+        n_pncp = f"{cnpj}/{ano}/{seq}" if cnpj and ano and seq else pncp_id
+
+        # Score para arquivo_origem
+        score = edital.get("score", 0)
+
+        return {
+            # Identificadores
+            "id_interno": id_interno,
+            "pncp_id": pncp_id,
+            # Localização
+            "orgao": edital.get("orgao_nome", "")[:200],
+            "uf": uf,
+            "cidade": edital.get("municipio", "")[:100],
+            # Edital
+            "n_edital": n_edital[:50],
+            "n_pncp": n_pncp[:100],
+            # Datas
+            "data_publicacao": data_pub_str,
+            "data_atualizacao": data_atual_str,
+            "data_leilao": data_leilao_str,
+            # Conteúdo
+            "titulo": str(edital.get("titulo", ""))[:500],
+            "descricao": str(edital.get("descricao", ""))[:2000],
+            "objeto_resumido": str(edital.get("objeto", ""))[:500] if edital.get("objeto") else None,
+            # Tags - Miner adiciona tag inicial, Auditor enriquece
+            "tags": ["miner_v10"],
+            # Links
+            "link_pncp": edital.get("link_pncp", ""),
+            "link_leiloeiro": None,  # Auditor extrai do PDF
+            # Comercial - Auditor extrai esses campos
+            "modalidade_leilao": edital.get("modalidade", "N/D"),
+            "valor_estimado": None,  # Auditor extrai
+            "quantidade_itens": None,  # Auditor extrai
+            "nome_leiloeiro": None,  # Auditor extrai
+            # Metadata
+            "arquivo_origem": f"{uf}_{cidade}/{data_pub_str}_S{score}_{pncp_id}",
+            "pdf_hash": None,
+            "versao_auditor": "MINER_V10",  # Será sobrescrito pelo Auditor
+        }
+
 
 # Teste básico
 if __name__ == "__main__":
