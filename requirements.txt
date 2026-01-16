@@ -1,0 +1,22 @@
+# ACHE SUCATAS V13 - Dependências Python
+# Instalar: pip install -r requirements.txt
+
+# PDF Parsing
+pdfplumber>=0.10.0
+
+# Data manipulation
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# Supabase
+supabase>=2.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Async (Miner)
+aiohttp>=3.9.0
+aiofiles>=23.0.0

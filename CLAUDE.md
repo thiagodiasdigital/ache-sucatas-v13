@@ -133,9 +133,73 @@ python desligar_supabase.py
 - **Visibilidade:** Privado
 - **Branch principal:** master
 
+## Dependências Python
+
+Instalar com: `pip install -r requirements.txt`
+
+| Pacote | Uso |
+|--------|-----|
+| pdfplumber | Parsing de PDFs |
+| pandas | Manipulação de dados |
+| openpyxl | Exportação Excel |
+| supabase | Cliente Supabase |
+| python-dotenv | Variáveis de ambiente |
+| requests | HTTP requests |
+| aiohttp | HTTP async (Miner) |
+| aiofiles | I/O async (Miner) |
+
+## API PNCP
+
+- **Base URL:** `https://pncp.gov.br/api/consulta/v1`
+- **Endpoint principal:** `/contratacoes/publicacao`
+- **Filtros usados:** `modalidadeId=8` (Leilão), `dataPublicacaoFim/Inicio`
+- **Rate limit:** Sem limite documentado, mas usar com moderação
+- **Docs:** https://pncp.gov.br/api/consulta/swagger-ui/index.html
+
+## Campos Extraídos dos Editais
+
+| Campo | Fonte | Descrição |
+|-------|-------|-----------|
+| titulo | PDF/JSON | Título do edital |
+| n_edital | PDF/JSON | Número do edital |
+| orgao | JSON | Órgão responsável |
+| municipio | Pasta | Cidade do leilão |
+| uf | Pasta | Estado |
+| data_publicacao | JSON | Data de publicação |
+| data_leilao | PDF | Data do leilão |
+| valor_estimado | PDF/API | Valor estimado total |
+| link_pncp | JSON | Link no PNCP |
+| link_leiloeiro | PDF | Link do leiloeiro |
+| nome_leiloeiro | PDF | Nome do leiloeiro |
+| quantidade_itens | PDF | Qtd de itens/lotes |
+| descricao | PDF | Descrição extraída |
+| score | Calculado | Score de qualidade (0-100) |
+
+## Problemas Conhecidos
+
+### Warning de PDF (não crítico)
+```
+Cannot set gray non-stroke color because /'Pattern1' is an invalid float value
+```
+- **Causa:** PDFs com padrões de cor inválidos
+- **Impacto:** Nenhum - dados são extraídos normalmente
+- **Ação:** Ignorar, é warning do pdfplumber
+
+### PDFs problemáticos
+- Alguns PDFs demoram mais para processar
+- Script `migrar_v13_robusto.py` tem try/except para continuar mesmo com erros
+
+## Backup Local
+
+Além do Supabase, o sistema gera backups locais:
+- `analise_editais_v13.csv` - Dados em CSV
+- `RESULTADO_FINAL.xlsx` - Dados em Excel
+- `ACHE_SUCATAS_DB/` - PDFs originais
+
 ## Notas Importantes
 
 1. **NUNCA commitar `.env`** - contém credenciais Supabase
 2. **ACHE_SUCATAS_DB/** está no .gitignore (PDFs muito grandes)
 3. Limite de $50 USD aprovado para Supabase
 4. Sempre testar com poucos editais antes de migração em lote
+5. Rodar `pip install -r requirements.txt` em novo ambiente
