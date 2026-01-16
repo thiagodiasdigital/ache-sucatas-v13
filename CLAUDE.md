@@ -8,6 +8,57 @@
 - Extrai informações estruturadas (título, data, valores, itens, etc.)
 - Persiste no Supabase PostgreSQL
 
+## Escopo do Projeto
+
+### Objetivo de Negócio
+Criar um banco de dados estruturado de **leilões públicos municipais** do Brasil, focando em:
+- Veículos e máquinas inservíveis
+- Sucatas e materiais recicláveis
+- Bens móveis de prefeituras
+
+### Público-Alvo
+- Empresas de reciclagem e sucata
+- Compradores de leilões públicos
+- Analistas de mercado de leilões
+
+### Fontes de Dados
+1. **API PNCP** - Metadados dos editais (título, órgão, datas, links)
+2. **PDFs dos Editais** - Detalhes extraídos (itens, valores, leiloeiro)
+
+### Fora do Escopo (por enquanto)
+- Leilões federais e estaduais
+- Leilões de imóveis
+- Integração com sistemas de leiloeiros
+- Interface web/dashboard
+
+## Roadmap
+
+### Fase 1 - Coleta (CONCLUÍDA)
+- [x] Miner V9 coletando da API PNCP
+- [x] Download automático de PDFs
+- [x] 198 editais coletados
+
+### Fase 2 - Extração (CONCLUÍDA)
+- [x] Auditor V13 extraindo dados dos PDFs
+- [x] 14 campos estruturados
+- [x] Score de qualidade calculado
+
+### Fase 3 - Persistência (EM ANDAMENTO)
+- [x] Supabase configurado
+- [x] Freios de segurança ativos
+- [ ] Migração dos 198 editais
+- [ ] Miner V10 logando no Supabase
+
+### Fase 4 - Automação (PENDENTE)
+- [ ] Cron job para execução diária
+- [ ] Alertas de novos editais
+- [ ] Monitoramento de erros
+
+### Fase 5 - Expansão (FUTURO)
+- [ ] Dashboard de visualização
+- [ ] API REST para consultas
+- [ ] Mais filtros e análises
+
 ## Arquitetura
 
 ```
@@ -111,14 +162,36 @@ python desligar_supabase.py
 | Feature flag | ENABLE_SUPABASE=true/false |
 | Kill switch | `desligar_supabase.py` |
 
-## Status Atual
+## Status Atual (Janeiro 2026)
 
-- [x] Auditor V13 funcionando
-- [x] Supabase integrado
-- [x] Freios de segurança ativos
-- [x] GitHub configurado (privado)
-- [ ] Migração 198 editais (pendente)
-- [ ] Miner V10 + Supabase (pendente)
+### Completo
+| Item | Detalhes |
+|------|----------|
+| Coleta PNCP | 198 editais baixados |
+| Auditor V13 | Extração de 14 campos |
+| Supabase | Schema criado, RLS ativo |
+| Segurança | Freios $50 USD configurados |
+| GitHub | Repo privado sincronizado |
+
+### Em Andamento
+| Item | Progresso | Bloqueio |
+|------|-----------|----------|
+| Migração 198 editais | 5/198 (2.5%) | Pausado pelo usuário |
+
+### Pendente
+| Item | Prioridade | Dependência |
+|------|------------|-------------|
+| Completar migração | Alta | Nenhuma |
+| Miner V10 + Supabase | Média | Migração |
+| Cron/Agendamento | Média | Miner V10 |
+| Dashboard | Baixa | Dados no Supabase |
+
+## Próximos Passos
+
+1. **Imediato:** Executar `python migrar_v13_robusto.py` para migrar 198 editais
+2. **Depois:** Integrar Miner V10 com Supabase (tabela execucoes_miner)
+3. **Depois:** Configurar agendamento automático (cron ou Task Scheduler)
+4. **Futuro:** Considerar dashboard de visualização
 
 ## Convenções de Código
 
