@@ -43,55 +43,93 @@ Criar um banco de dados estruturado de **leilões públicos municipais** do Bras
 - [x] 14 campos estruturados
 - [x] Score de qualidade calculado
 
-### Fase 3 - Persistência (EM ANDAMENTO)
+### Fase 3 - Persistência (CONCLUÍDA)
 - [x] Supabase configurado
 - [x] Freios de segurança ativos
 - [x] Miner V10 com integração Supabase (16/01/2026)
-- [ ] Migração dos 198 editais existentes
+- [x] Migração dos 198 editais existentes
 
-### Fase 4 - Automação (PENDENTE)
-- [ ] Cron job / Task Scheduler para Miner V10
-- [ ] Alertas de novos editais
-- [ ] Monitoramento de erros
+### Fase 4 - Cloud Native (CONCLUÍDA - 16/01/2026)
+- [x] **Miner V11** - Upload de PDFs para Supabase Storage
+- [x] **Auditor V14** - Lê PDFs do Storage (não mais local)
+- [x] **GitHub Actions** - Automação 3x/dia (cron)
+- [x] Supabase Storage configurado (bucket: editais-pdfs)
 
 ### Fase 5 - Expansão (FUTURO)
 - [ ] Dashboard de visualização
 - [ ] API REST para consultas
-- [ ] Mais filtros e análises
+- [ ] Alertas de novos editais
 
 ## Arquitetura
 
+### Arquitetura V11 - 100% Cloud
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   GITHUB ACTIONS                        │
+│              (Cron: 08:00, 16:00, 00:00 UTC)           │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   ┌─────────────┐         ┌─────────────┐              │
+│   │  Miner V11  │────────▶│ Auditor V14 │              │
+│   │  (coleta)   │         │  (extração) │              │
+│   └──────┬──────┘         └──────┬──────┘              │
+│          │                       │                      │
+└──────────┼───────────────────────┼──────────────────────┘
+           │                       │
+           ▼                       ▼
+    ┌─────────────────────────────────────┐
+    │           SUPABASE                   │
+    │  ┌─────────────┐  ┌──────────────┐  │
+    │  │   Storage   │  │  PostgreSQL  │  │
+    │  │   (PDFs)    │  │  (metadados) │  │
+    │  └─────────────┘  └──────────────┘  │
+    └─────────────────────────────────────┘
+```
+
+**Fluxo do Miner V11 (Cloud):**
+1. Coleta editais da API PNCP
+2. Download do PDF em memória (bytes)
+3. Upload PDF para Supabase Storage
+4. Insere metadados no PostgreSQL
+5. Registra execução em execucoes_miner
+
+**Fluxo do Auditor V14 (Cloud):**
+1. Query editais pendentes no PostgreSQL
+2. Download PDF do Storage → BytesIO
+3. pdfplumber.open(BytesIO) → extrai texto
+4. Update no PostgreSQL com dados extraídos
+
+### Arquitetura Legada (V10 - Local)
+
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│ Miner V10   │────▶│   Database  │────▶│ Auditor V13 │
+│ Miner V10   │────▶│   Local     │────▶│ Auditor V13 │
 │  (coleta)   │     │  (PDFs)     │     │  (parsing)  │
 └──────┬──────┘     └─────────────┘     └──────┬──────┘
        │                                       │
-       │         ┌─────────────────────────────┘
-       │         │
-       ▼         ▼
-  ┌─────────────────┐
-  │    Supabase     │
-  │   PostgreSQL    │
-  │  - editais      │
-  │  - execucoes    │
-  └─────────────────┘
+       ▼                                       ▼
+  ┌─────────────────────────────────────────────┐
+  │              Supabase PostgreSQL             │
+  └─────────────────────────────────────────────┘
 ```
-
-**Fluxo do Miner V10:**
-1. Coleta editais da API PNCP
-2. Salva localmente (backup)
-3. Insere no Supabase (editais_leilao)
-4. Registra execução (execucoes_miner)
 
 ## Arquivos Principais
 
-### Scripts de Produção
+### Scripts de Produção (V11 - Cloud)
 | Arquivo | Função |
 |---------|--------|
-| `ache_sucatas_miner_v10.py` | **Miner V10** - coleta + Supabase integrado |
-| `local_auditor_v13.py` | Auditor principal - extrai dados dos PDFs |
-| `supabase_repository.py` | Repositório Supabase com freios de segurança |
+| `ache_sucatas_miner_v11.py` | **Miner V11** - coleta 100% cloud (Storage) |
+| `cloud_auditor_v14.py` | **Auditor V14** - extrai PDFs do Storage |
+| `supabase_storage.py` | Repositório Supabase Storage (upload/download) |
+| `supabase_repository.py` | Repositório Supabase PostgreSQL |
+| `.github/workflows/ache-sucatas.yml` | GitHub Actions (cron 3x/dia) |
+
+### Scripts Legados (V10 - Local)
+| Arquivo | Função |
+|---------|--------|
+| `ache_sucatas_miner_v10.py` | Miner V10 - coleta + Supabase (local backup) |
+| `local_auditor_v13.py` | Auditor V13 - lê PDFs locais |
 | `migrar_v13_robusto.py` | Script de migração em lote |
 | `ache_sucatas_miner_v9_cron.py` | Miner V9 (legado, sem Supabase) |
 

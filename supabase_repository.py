@@ -589,6 +589,9 @@ class SupabaseRepository:
             "arquivo_origem": f"{uf}_{cidade}/{data_pub_str}_S{score}_{pncp_id}",
             "pdf_hash": None,
             "versao_auditor": "MINER_V10",  # Será sobrescrito pelo Auditor
+            # V11: Storage cloud
+            "storage_path": edital.get("storage_path"),
+            "pdf_storage_url": edital.get("pdf_storage_url"),
         }
 
 

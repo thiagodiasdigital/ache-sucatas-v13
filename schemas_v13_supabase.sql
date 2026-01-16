@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS editais_leilao (
   arquivo_origem TEXT NOT NULL,              -- Path no file system local
   pdf_hash TEXT,                             -- SHA256 do PDF
 
+  -- Storage Cloud (V11)
+  storage_path TEXT,                         -- Path no Supabase Storage (ex: "pncp_id/arquivo.pdf")
+  pdf_storage_url TEXT,                      -- URL pública do PDF no Storage
+
   -- Controle
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -280,5 +284,35 @@ COMMENT ON COLUMN editais_leilao.versao_auditor IS 'Versão do auditor que proce
 COMMENT ON COLUMN execucoes_miner.checkpoint_snapshot IS 'Snapshot do checkpoint para rastreabilidade';
 
 -- ============================================
--- FIM DO SCHEMA V13
+-- V11 MIGRATION: Storage Cloud Columns
+-- Execute se tabela já existe
+-- ============================================
+
+-- Adicionar colunas de storage (idempotente)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'editais_leilao' AND column_name = 'storage_path'
+    ) THEN
+        ALTER TABLE editais_leilao ADD COLUMN storage_path TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'editais_leilao' AND column_name = 'pdf_storage_url'
+    ) THEN
+        ALTER TABLE editais_leilao ADD COLUMN pdf_storage_url TEXT;
+    END IF;
+END $$;
+
+-- Índice para busca por storage_path
+CREATE INDEX IF NOT EXISTS idx_editais_storage_path ON editais_leilao(storage_path);
+
+-- Comentários das novas colunas
+COMMENT ON COLUMN editais_leilao.storage_path IS 'Caminho no Supabase Storage (V11)';
+COMMENT ON COLUMN editais_leilao.pdf_storage_url IS 'URL pública do PDF no Supabase Storage';
+
+-- ============================================
+-- FIM DO SCHEMA V13 + V11 Storage
 -- ============================================

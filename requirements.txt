@@ -1,4 +1,4 @@
-# ACHE SUCATAS V13 - Dependências Python
+# ACHE SUCATAS V14 - Dependências Python
 # Instalar: pip install -r requirements.txt
 
 # PDF Parsing
@@ -8,8 +8,11 @@ pdfplumber>=0.10.0
 pandas>=2.0.0
 openpyxl>=3.1.0
 
-# Supabase
+# Supabase (PostgreSQL + Storage)
 supabase>=2.0.0
+
+# Data validation (Miner V11)
+pydantic>=2.0.0
 
 # Environment variables
 python-dotenv>=1.0.0
@@ -17,6 +20,9 @@ python-dotenv>=1.0.0
 # HTTP requests
 requests>=2.31.0
 
-# Async (Miner)
+# Async (Miner V11)
 aiohttp>=3.9.0
 aiofiles>=23.0.0
+
+# DOCX parsing (opcional)
+python-docx>=1.0.0
