@@ -1,8 +1,8 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 00:30 UTC
+> **Ultima atualizacao:** 2026-01-17 00:00 UTC
 > **Versao atual:** V11 (Cloud-Native) + Auditor V14
-> **Status:** 100% Operacional na Nuvem
+> **Status:** 100% Operacional na Nuvem com Notificacoes
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
 ---
@@ -18,12 +18,13 @@
 7. [Seguranca](#seguranca)
 8. [Banco de Dados (Supabase)](#banco-de-dados-supabase)
 9. [GitHub Actions](#github-actions)
-10. [API PNCP](#api-pncp)
-11. [Comandos Uteis](#comandos-uteis)
-12. [Troubleshooting](#troubleshooting)
-13. [Roadmap](#roadmap)
-14. [Historico de Commits](#historico-de-commits)
-15. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
+10. [Sistema de Notificacoes](#sistema-de-notificacoes)
+11. [API PNCP](#api-pncp)
+12. [Comandos Uteis](#comandos-uteis)
+13. [Troubleshooting](#troubleshooting)
+14. [Roadmap](#roadmap)
+15. [Historico de Commits](#historico-de-commits)
+16. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
 
 ---
 
@@ -38,6 +39,7 @@
 3. **Extracao** - Extrai informacoes estruturadas dos PDFs (titulo, data, valores, itens, leiloeiro)
 4. **Persistencia** - Armazena metadados no Supabase PostgreSQL
 5. **Automacao** - Executa 3x/dia via GitHub Actions (sem necessidade de PC local)
+6. **Notificacao** - Envia email automatico quando o workflow falha
 
 ### Metricas Atuais
 
@@ -48,6 +50,19 @@
 | Workflows executados | 2 (100% sucesso) |
 | Ultima execucao | 2026-01-16 22:43 UTC |
 | Tempo medio de execucao | ~2 minutos |
+| Notificacoes configuradas | Email (Gmail SMTP) |
+
+### Funcionalidades Implementadas
+
+| Funcionalidade | Status | Data |
+|----------------|--------|------|
+| Coleta automatica de editais | Operacional | 2026-01-16 |
+| Upload para Supabase Storage | Operacional | 2026-01-16 |
+| Persistencia no PostgreSQL | Operacional | 2026-01-16 |
+| Extracao de dados dos PDFs | Operacional | 2026-01-16 |
+| Execucao agendada 3x/dia | Operacional | 2026-01-16 |
+| Notificacao de falha por email | Operacional | 2026-01-17 |
+| Pre-commit hook de seguranca | Operacional | 2026-01-16 |
 
 ---
 
@@ -101,25 +116,69 @@ Criar um banco de dados estruturado de **leiloes publicos municipais** do Brasil
 +-----------------------------------------------------------+
                             |
        +--------------------+--------------------+
-       |                                         |
-       v                                         v
-+--------------+                         +--------------+
-|  Miner V11   |------------------------>| Auditor V14  |
-|  (coleta)    |  (needs: miner)         |  (extracao)  |
-|   ~41s       |                         |    ~29s      |
-+------+-------+                         +------+-------+
-       |                                        |
-       |   +------------------------------------+
-       |   |
-       v   v
-+---------------------------------------+
-|            SUPABASE                    |
-|  +--------------+  +---------------+  |
-|  |   Storage    |  |  PostgreSQL   |  |
-|  |   (PDFs)     |  |  (metadados)  |  |
-|  | editais-pdfs |  |editais_leilao |  |
-|  +--------------+  +---------------+  |
-+---------------------------------------+
+       |                    |                    |
+       v                    v                    v
++--------------+    +--------------+    +------------------+
+|  Miner V11   |--->| Auditor V14  |    | Notify Failure   |
+|  (coleta)    |    |  (extracao)  |    | (email Gmail)    |
+|   ~41s       |    |    ~29s      |    | Se falhar        |
++------+-------+    +------+-------+    +------------------+
+       |                   |                    |
+       |   +---------------+                    |
+       |   |                                    v
+       v   v                          +------------------+
++---------------------------+         |  thiagodias...   |
+|        SUPABASE           |         |  @gmail.com      |
+|  +----------+ +--------+  |         +------------------+
+|  | Storage  | |PostgreSQL| |
+|  | (PDFs)   | |(metadata)| |
+|  +----------+ +--------+  |
++---------------------------+
+```
+
+### Fluxo Completo de Execucao
+
+```
+TRIGGER (Cron 3x/dia ou Manual)
+           |
+           v
++----------------------+
+| Job 1: MINER V11     |
+| - Conecta Supabase   |
+| - Busca API PNCP     |
+| - Filtra editais     |
+| - Download PDFs      |
+| - Upload Storage     |
+| - Insert PostgreSQL  |
++----------+-----------+
+           |
+           | (needs: miner)
+           v
++----------------------+
+| Job 2: AUDITOR V14   |
+| - Query pendentes    |
+| - Download do Storage|
+| - Extrai com         |
+|   pdfplumber         |
+| - Update PostgreSQL  |
++----------+-----------+
+           |
+           | (needs: miner, auditor)
+           v
++----------------------+
+| Job 3: VERIFY        |
+| - Conta editais      |
+| - Gera summary       |
++----------+-----------+
+           |
+           | (if: failure())
+           v
++----------------------+
+| Job 4: NOTIFY        |
+| - Envia email Gmail  |
+| - SMTP porta 465     |
+| - SSL/TLS            |
++----------------------+
 ```
 
 ### Fluxo Detalhado do Miner V11
@@ -179,6 +238,28 @@ Criar um banco de dados estruturado de **leiloes publicos municipais** do Brasil
    |-- Log de estatisticas
 ```
 
+### Fluxo de Notificacao de Falha
+
+```
+1. Condicao de Disparo
+   |-- Job miner falhou (result == 'failure')
+   |-- OU Job auditor falhou (result == 'failure')
+
+2. Envio de Email
+   |-- Servidor: smtp.gmail.com
+   |-- Porta: 465 (SSL/TLS)
+   |-- Autenticacao: EMAIL_ADDRESS + EMAIL_APP_PASSWORD
+   |-- Destinatario: thiagodias180986@gmail.com
+
+3. Conteudo do Email
+   |-- Assunto: "ACHE SUCATAS - Workflow Falhou"
+   |-- Corpo:
+       |-- Status de cada job (miner, auditor)
+       |-- Link direto para os logs no GitHub
+       |-- Repositorio e branch
+       |-- Data/hora da falha
+```
+
 ### Diagrama de Dependencias (Scripts)
 
 ```
@@ -202,6 +283,12 @@ supabase_repository.py
 supabase_storage.py
     |-- supabase-py (cliente oficial)
     |-- python-dotenv
+
+.github/workflows/ache-sucatas.yml
+    |-- dawidd6/action-send-mail@v3 (envio email)
+    |-- actions/checkout@v4
+    |-- actions/setup-python@v5
+    |-- actions/upload-artifact@v4
 ```
 
 ---
@@ -236,13 +323,13 @@ supabase_storage.py
 | `.env.example` | Template de credenciais (82 linhas, documentado) |
 | `requirements.txt` | Dependencias Python (9 pacotes) |
 | `schemas_v13_supabase.sql` | Schema das tabelas PostgreSQL |
-| `.gitignore` | Protecoes (87 linhas, reforçado) |
+| `.gitignore` | Protecoes (87 linhas, reforcado) |
 
 ### GitHub Actions
 
-| Arquivo | Funcao |
-|---------|--------|
-| `.github/workflows/ache-sucatas.yml` | Workflow principal (217 linhas) |
+| Arquivo | Linhas | Funcao |
+|---------|--------|--------|
+| `.github/workflows/ache-sucatas.yml` | 247 | Workflow principal com 4 jobs |
 
 ### Scripts Legados (NAO USAR em producao)
 
@@ -254,22 +341,39 @@ supabase_storage.py
 | `local_auditor_v12*.py` | V12 | Descontinuado |
 | `migrar_v13_robusto.py` | - | Migracao em lote (nao usado) |
 
-### Arvore de Arquivos Python (Raiz)
+### Arvore de Arquivos (Raiz)
 
 ```
 testes-12-01-17h/
-|-- ache_sucatas_miner_v11.py      # PRODUCAO - Miner cloud
-|-- cloud_auditor_v14.py           # PRODUCAO - Auditor cloud
-|-- supabase_repository.py         # PRODUCAO - Repo PostgreSQL
-|-- supabase_storage.py            # PRODUCAO - Repo Storage
-|-- rotacionar_credenciais.py      # Seguranca
-|-- instalar_hooks_seguranca.py    # Seguranca
-|-- desligar_supabase.py           # Emergencia
-|-- reativar_supabase.py           # Emergencia
-|-- monitorar_uso_supabase.py      # Monitoramento
-|-- ache_sucatas_miner_v10.py      # Legado
-|-- local_auditor_v13.py           # Legado
-|-- [outros scripts legados...]
+|
+|-- .github/
+|   +-- workflows/
+|       +-- ache-sucatas.yml           # Workflow principal (247 linhas)
+|
+|-- .githooks/
+|   +-- pre-commit                     # Hook de seguranca
+|
+|-- ache_sucatas_miner_v11.py          # PRODUCAO - Miner cloud
+|-- cloud_auditor_v14.py               # PRODUCAO - Auditor cloud
+|-- supabase_repository.py             # PRODUCAO - Repo PostgreSQL
+|-- supabase_storage.py                # PRODUCAO - Repo Storage
+|
+|-- rotacionar_credenciais.py          # Seguranca
+|-- instalar_hooks_seguranca.py        # Seguranca
+|-- desligar_supabase.py               # Emergencia
+|-- reativar_supabase.py               # Emergencia
+|-- monitorar_uso_supabase.py          # Monitoramento
+|
+|-- .env                               # CREDENCIAIS (gitignore)
+|-- .env.example                       # Template documentado
+|-- .gitignore                         # 87 linhas de protecao
+|-- CLAUDE.md                          # Este arquivo
+|-- requirements.txt                   # Dependencias Python
+|-- schemas_v13_supabase.sql           # Schema SQL
+|
+|-- ache_sucatas_miner_v10.py          # Legado
+|-- local_auditor_v13.py               # Legado
++-- [outros scripts legados...]
 ```
 
 ---
@@ -403,43 +507,79 @@ ENABLE_FILE_VERIFICATION=true
 |--------|-----------|-------------------|
 | `SUPABASE_URL` | URL do projeto Supabase | 2026-01-16 21:21 UTC |
 | `SUPABASE_SERVICE_KEY` | Service role key (ROTACIONADA) | 2026-01-16 22:41 UTC |
-| `EMAIL_ADDRESS` | Email Gmail para notificacoes | Pendente |
-| `EMAIL_APP_PASSWORD` | App Password do Gmail | Pendente |
+| `EMAIL_ADDRESS` | Email Gmail para notificacoes | 2026-01-16 23:41 UTC |
+| `EMAIL_APP_PASSWORD` | App Password do Gmail (16 chars) | 2026-01-16 23:43 UTC |
+
+### Como Verificar Secrets Configurados
+
+```bash
+# Listar todos os secrets
+gh secret list
+
+# Resultado esperado (4 secrets):
+# EMAIL_ADDRESS         2026-01-16T23:41:58Z
+# EMAIL_APP_PASSWORD    2026-01-16T23:43:24Z
+# SUPABASE_SERVICE_KEY  2026-01-16T22:41:56Z
+# SUPABASE_URL          2026-01-16T21:21:31Z
+```
 
 ### Como Configurar GitHub Secrets
 
 ```bash
 # Via GitHub CLI (requer autenticacao)
-echo "https://xxx.supabase.co" | gh secret set SUPABASE_URL
-echo "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." | gh secret set SUPABASE_SERVICE_KEY
 
-# Secrets de Email (notificacao de falha)
-gh secret set EMAIL_ADDRESS        # seu-email@gmail.com
-gh secret set EMAIL_APP_PASSWORD   # App Password de 16 caracteres
+# 1. Supabase URL
+gh secret set SUPABASE_URL
+# Cole: https://xxx.supabase.co
 
-# Verificar secrets configurados
-gh secret list
+# 2. Supabase Service Key
+gh secret set SUPABASE_SERVICE_KEY
+# Cole: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Resultado esperado:
-# EMAIL_ADDRESS         (data)
-# EMAIL_APP_PASSWORD    (data)
-# SUPABASE_SERVICE_KEY  2026-01-16T22:41:56Z
-# SUPABASE_URL          2026-01-16T21:21:31Z
+# 3. Email para notificacoes
+gh secret set EMAIL_ADDRESS
+# Cole: seu-email@gmail.com
+
+# 4. App Password do Gmail
+gh secret set EMAIL_APP_PASSWORD
+# Cole: abcdefghijklmnop (16 caracteres, sem espacos)
 ```
 
 ### Como Criar Gmail App Password
 
 O Gmail nao permite login direto por SMTP. E necessario criar um "App Password":
 
-1. Acesse https://myaccount.google.com/security
-2. Ative "Verificacao em duas etapas" (se ainda nao tiver)
-3. Acesse https://myaccount.google.com/apppasswords
-4. Selecione "Outro (nome personalizado)" e digite "ACHE SUCATAS"
-5. Clique em "Gerar"
-6. Copie a senha de 16 caracteres (ex: `abcd efgh ijkl mnop`)
-7. Use essa senha no secret `EMAIL_APP_PASSWORD` (sem espacos)
+**Passo a passo:**
 
-**IMPORTANTE:** A App Password so aparece uma vez. Se perder, delete e crie outra.
+1. **Acessar seguranca da conta:**
+   - Abra: https://myaccount.google.com/security
+   - Faca login com sua conta Gmail
+
+2. **Ativar verificacao em duas etapas (se nao tiver):**
+   - Clique em "Verificacao em duas etapas"
+   - Siga o processo (vai pedir seu celular)
+
+3. **Criar App Password:**
+   - Acesse: https://myaccount.google.com/apppasswords
+   - No campo "Nome do app", digite: `ACHE SUCATAS`
+   - Clique em "Criar"
+
+4. **Copiar a senha:**
+   - Aparecera uma senha de 16 caracteres: `abcd efgh ijkl mnop`
+   - Copie essa senha (Ctrl+C)
+   - **IMPORTANTE:** Essa senha so aparece UMA VEZ
+
+5. **Configurar no GitHub:**
+   ```bash
+   gh secret set EMAIL_APP_PASSWORD
+   # Cole a senha SEM espacos: abcdefghijklmnop
+   ```
+
+**Se precisar criar nova App Password:**
+- Acesse https://myaccount.google.com/apppasswords
+- Delete a antiga (ACHE SUCATAS)
+- Crie uma nova
+- Atualize o secret no GitHub
 
 ---
 
@@ -464,22 +604,22 @@ Uma auditoria completa de seguranca foi realizada e todas vulnerabilidades foram
 2. **Rotacao de credenciais** - Service key e senha do banco regeneradas no Supabase
 3. **Pre-commit hook** - Bloqueia automaticamente commits com secrets
 4. **Scripts de seguranca** - Ferramentas para rotacao e instalacao de hooks
-5. **.gitignore reforçado** - 87 linhas com padroes de seguranca
+5. **.gitignore reforcado** - 87 linhas com padroes de seguranca
 
 ### Pre-commit Hook
 
 O hook `.githooks/pre-commit` bloqueia commits contendo:
 
-| Padrao | Regex |
-|--------|-------|
-| Supabase service key | `SUPABASE_SERVICE_KEY=.+` |
-| Supabase DB password | `SUPABASE_DB_PASSWORD=.+` |
-| Supabase secret prefix | `sb_secret_[a-zA-Z0-9_-]+` |
-| PostgreSQL URL com senha | `postgresql://.*:.*@.*supabase` |
-| JWT tokens | `eyJ[a-zA-Z0-9_-]{20,}` |
-| Senhas em strings | `password.*=.*['\"][^'\"]{4,}['\"]` |
-| Secrets em strings | `secret.*=.*['\"][^'\"]{4,}['\"]` |
-| API keys em strings | `api_key.*=.*['\"][^'\"]{4,}['\"]` |
+| Padrao | Regex | Exemplo Bloqueado |
+|--------|-------|-------------------|
+| Supabase service key | `SUPABASE_SERVICE_KEY=.+` | SUPABASE_SERVICE_KEY=eyJ... |
+| Supabase DB password | `SUPABASE_DB_PASSWORD=.+` | SUPABASE_DB_PASSWORD=senha123 |
+| Supabase secret prefix | `sb_secret_[a-zA-Z0-9_-]+` | sb_secret_abc123 |
+| PostgreSQL URL com senha | `postgresql://.*:.*@.*supabase` | postgresql://user:pass@xxx.supabase.co |
+| JWT tokens | `eyJ[a-zA-Z0-9_-]{20,}` | eyJhbGciOiJIUzI1NiIsInR5... |
+| Senhas em strings | `password.*=.*['\"][^'\"]{4,}['\"]` | password = "minhasenha" |
+| Secrets em strings | `secret.*=.*['\"][^'\"]{4,}['\"]` | secret_key = "abc123" |
+| API keys em strings | `api_key.*=.*['\"][^'\"]{4,}['\"]` | api_key = "xyz789" |
 
 **Arquivos ignorados pelo hook:**
 - `.env.example` (usa placeholders)
@@ -497,6 +637,7 @@ O hook `.githooks/pre-commit` bloqueia commits contendo:
 | RLS (Row Level Security) | Ativo em todas as tabelas Supabase | ATIVO |
 | Feature flags | ENABLE_SUPABASE pode desativar integracao | ATIVO |
 | Kill switch | `desligar_supabase.py` disponivel | DISPONIVEL |
+| Notificacao de falha | Email quando workflow falha | ATIVO |
 
 ### Como Rotacionar Credenciais
 
@@ -545,6 +686,7 @@ git config core.hooksPath
 | Supabase DB | 500 MB | ~5 MB | 1% |
 | Supabase Storage | 1 GB | ~50 MB | 5% |
 | GitHub Actions | 2000 min/mes | ~180 min/mes | 9% |
+| Gmail SMTP | Ilimitado | ~0 emails/mes | 0% |
 | **TOTAL** | - | - | **$0/mes** |
 
 ---
@@ -608,13 +750,6 @@ Log de todas as execucoes do Miner.
 | supabase_inserts | INTEGER | Inserts no banco |
 | error_message | TEXT | Mensagem de erro (se falhou) |
 
-**Ultimas execucoes:**
-```
-[SUCCESS] V11_CLOUD - novos:433 storage:0 db:0
-[SUCCESS] V11_CLOUD - novos:433 storage:0 db:0
-[SUCCESS] V11_CLOUD - novos:20 storage:0 db:0
-```
-
 ### Tabela: metricas_diarias
 
 Metricas agregadas por dia.
@@ -647,6 +782,9 @@ Configuracao do Supabase Storage.
 
 Configuracao completa do workflow de automacao.
 
+**Arquivo:** `.github/workflows/ache-sucatas.yml`
+**Linhas:** 247
+
 #### Triggers
 
 | Trigger | Configuracao | Descricao |
@@ -674,7 +812,7 @@ Configuracao completa do workflow de automacao.
 | miner | Miner V11 - Coleta | - | 30 min | Sempre (schedule ou manual) |
 | auditor | Auditor V14 - Processamento | miner | 60 min | Miner sucesso ou pulado |
 | verify | Verificacao Final | miner, auditor | - | Sempre |
-| notify-failure | Notificar Falha | miner, auditor | - | Se falhou |
+| notify-failure | Notificar Falha por Email | miner, auditor | - | Se algum job falhou |
 
 #### Variaveis de Ambiente (workflow)
 
@@ -702,7 +840,121 @@ env:
 | Miner V11 | 41s |
 | Auditor V14 | 29s |
 | Verificacao | 30s |
+| Notificacao | 8s (se falhar) |
 | **Total** | ~2 min |
+
+---
+
+## Sistema de Notificacoes
+
+### Visao Geral
+
+O sistema envia email automaticamente quando qualquer job do workflow falha.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Tipo | Email via Gmail SMTP |
+| Servidor | smtp.gmail.com |
+| Porta | 465 (SSL/TLS) |
+| Autenticacao | App Password |
+| Destinatario | thiagodias180986@gmail.com |
+| Trigger | Quando miner OU auditor falha |
+
+### Configuracao Tecnica
+
+```yaml
+# Job de notificacao no workflow
+notify-failure:
+  name: Notificar Falha por Email
+  runs-on: ubuntu-latest
+  needs: [miner, auditor]
+  if: failure()
+
+  steps:
+    - name: Send email notification
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.EMAIL_ADDRESS }}
+        password: ${{ secrets.EMAIL_APP_PASSWORD }}
+        subject: "ACHE SUCATAS - Workflow Falhou"
+        to: ${{ secrets.EMAIL_ADDRESS }}
+        from: ACHE SUCATAS <${{ secrets.EMAIL_ADDRESS }}>
+        body: |
+          O workflow ACHE SUCATAS falhou!
+
+          Miner V11:   ${{ needs.miner.result }}
+          Auditor V14: ${{ needs.auditor.result }}
+
+          Verifique os logs em:
+          https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
+
+### Formato do Email
+
+**Assunto:**
+```
+ACHE SUCATAS - Workflow Falhou
+```
+
+**Corpo:**
+```
+O workflow ACHE SUCATAS falhou!
+
+----------------------------------------
+DETALHES DA EXECUCAO
+----------------------------------------
+
+Repositorio: thiagodiasdigital/ache-sucatas-v13
+Branch: master
+Commit: abc123...
+Evento: schedule
+
+----------------------------------------
+STATUS DOS JOBS
+----------------------------------------
+
+Miner V11:   failure
+Auditor V14: skipped
+
+----------------------------------------
+ACAO NECESSARIA
+----------------------------------------
+
+Verifique os logs em:
+https://github.com/thiagodiasdigital/ache-sucatas-v13/actions/runs/123456789
+
+----------------------------------------
+Enviado automaticamente pelo GitHub Actions
+```
+
+### Secrets Necessarios
+
+| Secret | Descricao | Como Obter |
+|--------|-----------|------------|
+| `EMAIL_ADDRESS` | Email Gmail completo | Seu email @gmail.com |
+| `EMAIL_APP_PASSWORD` | Senha de app de 16 caracteres | myaccount.google.com/apppasswords |
+
+### Teste de Notificacao
+
+Para testar se as notificacoes estao funcionando:
+
+```bash
+# 1. Criar workflow de teste temporario
+# (crie arquivo .github/workflows/test-email.yml)
+
+# 2. Disparar manualmente
+gh workflow run test-email.yml
+
+# 3. Verificar inbox do Gmail
+# Email deve chegar em ~10 segundos
+
+# 4. Deletar workflow de teste
+rm .github/workflows/test-email.yml
+git add -A && git commit -m "chore: Remove test" && git push
+```
 
 ---
 
@@ -745,7 +997,7 @@ GET /contratacoes/publicacao
         "uf": "RS"
       },
       "numeroControlePNCP": "18188243000160-1-000161/2025",
-      "titulo": "Leilão de veículos inservíveis",
+      "titulo": "Leilao de veiculos inserviveis",
       "dataPublicacao": "2026-01-16T10:00:00",
       ...
     }
@@ -774,7 +1026,7 @@ GET /orgaos/18188243000160/compras/2025/000161/arquivos
 [
   {
     "sequencialDocumento": 1,
-    "titulo": "Edital de Leilão",
+    "titulo": "Edital de Leilao",
     "url": "https://pncp.gov.br/pncp-api/v1/orgaos/.../arquivos/1"
   }
 ]
@@ -863,7 +1115,7 @@ python instalar_hooks_seguranca.py
 # Rotacionar credenciais (interativo)
 python rotacionar_credenciais.py
 
-# Verificar GitHub Secrets
+# Verificar GitHub Secrets (deve mostrar 4)
 gh secret list
 
 # Testar hook manualmente
@@ -887,6 +1139,17 @@ git push
 
 # Verificar se hook esta ativo
 git config core.hooksPath
+```
+
+### Notificacoes
+
+```bash
+# Verificar se secrets de email estao configurados
+gh secret list | grep EMAIL
+
+# Deve mostrar:
+# EMAIL_ADDRESS         (data)
+# EMAIL_APP_PASSWORD    (data)
 ```
 
 ### EMERGENCIA
@@ -984,34 +1247,62 @@ Solucao:
   4. File size limit: 50MB
 ```
 
+### Problema: Email de notificacao nao chegou
+
+```
+Sintoma: Workflow falhou mas nao recebi email
+Causa 1: Secrets EMAIL_ADDRESS ou EMAIL_APP_PASSWORD incorretos
+Causa 2: App Password expirou ou foi revogado
+Causa 3: Email foi para pasta de Spam
+
+Verificar:
+  1. gh secret list | grep EMAIL
+  2. Verificar pasta Spam do Gmail
+  3. Verificar se App Password ainda existe em myaccount.google.com/apppasswords
+
+Solucao:
+  1. Criar nova App Password no Google
+  2. Atualizar secret: gh secret set EMAIL_APP_PASSWORD
+```
+
+### Problema: Erro SSL ao enviar email
+
+```
+Sintoma: ssl3_get_record:wrong version number
+Causa: Porta errada (587 em vez de 465)
+Solucao: Ja corrigido - workflow usa porta 465 com SSL
+Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
+```
+
 ---
 
 ## Roadmap
 
 ### Fases Concluidas
 
-| Fase | Descricao | Status |
-|------|-----------|--------|
-| 1 - Coleta | Miner V9 coletando da API PNCP | CONCLUIDA |
-| 2 - Extracao | Auditor V13 extraindo dados dos PDFs | CONCLUIDA |
-| 3 - Persistencia | Supabase PostgreSQL configurado | CONCLUIDA |
-| 4 - Cloud Native | V11 + V14 100% na nuvem | CONCLUIDA |
-| 5 - Seguranca | Auditoria e correcoes | CONCLUIDA |
+| Fase | Descricao | Status | Data |
+|------|-----------|--------|------|
+| 1 - Coleta | Miner V9 coletando da API PNCP | CONCLUIDA | 2026-01-16 |
+| 2 - Extracao | Auditor V13 extraindo dados dos PDFs | CONCLUIDA | 2026-01-16 |
+| 3 - Persistencia | Supabase PostgreSQL configurado | CONCLUIDA | 2026-01-16 |
+| 4 - Cloud Native | V11 + V14 100% na nuvem | CONCLUIDA | 2026-01-16 |
+| 5 - Seguranca | Auditoria e correcoes | CONCLUIDA | 2026-01-16 |
+| 6 - Notificacoes | Email de falha via Gmail | CONCLUIDA | 2026-01-17 |
 
-### Fase 6 - Expansao (FUTURO)
+### Fase 7 - Expansao (FUTURO)
 
 | Item | Descricao | Prioridade |
 |------|-----------|------------|
 | Dashboard | Interface web para visualizar dados | Alta |
 | API REST | Endpoint para consultas externas | Alta |
-| Alertas | Notificacoes de novos editais (email/webhook) | Media |
+| Alertas de novos editais | Notificacao quando novos editais sao coletados | Media |
 | Retry backoff | Retry exponencial para API PNCP | Media |
 
 ### Dividas Tecnicas
 
 | Item | Descricao | Esforco | Status |
 |------|-----------|---------|--------|
-| Notificacao de falha | Email quando workflow falha | Baixo | IMPLEMENTADO (configurar secrets) |
+| Notificacao de falha | Email quando workflow falha | Baixo | CONCLUIDO |
 | Testes unitarios | Cobertura para Storage e Repository | Medio | Pendente |
 | Monitoramento custos | Alerta quando Storage > 500MB | Baixo | Pendente |
 | Limpeza editais antigos | Remover editais > 1 ano | Baixo | Pendente |
@@ -1024,6 +1315,11 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `e566fd0` | 2026-01-17 | chore: Remove email test workflow |
+| `75548f1` | 2026-01-17 | fix: Use SSL port 465 instead of STARTTLS port 587 for Gmail |
+| `09bc949` | 2026-01-17 | test: Add email notification test workflow |
+| `c3a9817` | 2026-01-17 | feat: Add email notification on workflow failure |
+| `cf6cc99` | 2026-01-16 | docs: Comprehensive CLAUDE.md rewrite with ultra-detailed documentation |
 | `f687f46` | 2026-01-16 | fix: Relax pre-commit hook regex to catch smaller secrets |
 | `f437982` | 2026-01-16 | docs: Update CLAUDE.md with security audit and credential rotation |
 | `dd57120` | 2026-01-16 | security: Remove exposed credentials and add protection mechanisms |
@@ -1035,12 +1331,33 @@ Solucao:
 | `aeb193a` | 2026-01-16 | docs: Add Quick Start, Troubleshooting and Architecture Decisions |
 | `36c0595` | 2026-01-16 | docs: Add project scope, roadmap and next steps to CLAUDE.md |
 
-### Commits de Seguranca
+### Commits por Categoria
 
+#### Funcionalidades (feat)
 | Hash | Descricao |
 |------|-----------|
-| `f687f46` | Regex do hook relaxado para pegar secrets menores |
-| `dd57120` | Remocao de credenciais e mecanismos de protecao |
+| `c3a9817` | Notificacao por email quando workflow falha |
+| `11ac508` | Arquitetura 100% cloud com Supabase Storage |
+| `a639ebd` | Miner V10 com integracao Supabase |
+
+#### Correcoes (fix)
+| Hash | Descricao |
+|------|-----------|
+| `75548f1` | Porta SSL 465 para Gmail SMTP |
+| `f687f46` | Regex do hook para secrets menores |
+| `4deadc2` | Tratamento de UF invalida |
+
+#### Seguranca (security)
+| Hash | Descricao |
+|------|-----------|
+| `dd57120` | Remocao de credenciais expostas |
+
+#### Documentacao (docs)
+| Hash | Descricao |
+|------|-----------|
+| `cf6cc99` | Reescrita completa do CLAUDE.md |
+| `f437982` | Auditoria de seguranca |
+| `6642d33` | Arquitetura V11 cloud |
 
 ---
 
@@ -1058,7 +1375,7 @@ python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepos
 # 3. Verificar editais no Storage
 python -c "from supabase_storage import SupabaseStorageRepository; s = SupabaseStorageRepository(); print(f'Editais no Storage: {len(s.listar_editais())}')"
 
-# 4. Verificar secrets configurados
+# 4. Verificar secrets configurados (deve mostrar 4)
 gh secret list
 ```
 
@@ -1074,7 +1391,9 @@ Editais no banco: 6
 # Storage
 Editais no Storage: 20
 
-# Secrets
+# Secrets (4 secrets)
+EMAIL_ADDRESS         2026-01-16T23:41:58Z
+EMAIL_APP_PASSWORD    2026-01-16T23:43:24Z
 SUPABASE_SERVICE_KEY  2026-01-16T22:41:56Z
 SUPABASE_URL          2026-01-16T21:21:31Z
 ```
@@ -1087,6 +1406,7 @@ SUPABASE_URL          2026-01-16T21:21:31Z
 | Supabase nao conecta | Verificar .env ou GitHub Secrets |
 | Storage nao conecta | Verificar se bucket existe no Dashboard |
 | Secrets nao listados | Configurar via `gh secret set` |
+| Menos de 4 secrets | Configurar EMAIL_ADDRESS e EMAIL_APP_PASSWORD |
 
 ---
 
@@ -1098,7 +1418,8 @@ SUPABASE_URL          2026-01-16T21:21:31Z
 | Visibilidade | Privado |
 | Branch principal | master |
 | Actions | https://github.com/thiagodiasdigital/ache-sucatas-v13/actions |
-| Secrets configurados | 2 (SUPABASE_URL, SUPABASE_SERVICE_KEY) |
+| Secrets configurados | 4 (SUPABASE_URL, SUPABASE_SERVICE_KEY, EMAIL_ADDRESS, EMAIL_APP_PASSWORD) |
+| Email de notificacao | thiagodias180986@gmail.com |
 
 ---
 
@@ -1130,11 +1451,13 @@ Instalar com: `pip install -r requirements.txt`
 5. **Limite de $50 USD** aprovado para Supabase
 6. **Sistema 100% cloud** - nao precisa mais de PC local ligado
 7. **Execucao automatica 3x/dia** - 00:00, 08:00, 16:00 UTC
-8. **GitHub Secrets configurados** - nao precisa .env no workflow
+8. **4 GitHub Secrets configurados** - SUPABASE_URL, SUPABASE_SERVICE_KEY, EMAIL_ADDRESS, EMAIL_APP_PASSWORD
 9. **Bucket `editais-pdfs`** ja criado e funcionando
 10. **UF invalida vira "XX"** - nao bloqueia por dados ruins da API
+11. **Notificacao por email** - envia automaticamente quando workflow falha
+12. **Gmail SMTP porta 465** - SSL/TLS, nao usar porta 587
 
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-16 23:15 UTC
+> Ultima atualizacao: 2026-01-17 00:00 UTC
