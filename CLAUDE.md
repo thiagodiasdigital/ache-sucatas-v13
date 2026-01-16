@@ -1,6 +1,6 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-16 23:15 UTC
+> **Ultima atualizacao:** 2026-01-17 00:30 UTC
 > **Versao atual:** V11 (Cloud-Native) + Auditor V14
 > **Status:** 100% Operacional na Nuvem
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
@@ -403,6 +403,8 @@ ENABLE_FILE_VERIFICATION=true
 |--------|-----------|-------------------|
 | `SUPABASE_URL` | URL do projeto Supabase | 2026-01-16 21:21 UTC |
 | `SUPABASE_SERVICE_KEY` | Service role key (ROTACIONADA) | 2026-01-16 22:41 UTC |
+| `EMAIL_ADDRESS` | Email Gmail para notificacoes | Pendente |
+| `EMAIL_APP_PASSWORD` | App Password do Gmail | Pendente |
 
 ### Como Configurar GitHub Secrets
 
@@ -411,13 +413,33 @@ ENABLE_FILE_VERIFICATION=true
 echo "https://xxx.supabase.co" | gh secret set SUPABASE_URL
 echo "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." | gh secret set SUPABASE_SERVICE_KEY
 
+# Secrets de Email (notificacao de falha)
+gh secret set EMAIL_ADDRESS        # seu-email@gmail.com
+gh secret set EMAIL_APP_PASSWORD   # App Password de 16 caracteres
+
 # Verificar secrets configurados
 gh secret list
 
 # Resultado esperado:
+# EMAIL_ADDRESS         (data)
+# EMAIL_APP_PASSWORD    (data)
 # SUPABASE_SERVICE_KEY  2026-01-16T22:41:56Z
 # SUPABASE_URL          2026-01-16T21:21:31Z
 ```
+
+### Como Criar Gmail App Password
+
+O Gmail nao permite login direto por SMTP. E necessario criar um "App Password":
+
+1. Acesse https://myaccount.google.com/security
+2. Ative "Verificacao em duas etapas" (se ainda nao tiver)
+3. Acesse https://myaccount.google.com/apppasswords
+4. Selecione "Outro (nome personalizado)" e digite "ACHE SUCATAS"
+5. Clique em "Gerar"
+6. Copie a senha de 16 caracteres (ex: `abcd efgh ijkl mnop`)
+7. Use essa senha no secret `EMAIL_APP_PASSWORD` (sem espacos)
+
+**IMPORTANTE:** A App Password so aparece uma vez. Se perder, delete e crie outra.
 
 ---
 
@@ -987,12 +1009,12 @@ Solucao:
 
 ### Dividas Tecnicas
 
-| Item | Descricao | Esforco |
-|------|-----------|---------|
-| Notificacao de falha | Email/webhook quando workflow falha | Baixo |
-| Testes unitarios | Cobertura para Storage e Repository | Medio |
-| Monitoramento custos | Alerta quando Storage > 500MB | Baixo |
-| Limpeza editais antigos | Remover editais > 1 ano | Baixo |
+| Item | Descricao | Esforco | Status |
+|------|-----------|---------|--------|
+| Notificacao de falha | Email quando workflow falha | Baixo | IMPLEMENTADO (configurar secrets) |
+| Testes unitarios | Cobertura para Storage e Repository | Medio | Pendente |
+| Monitoramento custos | Alerta quando Storage > 500MB | Baixo | Pendente |
+| Limpeza editais antigos | Remover editais > 1 ano | Baixo | Pendente |
 
 ---
 

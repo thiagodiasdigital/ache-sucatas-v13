@@ -191,10 +191,10 @@ jobs:
           echo "Executado em: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
-  # JOB 4: NOTIFICACAO (opcional) - Erro
+  # JOB 4: NOTIFICACAO - Email quando falhar
   # ==========================================================================
   notify-failure:
-    name: Notificar Falha
+    name: Notificar Falha por Email
     runs-on: ubuntu-latest
     needs: [miner, auditor]
     if: failure()
@@ -206,11 +206,42 @@ jobs:
           echo "Miner: ${{ needs.miner.result }}"
           echo "Auditor: ${{ needs.auditor.result }}"
 
-      # Descomente para adicionar notificacao por Slack/Email
-      # - name: Send Slack notification
-      #   uses: 8398a7/action-slack@v3
-      #   with:
-      #     status: failure
-      #     fields: repo,message,commit,author,action,eventName,ref,workflow
-      #   env:
-      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: true
+          username: ${{ secrets.EMAIL_ADDRESS }}
+          password: ${{ secrets.EMAIL_APP_PASSWORD }}
+          subject: "⚠️ ACHE SUCATAS - Workflow Falhou"
+          to: ${{ secrets.EMAIL_ADDRESS }}
+          from: ACHE SUCATAS <${{ secrets.EMAIL_ADDRESS }}>
+          body: |
+            O workflow ACHE SUCATAS falhou!
+
+            ----------------------------------------
+            DETALHES DA EXECUÇÃO
+            ----------------------------------------
+
+            Repositório: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Evento: ${{ github.event_name }}
+
+            ----------------------------------------
+            STATUS DOS JOBS
+            ----------------------------------------
+
+            Miner V11:   ${{ needs.miner.result }}
+            Auditor V14: ${{ needs.auditor.result }}
+
+            ----------------------------------------
+            AÇÃO NECESSÁRIA
+            ----------------------------------------
+
+            Verifique os logs em:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ----------------------------------------
+            Enviado automaticamente pelo GitHub Actions
