@@ -20,8 +20,23 @@ except ImportError:
     print("\n[ERRO] psycopg2 nao instalado")
     exit(1)
 
-# Connection string (encontrada em C:\projetos\ache-sucatas\antes_07_01_26\.env)
-DATABASE_URL = "postgresql://postgres:3pzHqcX7zIt1csCP@db.rwamrppaczwhbnxfpohc.supabase.co:5432/postgres"
+# Connection string - NUNCA hardcode credenciais!
+# Usar variáveis de ambiente do .env
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD", "")
+
+if not SUPABASE_URL or not DB_PASSWORD:
+    print("[ERRO] Credenciais não encontradas no .env")
+    print("Configure SUPABASE_URL e SUPABASE_DB_PASSWORD no arquivo .env")
+    exit(1)
+
+# Extrair project_id da URL
+project_id = SUPABASE_URL.replace("https://", "").replace(".supabase.co", "")
+DATABASE_URL = f"postgresql://postgres:{DB_PASSWORD}@db.{project_id}.supabase.co:5432/postgres"
 
 print(f"\n[1] Conectando ao PostgreSQL...")
 try:

@@ -12,7 +12,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 # Extrair project_id da URL
-# https://rwamrppaczwhbnxfpohc.supabase.co → rwamrppaczwhbnxfpohc
+# Exemplo: https://xxx.supabase.co → xxx
 project_id = SUPABASE_URL.replace("https://", "").split(".")[0]
 
 print("="*60)

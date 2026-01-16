@@ -1,0 +1,85 @@
+#!/bin/bash
+# Pre-commit hook para detectar secrets e credenciais
+# Instalar: git config core.hooksPath .githooks
+
+echo "=== Verificando secrets antes do commit ==="
+
+# Padrões de secrets a serem bloqueados
+PATTERNS=(
+    "SUPABASE_SERVICE_KEY=.*[a-zA-Z0-9_-]{20,}"
+    "SUPABASE_DB_PASSWORD=.*[a-zA-Z0-9_-]{8,}"
+    "sb_secret_[a-zA-Z0-9_-]{20,}"
+    "postgresql://.*:.*@.*supabase"
+    "eyJ[a-zA-Z0-9_-]{50,}"
+    "password.*=.*['\"][^'\"]{8,}['\"]"
+    "secret.*=.*['\"][^'\"]{8,}['\"]"
+    "api_key.*=.*['\"][^'\"]{8,}['\"]"
+)
+
+# Arquivos a ignorar (já têm placeholders)
+IGNORE_FILES=(
+    ".env.example"
+    "rotacionar_credenciais.py"
+    ".githooks/pre-commit"
+)
+
+# Verificar arquivos staged
+FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$FILES" ]; then
+    echo "[OK] Nenhum arquivo para verificar"
+    exit 0
+fi
+
+FOUND_SECRETS=0
+
+for file in $FILES; do
+    # Pular arquivos ignorados
+    SKIP=0
+    for ignore in "${IGNORE_FILES[@]}"; do
+        if [[ "$file" == *"$ignore"* ]]; then
+            SKIP=1
+            break
+        fi
+    done
+
+    if [ $SKIP -eq 1 ]; then
+        continue
+    fi
+
+    # Pular arquivos binários
+    if file "$file" | grep -q "binary"; then
+        continue
+    fi
+
+    # Verificar cada padrão
+    for pattern in "${PATTERNS[@]}"; do
+        if git diff --cached "$file" | grep -iE "$pattern" > /dev/null 2>&1; then
+            echo ""
+            echo "[BLOQUEADO] Possível secret detectado em: $file"
+            echo "Padrão: $pattern"
+            echo ""
+            git diff --cached "$file" | grep -iE "$pattern" --color=always | head -5
+            echo ""
+            FOUND_SECRETS=1
+        fi
+    done
+done
+
+if [ $FOUND_SECRETS -eq 1 ]; then
+    echo ""
+    echo "=============================================="
+    echo "COMMIT BLOQUEADO: Secrets detectados!"
+    echo "=============================================="
+    echo ""
+    echo "Remova as credenciais dos arquivos antes de commitar."
+    echo "Use variáveis de ambiente (.env) para credenciais."
+    echo ""
+    echo "Para bypass (NÃO RECOMENDADO):"
+    echo "  git commit --no-verify"
+    echo ""
+    exit 1
+fi
+
+echo "[OK] Nenhum secret detectado"
+exit 0

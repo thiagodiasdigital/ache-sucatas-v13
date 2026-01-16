@@ -5,11 +5,32 @@
 # CREDENCIAIS E SEGREDOS (NUNCA COMMITAR!)
 .env
 .env.*
+.env.backup_*
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
 credentials.json
 secrets.json
+service_account.json
+*_credentials.json
+*_secret.json
+*.keystore
+
+# Tokens e chaves
+*.token
+.npmrc
+.pypirc
+
+# SSH keys
+id_rsa*
+id_ed25519*
+*.ppk
+
+# Flags de emergência
+*.flag
+SUPABASE_DISABLED.flag
 
 # Python
 __pycache__/

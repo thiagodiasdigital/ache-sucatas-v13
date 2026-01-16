@@ -231,8 +231,9 @@ editais-pdfs/                      # Bucket principal
 # ============================================
 # SUPABASE (CONFIDENCIAL)
 # ============================================
-SUPABASE_URL=https://rwamrppaczwhbnxfpohc.supabase.co
-SUPABASE_SERVICE_KEY=sb_secret_TLMfDIUtudX-skhVKWX9vg_6xgLkUat
+SUPABASE_URL=https://SEU_PROJECT_ID.supabase.co
+SUPABASE_SERVICE_KEY=sua_service_key_aqui
+SUPABASE_DB_PASSWORD=sua_senha_do_banco_aqui
 
 # ============================================
 # PNCP API (PÚBLICO)

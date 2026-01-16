@@ -3,7 +3,7 @@
 ## Passo 1: Acessar SQL Editor do Supabase
 
 1. Acesse: https://supabase.com/dashboard
-2. Selecione o projeto: **rwamrppaczwhbnxfpohc**
+2. Selecione o projeto: **SEU_PROJECT_ID**
 3. No menu lateral esquerdo, clique em: **SQL Editor**
 4. Clique no botão: **New query**
 

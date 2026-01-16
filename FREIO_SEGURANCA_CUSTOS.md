@@ -8,7 +8,7 @@
 
 ### ⚠️ AÇÃO IMEDIATA NO DASHBOARD
 
-Acesse: https://supabase.com/dashboard/project/rwamrppaczwhbnxfpohc/settings/billing
+Acesse: https://supabase.com/dashboard/project/SEU_PROJECT_ID/settings/billing
 
 #### **Passo 1: Bloquear Upgrade Automático**
 1. Vá em **Settings** → **Billing**
@@ -205,7 +205,7 @@ python reativar_supabase.py
 ## 📞 AÇÃO OBRIGATÓRIA AGORA
 
 **VOCÊ PRECISA FAZER (no Dashboard do Supabase):**
-1. Acessar: https://supabase.com/dashboard/project/rwamrppaczwhbnxfpohc/settings/billing
+1. Acessar: https://supabase.com/dashboard/project/SEU_PROJECT_ID/settings/billing
 2. Desabilitar "auto-upgrade"
 3. Configurar spending cap em $0 (ou máximo $50)
 4. Habilitar alertas de email

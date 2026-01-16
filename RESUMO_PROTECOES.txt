@@ -54,7 +54,7 @@ Limite aprovado: $50.00 USD
 O QUE VOCE PRECISA FAZER
 ============================================================
 
-Acesse: https://supabase.com/dashboard/project/rwamrppaczwhbnxfpohc/settings/billing
+Acesse: https://supabase.com/dashboard/project/SEU_PROJECT_ID/settings/billing
 
 1. Verificar tier: FREE
 2. Desabilitar "Auto-upgrade"

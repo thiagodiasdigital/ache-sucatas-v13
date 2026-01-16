@@ -197,7 +197,7 @@ python desligar_supabase.py
 python desligar_supabase.py
 
 # 2. Verificar Dashboard
-# https://supabase.com/dashboard/project/rwamrppaczwhbnxfpohc/settings/billing
+# https://supabase.com/dashboard/project/SEU_PROJECT_ID/settings/billing
 
 # 3. Continuar com local-only
 python local_auditor_v13.py  # Vai usar CSV/XLSX apenas
@@ -212,7 +212,7 @@ cat logs/usage_*.json
 
 **⚠️ VOCÊ AINDA PRECISA FAZER (não posso automatizar):**
 
-Acesse: https://supabase.com/dashboard/project/rwamrppaczwhbnxfpohc/settings/billing
+Acesse: https://supabase.com/dashboard/project/SEU_PROJECT_ID/settings/billing
 
 1. **Settings → Billing:**
    - [ ] Verificar tier: FREE
