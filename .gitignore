@@ -1,0 +1,64 @@
+# ===========================================
+# ACHE SUCATAS V13 - .gitignore
+# ===========================================
+
+# CREDENCIAIS E SEGREDOS (NUNCA COMMITAR!)
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+
+# Logs
+*.log
+logs/
+*_output.txt
+*_output.log
+
+# Database local (PDFs - muito grande)
+ACHE_SUCATAS_DB/
+
+# Arquivos gerados (CSVs, Excel)
+*.csv
+*.xlsx
+*.xls
+
+# Runtime/State
+.ache_sucatas_checkpoint.json
+*.jsonl
+
+# Backups locais
+backup_*/
+antes-dia-*/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Windows
+NUL
+Thumbs.db
+Desktop.ini
+
+# Mac
+.DS_Store
+
+# Temp
+*.tmp
+*.temp
