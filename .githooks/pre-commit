@@ -16,11 +16,12 @@ PATTERNS=(
     "api_key.*=.*['\"][^'\"]{4,}['\"]"
 )
 
-# Arquivos a ignorar (já têm placeholders)
+# Arquivos a ignorar (já têm placeholders ou documentação)
 IGNORE_FILES=(
     ".env.example"
     "rotacionar_credenciais.py"
     ".githooks/pre-commit"
+    "CLAUDE.md"
 )
 
 # Verificar arquivos staged
