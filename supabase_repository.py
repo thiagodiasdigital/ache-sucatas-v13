@@ -505,8 +505,16 @@ class SupabaseRepository:
         - link_leiloeiro, valor_estimado, quantidade_itens, nome_leiloeiro
         """
         # Extrair dados básicos
-        uf = str(edital.get("uf", "XX")).upper()[:2]
-        cidade = str(edital.get("municipio", "DESCONHECIDA")).upper().replace(" ", "_")
+        uf_raw = str(edital.get("uf", "") or "").strip().upper()
+        # Validar UF: deve ter exatamente 2 letras
+        if len(uf_raw) == 2 and uf_raw.isalpha():
+            uf = uf_raw
+        else:
+            # Tentar extrair UF do município ou usar fallback
+            uf = "XX"
+
+        cidade_raw = str(edital.get("municipio", "") or "").strip()
+        cidade = cidade_raw.upper().replace(" ", "_") if cidade_raw else "DESCONHECIDA"
         cidade = cidade[:30]  # Limitar tamanho
         pncp_id = edital.get("pncp_id", "")
 
