@@ -269,6 +269,44 @@ Além do Supabase, o sistema gera backups locais:
 - `RESULTADO_FINAL.xlsx` - Dados em Excel
 - `ACHE_SUCATAS_DB/` - PDFs originais
 
+## IMPORTANTE: Dados Locais (não estão no Git)
+
+### ACHE_SUCATAS_DB/ (PDFs dos editais)
+Esta pasta contém 198 subpastas com PDFs dos editais. **NÃO está no Git** (muito grande).
+
+**Como obter os PDFs:**
+```bash
+# Opção 1: Executar o Miner para coletar novamente
+python ache_sucatas_miner_v9_cron.py
+
+# Opção 2: Solicitar backup ao proprietário do projeto
+# Os PDFs podem estar em backup externo (perguntar ao usuário)
+```
+
+**Estrutura esperada:**
+```
+ACHE_SUCATAS_DB/
+├── AL_MACEIO/
+│   └── 2025-10-02_S100_04302189000128-1-000019-2025/
+│       ├── edital.pdf
+│       └── metadados.json
+├── AM_MANAUS/
+│   └── ...
+└── [196 outras pastas por UF_CIDADE]
+```
+
+### .env (Credenciais)
+Arquivo com credenciais Supabase. **NÃO está no Git** (segurança).
+
+**Como configurar:**
+```bash
+# Copiar template
+cp .env.example .env
+
+# Editar com suas credenciais Supabase
+# Obter em: https://supabase.com/dashboard/project/SEU_PROJETO/settings/api
+```
+
 ## Quick Start (Novo Ambiente)
 
 ```bash
@@ -279,17 +317,22 @@ cd ache-sucatas-v13
 # 2. Instalar dependências
 pip install -r requirements.txt
 
-# 3. Criar arquivo .env (copiar de .env.example ou pedir credenciais)
-# SUPABASE_URL=https://xxx.supabase.co
-# SUPABASE_SERVICE_KEY=eyJ...
-# ENABLE_SUPABASE=true
-# MAX_EDITAIS_SUPABASE=10000
+# 3. Configurar credenciais
+cp .env.example .env
+# Editar .env com credenciais Supabase reais
 
-# 4. Verificar conexão Supabase
+# 4. Obter PDFs dos editais (escolha uma opção):
+#    a) Executar Miner: python ache_sucatas_miner_v9_cron.py
+#    b) Restaurar de backup externo (se disponível)
+
+# 5. Verificar conexão Supabase
 python testar_supabase_conexao.py
 
-# 5. Verificar estado atual
+# 6. Verificar estado atual
 python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepository(); print(f'Editais no Supabase: {r.contar_editais()}')"
+
+# 7. Verificar PDFs locais
+python -c "from pathlib import Path; p = Path('ACHE_SUCATAS_DB'); print(f'Pastas de editais: {len(list(p.glob(\"*/*\")))}')"
 ```
 
 ## Troubleshooting
@@ -354,6 +397,29 @@ python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepos
 **Última verificação:** 5 editais no Supabase (Janeiro 2026)
 **Pendente:** 193 editais para migrar
 
+## Checklist para Nova Sessão Claude
+
+**SEMPRE execute no início de uma nova sessão:**
+
+```bash
+# 1. Verificar se .env existe
+ls -la .env
+
+# 2. Verificar conexão Supabase
+python testar_supabase_conexao.py
+
+# 3. Contar editais no Supabase
+python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepository(); print(f'Supabase: {r.contar_editais()} editais')"
+
+# 4. Contar PDFs locais
+python -c "from pathlib import Path; p = Path('ACHE_SUCATAS_DB'); folders = list(p.glob('*/*')); print(f'Local: {len(folders)} editais')"
+```
+
+**Se algum falhar:**
+- `.env` não existe → `cp .env.example .env` e pedir credenciais ao usuário
+- Supabase não conecta → Verificar credenciais ou se ENABLE_SUPABASE=true
+- PDFs não existem → Executar Miner ou pedir backup ao usuário
+
 ## Notas Importantes
 
 1. **NUNCA commitar `.env`** - contém credenciais Supabase
@@ -362,3 +428,4 @@ python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepos
 4. Sempre testar com poucos editais antes de migração em lote
 5. Rodar `pip install -r requirements.txt` em novo ambiente
 6. **Se em dúvida, pergunte antes de executar comandos destrutivos**
+7. **Executar checklist de nova sessão** antes de qualquer operação
