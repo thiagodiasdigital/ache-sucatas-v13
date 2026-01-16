@@ -269,6 +269,91 @@ Além do Supabase, o sistema gera backups locais:
 - `RESULTADO_FINAL.xlsx` - Dados em Excel
 - `ACHE_SUCATAS_DB/` - PDFs originais
 
+## Quick Start (Novo Ambiente)
+
+```bash
+# 1. Clonar repositório
+git clone https://github.com/thiagodiasdigital/ache-sucatas-v13.git
+cd ache-sucatas-v13
+
+# 2. Instalar dependências
+pip install -r requirements.txt
+
+# 3. Criar arquivo .env (copiar de .env.example ou pedir credenciais)
+# SUPABASE_URL=https://xxx.supabase.co
+# SUPABASE_SERVICE_KEY=eyJ...
+# ENABLE_SUPABASE=true
+# MAX_EDITAIS_SUPABASE=10000
+
+# 4. Verificar conexão Supabase
+python testar_supabase_conexao.py
+
+# 5. Verificar estado atual
+python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepository(); print(f'Editais no Supabase: {r.contar_editais()}')"
+```
+
+## Troubleshooting
+
+### Erro de conexão Supabase
+```
+Problema: "Could not connect to Supabase"
+Causa: Credenciais inválidas ou Supabase desligado
+Solução:
+  1. Verificar .env (SUPABASE_URL e SUPABASE_SERVICE_KEY)
+  2. Verificar se ENABLE_SUPABASE=true
+  3. Testar no Dashboard: https://supabase.com/dashboard
+```
+
+### Migração travou no meio
+```
+Problema: Script parou em X/198 editais
+Causa: PDF problemático ou timeout
+Solução:
+  1. O script migrar_v13_robusto.py tem try/except
+  2. Ele pula editais com erro e continua
+  3. Verifique o log para ver quais falharam
+  4. Execute novamente - editais já migrados são atualizados (upsert)
+```
+
+### Warning de PDF (ignorar)
+```
+Problema: "Cannot set gray non-stroke color..."
+Causa: PDF com padrões de cor inválidos
+Solução: IGNORAR - não afeta extração dos dados
+```
+
+### Limite de segurança atingido
+```
+Problema: "LIMITE ATINGIDO: X/10000 editais"
+Causa: Freio de segurança ativado
+Solução:
+  1. Verificar custo no Dashboard Supabase
+  2. Se dentro do limite $50, aumentar MAX_EDITAIS_SUPABASE no .env
+  3. Ou deletar editais antigos/duplicados
+```
+
+## Decisões de Arquitetura
+
+| Decisão | Motivo |
+|---------|--------|
+| Limite $50 USD | Aprovado pelo usuário para controle de custos |
+| MAX_EDITAIS=10.000 | Margem segura para ~200 editais/mês |
+| Supabase PostgreSQL | Free tier generoso, fácil setup, RLS nativo |
+| Feature flag ENABLE_SUPABASE | Permite desligar rapidamente sem alterar código |
+| Dual storage (Supabase + CSV) | Backup local caso Supabase falhe |
+| Script robusto com try/except | Continua migração mesmo com PDFs problemáticos |
+| V13 (não V12) | V13 adiciona integração Supabase ao V12 |
+
+## Estado Atual do Banco (verificar sempre)
+
+Para verificar o estado atual, execute:
+```bash
+python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepository(); print(f'Editais: {r.contar_editais()}/198')"
+```
+
+**Última verificação:** 5 editais no Supabase (Janeiro 2026)
+**Pendente:** 193 editais para migrar
+
 ## Notas Importantes
 
 1. **NUNCA commitar `.env`** - contém credenciais Supabase
@@ -276,3 +361,4 @@ Além do Supabase, o sistema gera backups locais:
 3. Limite de $50 USD aprovado para Supabase
 4. Sempre testar com poucos editais antes de migração em lote
 5. Rodar `pip install -r requirements.txt` em novo ambiente
+6. **Se em dúvida, pergunte antes de executar comandos destrutivos**
