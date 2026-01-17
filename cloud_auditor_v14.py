@@ -276,12 +276,22 @@ def formatar_data_br(data_raw) -> str:
 
 
 def formatar_valor_br(valor_raw) -> str:
+    """Formata valor para moeda brasileira. Nunca retorna 'nan'."""
+    import math
+
     if not valor_raw:
         return "N/D"
+
+    # Verificar se é NaN/None antes de converter
+    if isinstance(valor_raw, float) and (math.isnan(valor_raw) or math.isinf(valor_raw)):
+        return "N/D"
+
     try:
         valor_float = float(valor_raw)
+        if math.isnan(valor_float) or math.isinf(valor_float):
+            return "N/D"
         return f"R$ {valor_float:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    except:
+    except (ValueError, TypeError):
         return "N/D"
 
 
@@ -324,17 +334,63 @@ def extrair_titulo_inteligente(pdf_text: str, descricao: str, n_edital: str) -> 
 
 
 def extrair_modalidade(pdf_text: str, descricao: str = "") -> str:
+    """
+    Extrai e padroniza a modalidade do leilão.
+
+    Valores padronizados retornados:
+    - "Eletrônico" (leilões online/internet/virtuais)
+    - "Presencial" (leilões físicos)
+    - "Híbrido" (combinação de ambos)
+    - "N/D" (não identificado)
+    """
     texto = f"{pdf_text[:2000]} {descricao}".lower()
 
-    tem_online = any(x in texto for x in ['eletrônico', 'eletronico', 'online', 'internet', 'virtual'])
-    tem_presencial = any(x in texto for x in ['presencial', 'sede', 'auditório', 'sala', 'comparecimento'])
+    # Palavras-chave para leilão online/eletrônico
+    keywords_eletronico = [
+        'eletrônico', 'eletronico', 'online', 'internet', 'virtual',
+        'plataforma digital', 'meio eletrônico', 'forma eletrônica',
+        'site', 'portal', 'sistema eletrônico'
+    ]
 
-    if tem_online and tem_presencial:
-        return "HÍBRIDO"
-    elif tem_online:
-        return "ONLINE"
+    # Palavras-chave para leilão presencial
+    keywords_presencial = [
+        'presencial', 'sede', 'auditório', 'auditorio', 'sala',
+        'comparecimento', 'in loco', 'endereço', 'endereco',
+        'local do leilão', 'local do leilao'
+    ]
+
+    tem_eletronico = any(kw in texto for kw in keywords_eletronico)
+    tem_presencial = any(kw in texto for kw in keywords_presencial)
+
+    if tem_eletronico and tem_presencial:
+        return "Híbrido"
+    elif tem_eletronico:
+        return "Eletrônico"
     elif tem_presencial:
-        return "PRESENCIAL"
+        return "Presencial"
+    return "N/D"
+
+
+def padronizar_modalidade(modalidade: str) -> str:
+    """
+    Padroniza valores de modalidade existentes no banco.
+
+    Converte valores antigos ("ONLINE", "HÍBRIDO", etc.) para o padrão:
+    - "Eletrônico", "Presencial", "Híbrido", "N/D"
+    """
+    if not modalidade or modalidade.strip().upper() in ("N/D", "NONE", ""):
+        return "N/D"
+
+    modalidade_lower = modalidade.lower().strip()
+
+    # Mapear para valores padronizados
+    if any(x in modalidade_lower for x in ['eletrônico', 'eletronico', 'online']):
+        return "Eletrônico"
+    if 'presencial' in modalidade_lower:
+        return "Presencial"
+    if any(x in modalidade_lower for x in ['híbrido', 'hibrido']):
+        return "Híbrido"
+
     return "N/D"
 
 
@@ -348,22 +404,130 @@ def extrair_valor_estimado(pdf_text: str) -> str:
 
 
 def extrair_quantidade_itens(pdf_text: str) -> str:
-    lotes = len(re.findall(r'\bLOTE\s*\d+', pdf_text[:5000], re.IGNORECASE))
-    if lotes > 0:
-        return str(lotes)
+    """
+    Extrai quantidade de itens/lotes do edital usando múltiplos padrões.
 
-    itens = len(re.findall(r'\bITEM\s*\d+', pdf_text[:5000], re.IGNORECASE))
-    if itens > 0:
-        return str(itens)
+    Padrões comuns:
+    - "XX (extenso) lotes"
+    - "Total de XX itens"
+    - "Lote 1 a XX"
+    - "Composto por XX veículos"
+    - Contagem de "LOTE X" ou "ITEM X"
+    """
+    if not pdf_text:
+        return "N/D"
+
+    texto_busca = pdf_text[:8000]
+
+    # 1. Padrões explícitos (mais confiáveis)
+    padroes_explicitos = [
+        # "Total de XX lotes/itens/veículos"
+        r'[Tt]otal\s+de\s+(\d+)\s+(?:lotes?|itens?|veículos?|bens?)',
+        # "XX (extenso) lotes/itens"
+        r'(\d+)\s*\([a-záéíóúâêîôû\s]+\)\s+(?:lotes?|itens?|veículos?)',
+        # "composto por XX lotes/itens"
+        r'[Cc]omposto\s+por\s+(\d+)\s+(?:lotes?|itens?|veículos?)',
+        # "contendo XX lotes/itens"
+        r'[Cc]ontendo\s+(\d+)\s+(?:lotes?|itens?|veículos?)',
+        # "XX lotes disponíveis"
+        r'(\d+)\s+(?:lotes?|itens?)\s+disponíveis',
+        # "dividido em XX lotes"
+        r'[Dd]ividido\s+em\s+(\d+)\s+(?:lotes?|itens?)',
+        # "Lote 1 ao/a XX"
+        r'[Ll]ote\s+\d+\s+(?:ao?|até)\s+(?:[Ll]ote\s+)?(\d+)',
+        # "Lotes 1 a XX"
+        r'[Ll]otes?\s+\d+\s+a\s+(\d+)',
+        # "são XX lotes"
+        r'[Ss]ão\s+(\d+)\s+(?:lotes?|itens?|veículos?)',
+        # "quantidade: XX"
+        r'[Qq]uantidade[:\s]+(\d+)\s*(?:lotes?|itens?|veículos?)?',
+    ]
+
+    for padrao in padroes_explicitos:
+        match = re.search(padrao, texto_busca, re.IGNORECASE)
+        if match:
+            qtd = int(match.group(1))
+            if 1 <= qtd <= 9999:  # Validar range razoável
+                return str(qtd)
+
+    # 2. Contar ocorrências de LOTE + número
+    lotes_pattern = r'\b[Ll][Oo][Tt][Ee]\s*(?:N[ºo°]?\s*)?(\d+)'
+    lotes_matches = re.findall(lotes_pattern, texto_busca)
+    if lotes_matches:
+        # Pegar o maior número de lote encontrado
+        max_lote = max(int(n) for n in lotes_matches)
+        if max_lote >= 1:
+            return str(max_lote)
+
+    # 3. Contar ocorrências de ITEM + número
+    itens_pattern = r'\b[Ii][Tt][Ee][Mm]\s*(?:N[ºo°]?\s*)?(\d+)'
+    itens_matches = re.findall(itens_pattern, texto_busca)
+    if itens_matches:
+        max_item = max(int(n) for n in itens_matches)
+        if max_item >= 1:
+            return str(max_item)
+
+    # 4. Fallback: contar simples ocorrências de "LOTE"
+    lotes_count = len(re.findall(r'\b[Ll]ote\b', texto_busca))
+    if lotes_count >= 2:  # Pelo menos 2 para evitar falsos positivos
+        return str(lotes_count)
 
     return "N/D"
 
 
 def extrair_nome_leiloeiro(pdf_text: str) -> str:
-    padrao = r'(?:leiloeiro|leiloeira)[:\s]*(?:oficial|público|a)?\s*[:\s]*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,4})'
-    match = re.search(padrao, pdf_text[:3000])
-    if match:
-        return match.group(1).strip()[:100]
+    """
+    Extrai nome do leiloeiro do texto do PDF usando múltiplos padrões.
+
+    Padrões comuns em editais:
+    - "Leiloeiro(a) Oficial: [NOME]"
+    - "Leiloeiro Público: [NOME]"
+    - "Leiloeiro designado: [NOME]"
+    - "O leilão será conduzido pelo(a) leiloeiro(a) [NOME]"
+    - "Leiloeiro: [NOME] - Matrícula JUCERJA nº [XXX]"
+    """
+    if not pdf_text:
+        return "N/D"
+
+    texto_busca = pdf_text[:5000]  # Expandir área de busca
+
+    # Lista de padrões ordenados por especificidade (mais específico primeiro)
+    padroes = [
+        # Padrão com matrícula/registro (muito específico)
+        r'[Ll]eiloeiro(?:a)?(?:\s+[Oo]ficial|\s+[Pp]úblico)?[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,5})\s*[-–]\s*[Mm]atrícula',
+        r'[Ll]eiloeiro(?:a)?(?:\s+[Oo]ficial|\s+[Pp]úblico)?[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,5})\s*,?\s*(?:inscrit[oa]|CPF|matrícula)',
+
+        # Padrão com "conduzido por" ou "realizado por"
+        r'(?:conduzido|realizado|presidido)\s+(?:pelo|pela)\s+(?:leiloeiro|leiloeira)(?:\s+oficial)?\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,5})',
+
+        # Padrão com designação
+        r'[Ll]eiloeiro(?:a)?\s+designad[oa][:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,5})',
+
+        # Padrões básicos (nome após leiloeiro)
+        r'[Ll]eiloeiro(?:a)?(?:\s+[Oo]ficial|\s+[Pp]úblico)?[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de\s+|da\s+|do\s+|dos\s+|das\s+)?[A-ZÀ-Ú][a-zà-ú]+){1,5})',
+        r'[Ll]eiloeiro(?:a)?[:\s]*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,4})',
+
+        # Padrão em tabela (Sr./Sra. antes do nome)
+        r'[Ll]eiloeiro(?:a)?[:\s]*(?:Sr\.?|Sra\.?)\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,4})',
+
+        # Padrão "nome do leiloeiro"
+        r'[Nn]ome\s+do\s+[Ll]eiloeiro(?:a)?[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,5})',
+
+        # Padrões com verbos
+        r'[Ss]erá\s+[Ll]eiloeiro(?:a)?[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){1,4})',
+    ]
+
+    for padrao in padroes:
+        match = re.search(padrao, texto_busca)
+        if match:
+            nome = match.group(1).strip()
+            # Validar: nome deve ter pelo menos 2 palavras e menos de 80 chars
+            if len(nome.split()) >= 2 and len(nome) < 80:
+                # Remover sufixos comuns que podem ter sido capturados
+                nome = re.sub(r'\s*[-–,].*$', '', nome).strip()
+                if len(nome) >= 5:
+                    return nome[:100]
+
     return "N/D"
 
 

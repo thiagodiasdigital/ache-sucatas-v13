@@ -16,6 +16,29 @@ load_dotenv()
 logger = logging.getLogger("SupabaseRepository")
 
 
+# Lista de UFs válidas do Brasil
+UFS_VALIDAS = {
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+    "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+    "SP", "SE", "TO"
+}
+
+# Mapeamento de nomes de estados para UFs
+ESTADOS_PARA_UF = {
+    "acre": "AC", "alagoas": "AL", "amapa": "AP", "amapá": "AP",
+    "amazonas": "AM", "bahia": "BA", "ceara": "CE", "ceará": "CE",
+    "distrito federal": "DF", "espirito santo": "ES", "espírito santo": "ES",
+    "goias": "GO", "goiás": "GO", "maranhao": "MA", "maranhão": "MA",
+    "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+    "para": "PA", "pará": "PA", "paraiba": "PB", "paraíba": "PB",
+    "parana": "PR", "paraná": "PR", "pernambuco": "PE", "piaui": "PI",
+    "piauí": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+    "rio grande do sul": "RS", "rondonia": "RO", "rondônia": "RO",
+    "roraima": "RR", "santa catarina": "SC", "sao paulo": "SP",
+    "são paulo": "SP", "sergipe": "SE", "tocantins": "TO"
+}
+
+
 class SupabaseRepository:
     """Gerencia persistência no Supabase com segurança máxima."""
 
@@ -349,6 +372,7 @@ class SupabaseRepository:
         data_inicio: Optional[str] = None,
         data_fim: Optional[str] = None,
         modalidade: Optional[str] = None,
+        tag: Optional[str] = None,
         limit: int = 100,
     ) -> List[Dict]:
         """
@@ -359,6 +383,7 @@ class SupabaseRepository:
             data_inicio: Data inicial ISO (ex: "2026-01-01")
             data_fim: Data final ISO (ex: "2026-01-31")
             modalidade: ONLINE | PRESENCIAL | HIBRIDO | N/D
+            tag: Filtrar por tag específica
             limit: Máximo de resultados (default 100)
 
         Returns:
@@ -372,7 +397,7 @@ class SupabaseRepository:
                 "id, pncp_id, titulo, orgao, uf, cidade, "
                 "data_publicacao, data_leilao, valor_estimado, "
                 "quantidade_itens, modalidade_leilao, nome_leiloeiro, "
-                "link_pncp, storage_path, score"
+                "link_pncp, link_leiloeiro, storage_path, score, tags"
             )
 
             # Aplicar filtros
@@ -387,6 +412,10 @@ class SupabaseRepository:
 
             if modalidade:
                 query = query.eq("modalidade_leilao", modalidade)
+
+            if tag:
+                # Filtrar por tag - tags é um array no PostgreSQL
+                query = query.contains("tags", [tag])
 
             # Ordenar e limitar
             query = query.order("data_publicacao", desc=True).limit(limit)
@@ -449,6 +478,42 @@ class SupabaseRepository:
 
         except Exception as e:
             logger.error("Erro ao listar modalidades: %s", e)
+            return []
+
+    def listar_tags_disponiveis(self) -> List[str]:
+        """
+        Lista tags únicas disponíveis nos editais.
+
+        Returns:
+            Lista de tags ordenadas (ex: ["automovel", "sucata", "veiculos_detran"])
+        """
+        if not self.enable_supabase:
+            return []
+
+        try:
+            response = (
+                self.client.table("editais_leilao")
+                .select("tags")
+                .execute()
+            )
+
+            # Extrair tags únicas de todos os registros
+            all_tags = set()
+            for item in response.data:
+                tags = item.get("tags")
+                if isinstance(tags, list):
+                    for tag in tags:
+                        if tag and tag.strip():
+                            all_tags.add(tag.strip())
+                elif isinstance(tags, str) and tags:
+                    for tag in tags.split(","):
+                        if tag.strip():
+                            all_tags.add(tag.strip())
+
+            return sorted(list(all_tags))
+
+        except Exception as e:
+            logger.error("Erro ao listar tags: %s", e)
             return []
 
     # =========================================================================
@@ -602,6 +667,83 @@ class SupabaseRepository:
             )
             return False
 
+    def _extrair_uf_de_texto(self, texto: str) -> Optional[str]:
+        """
+        Tenta extrair UF de um texto (nome de órgão, município, etc.).
+
+        Args:
+            texto: Texto para buscar UF
+
+        Returns:
+            UF válida (2 letras) ou None
+        """
+        if not texto:
+            return None
+
+        texto_lower = texto.lower().strip()
+
+        # 1. Tentar match direto com UF no final (ex: "São Paulo/SP", "DETRAN-RJ")
+        import re
+        match = re.search(r'[-/\s]([A-Za-z]{2})$', texto)
+        if match:
+            uf_candidate = match.group(1).upper()
+            if uf_candidate in UFS_VALIDAS:
+                return uf_candidate
+
+        # 2. Tentar encontrar UF no meio do texto (ex: "DETRAN SP", "Prefeitura de MG")
+        for uf in UFS_VALIDAS:
+            if f" {uf.lower()} " in f" {texto_lower} " or texto_lower.endswith(f" {uf.lower()}"):
+                return uf
+
+        # 3. Tentar match com nome de estado
+        for estado, uf in ESTADOS_PARA_UF.items():
+            if estado in texto_lower:
+                return uf
+
+        return None
+
+    def _validar_e_corrigir_uf(self, uf_raw: str, municipio: str = "", orgao: str = "") -> str:
+        """
+        Valida UF e tenta corrigir se inválida.
+
+        Args:
+            uf_raw: UF original (pode ser inválida)
+            municipio: Nome do município (fallback)
+            orgao: Nome do órgão (fallback)
+
+        Returns:
+            UF válida ou "DF" para órgãos federais, nunca "XX"
+        """
+        # 1. Validar UF fornecida
+        uf_clean = str(uf_raw or "").strip().upper()
+        if uf_clean in UFS_VALIDAS:
+            return uf_clean
+
+        # 2. Tentar extrair do município
+        uf_municipio = self._extrair_uf_de_texto(municipio)
+        if uf_municipio:
+            return uf_municipio
+
+        # 3. Tentar extrair do órgão
+        uf_orgao = self._extrair_uf_de_texto(orgao)
+        if uf_orgao:
+            return uf_orgao
+
+        # 4. Verificar se é órgão federal (usar DF como default)
+        orgao_lower = str(orgao or "").lower()
+        orgaos_federais = [
+            'ministério', 'ministerio', 'receita federal', 'união', 'uniao',
+            'federal', 'nacional', 'brasil', 'ibama', 'inss', 'antt', 'anac',
+            'anvisa', 'banco central', 'cgu', 'dnit', 'funai', 'incra'
+        ]
+        if any(of in orgao_lower for of in orgaos_federais):
+            return "DF"  # Órgãos federais → Brasília
+
+        # 5. Se não conseguiu identificar, usar DF como fallback seguro
+        # (melhor que XX pois DF é válido para consultas/filtros)
+        logger.warning(f"UF não identificada para municipio='{municipio}', orgao='{orgao}'. Usando DF.")
+        return "DF"
+
     def _mapear_edital_model_para_v13(self, edital: dict) -> dict:
         """
         Mapeia EditalModel do Miner V10 para schema editais_leilao.
@@ -618,12 +760,11 @@ class SupabaseRepository:
         """
         # Extrair dados básicos
         uf_raw = str(edital.get("uf", "") or "").strip().upper()
-        # Validar UF: deve ter exatamente 2 letras
-        if len(uf_raw) == 2 and uf_raw.isalpha():
-            uf = uf_raw
-        else:
-            # Tentar extrair UF do município ou usar fallback
-            uf = "XX"
+        municipio = str(edital.get("municipio", "") or "").strip()
+        orgao = str(edital.get("orgao_nome", "") or "").strip()
+
+        # Validar e corrigir UF
+        uf = self._validar_e_corrigir_uf(uf_raw, municipio, orgao)
 
         cidade_raw = str(edital.get("municipio", "") or "").strip()
         cidade = cidade_raw.upper().replace(" ", "_") if cidade_raw else "DESCONHECIDA"

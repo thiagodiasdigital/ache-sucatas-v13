@@ -51,17 +51,30 @@ def get_modalidades_disponiveis(_repo):
     return _repo.listar_modalidades_disponiveis()
 
 
+@st.cache_data(ttl=300)
+def get_tags_disponiveis(_repo):
+    """Lista cached de tags disponiveis."""
+    return _repo.listar_tags_disponiveis()
+
+
 # =============================================================================
 # FUNCOES AUXILIARES
 # =============================================================================
 
 
 def format_currency(value):
-    """Formata valor como moeda brasileira."""
+    """Formata valor como moeda brasileira. Nunca retorna 'nan'."""
+    import math
+
     if value is None:
         return "N/D"
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return "N/D"
     try:
-        formatted = f"R$ {value:,.2f}"
+        value_float = float(value)
+        if math.isnan(value_float) or math.isinf(value_float):
+            return "N/D"
+        formatted = f"R$ {value_float:,.2f}"
         return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
         return "N/D"
@@ -138,6 +151,14 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
             "Modalidade", options=modalidade_options, index=0
         )
 
+        # Filtro de Tags
+        tags_disponiveis = get_tags_disponiveis(repo)
+        if tags_disponiveis:
+            tags_options = ["Todas"] + tags_disponiveis
+            tag_selected = st.selectbox("Tag", options=tags_options, index=0)
+        else:
+            tag_selected = "Todas"
+
         # Limite de resultados
         limit = st.slider(
             "Max. resultados", min_value=10, max_value=500, value=50, step=10
@@ -156,6 +177,7 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
         data_inicio=data_inicio.isoformat() if data_inicio else None,
         data_fim=data_fim.isoformat() if data_fim else None,
         modalidade=modalidade_selected if modalidade_selected != "Todas" else None,
+        tag=tag_selected if tag_selected != "Todas" else None,
         limit=limit,
     )
 
@@ -201,6 +223,12 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
     df_display["data_leilao"] = df_display["data_leilao"].apply(format_date_br)
     df_display["valor_estimado"] = df_display["valor_estimado"].apply(format_currency)
 
+    # Formatar tags para exibicao
+    if "tags" in df_display.columns:
+        df_display["tags"] = df_display["tags"].apply(
+            lambda x: ", ".join(x) if isinstance(x, list) else (x or "N/D")
+        )
+
     # Selecionar colunas para exibir
     columns_display = [
         "titulo",
@@ -213,6 +241,9 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
         "quantidade_itens",
         "modalidade_leilao",
         "nome_leiloeiro",
+        "tags",
+        "link_pncp",
+        "link_leiloeiro",
     ]
 
     # Filtrar colunas existentes
@@ -230,12 +261,32 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
         "quantidade_itens": "Itens",
         "modalidade_leilao": "Modalidade",
         "nome_leiloeiro": "Leiloeiro",
+        "tags": "Tags",
+        "link_pncp": "Link PNCP",
+        "link_leiloeiro": "Link Leilao",
     }
 
     df_show = df_display[columns_display].rename(columns=column_names)
 
-    # Exibir tabela
-    st.dataframe(df_show, use_container_width=True, hide_index=True, height=400)
+    # Configurar colunas de link como clicaveis
+    column_config = {}
+    if "Link PNCP" in df_show.columns:
+        column_config["Link PNCP"] = st.column_config.LinkColumn(
+            "Link PNCP", display_text="Abrir PNCP"
+        )
+    if "Link Leilao" in df_show.columns:
+        column_config["Link Leilao"] = st.column_config.LinkColumn(
+            "Link Leilao", display_text="Abrir Leilao"
+        )
+
+    # Exibir tabela com links clicaveis
+    st.dataframe(
+        df_show,
+        use_container_width=True,
+        hide_index=True,
+        height=400,
+        column_config=column_config,
+    )
 
     # =========================================================================
     # DETALHES DO EDITAL
@@ -293,17 +344,28 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
 
                 # Links
                 st.markdown("**Links**")
-                link_col1, link_col2 = st.columns(2)
+                link_col1, link_col2, link_col3 = st.columns(3)
 
                 link_pncp = edital.get("link_pncp")
                 if link_pncp:
                     with link_col1:
                         st.link_button("Ver no PNCP", link_pncp)
 
+                link_leiloeiro = edital.get("link_leiloeiro")
+                if link_leiloeiro:
+                    with link_col2:
+                        st.link_button("Site do Leilao", link_leiloeiro)
+
                 pdf_url = edital.get("storage_path")
                 if pdf_url:
-                    with link_col2:
+                    with link_col3:
                         st.link_button("Download PDF", pdf_url)
+
+                # Tags
+                tags = edital.get("tags")
+                if tags:
+                    tags_str = ", ".join(tags) if isinstance(tags, list) else tags
+                    st.markdown(f"**Tags:** {tags_str}")
 
 
 # =============================================================================
