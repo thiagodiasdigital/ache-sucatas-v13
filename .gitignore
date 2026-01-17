@@ -7,6 +7,9 @@
 .env.*
 .env.backup_*
 !.env.example
+
+# Streamlit secrets
+.streamlit/secrets.toml
 *.pem
 *.key
 *.p12

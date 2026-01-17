@@ -340,6 +340,118 @@ class SupabaseRepository:
             return []
 
     # =========================================================================
+    # MÉTODOS PARA DASHBOARD - Filtros e consultas
+    # =========================================================================
+
+    def listar_editais_filtrados(
+        self,
+        uf: Optional[str] = None,
+        data_inicio: Optional[str] = None,
+        data_fim: Optional[str] = None,
+        modalidade: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict]:
+        """
+        Lista editais com filtros opcionais.
+
+        Args:
+            uf: Filtrar por UF (ex: "SP", "RJ")
+            data_inicio: Data inicial ISO (ex: "2026-01-01")
+            data_fim: Data final ISO (ex: "2026-01-31")
+            modalidade: ONLINE | PRESENCIAL | HIBRIDO | N/D
+            limit: Máximo de resultados (default 100)
+
+        Returns:
+            Lista de dicionários com dados dos editais
+        """
+        if not self.enable_supabase:
+            return []
+
+        try:
+            query = self.client.table("editais_leilao").select(
+                "id, pncp_id, titulo, orgao, uf, cidade, "
+                "data_publicacao, data_leilao, valor_estimado, "
+                "quantidade_itens, modalidade_leilao, nome_leiloeiro, "
+                "link_pncp, pdf_storage_url, score"
+            )
+
+            # Aplicar filtros
+            if uf:
+                query = query.eq("uf", uf)
+
+            if data_inicio:
+                query = query.gte("data_publicacao", data_inicio)
+
+            if data_fim:
+                query = query.lte("data_publicacao", data_fim)
+
+            if modalidade:
+                query = query.eq("modalidade_leilao", modalidade)
+
+            # Ordenar e limitar
+            query = query.order("data_publicacao", desc=True).limit(limit)
+
+            response = query.execute()
+            return response.data
+
+        except Exception as e:
+            logger.error("Erro ao listar editais filtrados: %s", e)
+            return []
+
+    def listar_ufs_disponiveis(self) -> List[str]:
+        """
+        Lista UFs que possuem editais no banco.
+
+        Returns:
+            Lista de UFs ordenadas (ex: ["BA", "MG", "SP"])
+        """
+        if not self.enable_supabase:
+            return []
+
+        try:
+            response = (
+                self.client.table("editais_leilao")
+                .select("uf")
+                .execute()
+            )
+
+            # Extrair UFs únicas
+            ufs = set(item["uf"] for item in response.data if item.get("uf"))
+            return sorted(list(ufs))
+
+        except Exception as e:
+            logger.error("Erro ao listar UFs: %s", e)
+            return []
+
+    def listar_modalidades_disponiveis(self) -> List[str]:
+        """
+        Lista modalidades de leilão disponíveis.
+
+        Returns:
+            Lista de modalidades (ex: ["ONLINE", "PRESENCIAL", "N/D"])
+        """
+        if not self.enable_supabase:
+            return []
+
+        try:
+            response = (
+                self.client.table("editais_leilao")
+                .select("modalidade_leilao")
+                .execute()
+            )
+
+            modalidades = set(
+                item["modalidade_leilao"]
+                for item in response.data
+                if item.get("modalidade_leilao")
+            )
+            return sorted(list(modalidades))
+
+        except Exception as e:
+            logger.error("Erro ao listar modalidades: %s", e)
+            return []
+
+    # =========================================================================
     # MÉTODOS PARA MINER V10 - Execuções e Editais direto do Miner
     # =========================================================================
 
