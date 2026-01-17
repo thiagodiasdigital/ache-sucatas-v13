@@ -3,6 +3,7 @@
 """
 ACHE SUCATAS - Dashboard de Editais de Leilao
 Visualizacao e filtragem de editais coletados do PNCP
+Version: 1.1.0 - Fix listar_tags_disponiveis AttributeError
 """
 import streamlit as st
 import pandas as pd
