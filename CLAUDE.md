@@ -81,16 +81,16 @@
 
 ### Objetivo de Negocio
 
-Criar um banco de dados estruturado de **leiloes publicos municipais** do Brasil, focando em:
-- Veiculos e maquinas inserviveis
-- Sucatas e materiais reciclaveis
-- Bens moveis de prefeituras
+Criar um banco de dados estruturado de **leiloes publicos** do Brasil, focando em:
+- Veiculos e maquinas agricolas inserviveis
+- Sucatas de veiculos
+- Bens moveis de orgaos publicos
 
 ### Publico-Alvo
 
-- Empresas de reciclagem e sucata
+- Centro de desmanche automotivo
 - Compradores de leiloes publicos
-- Analistas de mercado de leiloes
+- Auto pecas usadas
 
 ### Fontes de Dados
 
@@ -102,16 +102,13 @@ Criar um banco de dados estruturado de **leiloes publicos municipais** do Brasil
 ### Filtros de Coleta
 
 - **Modalidade:** Leilao (modalidadeId=8)
-- **Esfera:** Municipal (prefeituras)
 - **Janela temporal:** Ultimas 24 horas
 - **Score minimo:** 30 pontos (relevancia)
 
 ### Fora do Escopo (por enquanto)
 
-- Leiloes federais e estaduais
 - Leiloes de imoveis
 - Integracao com sistemas de leiloeiros
-- Interface web/dashboard
 
 ---
 
@@ -532,7 +529,7 @@ Bucket: editais-pdfs (privado)
 ```
 Schema: public
 |
-|-- editais_leilao                     # Tabela principal (6 registros)
+|-- editais_leilao                     # Tabela principal (26 registros)
 |-- execucoes_miner                    # Log de execucoes
 +-- metricas_diarias                   # Metricas agregadas
 ```
@@ -640,36 +637,6 @@ gh secret set EMAIL_ADDRESS
 gh secret set EMAIL_APP_PASSWORD
 # Cole: abcdefghijklmnop (16 caracteres, sem espacos)
 ```
-
-### Como Criar Gmail App Password
-
-O Gmail nao permite login direto por SMTP. E necessario criar um "App Password":
-
-**Passo a passo:**
-
-1. **Acessar seguranca da conta:**
-   - Abra: https://myaccount.google.com/security
-   - Faca login com sua conta Gmail
-
-2. **Ativar verificacao em duas etapas (se nao tiver):**
-   - Clique em "Verificacao em duas etapas"
-   - Siga o processo (vai pedir seu celular)
-
-3. **Criar App Password:**
-   - Acesse: https://myaccount.google.com/apppasswords
-   - No campo "Nome do app", digite: `ACHE SUCATAS`
-   - Clique em "Criar"
-
-4. **Copiar a senha:**
-   - Aparecera uma senha de 16 caracteres: `abcd efgh ijkl mnop`
-   - Copie essa senha (Ctrl+C)
-   - **IMPORTANTE:** Essa senha so aparece UMA VEZ
-
-5. **Configurar no GitHub:**
-   ```bash
-   gh secret set EMAIL_APP_PASSWORD
-   # Cole a senha SEM espacos: abcdefghijklmnop
-   ```
 
 **Se precisar criar nova App Password:**
 - Acesse https://myaccount.google.com/apppasswords
@@ -1310,24 +1277,6 @@ Enviado automaticamente pelo GitHub Actions
 | `EMAIL_ADDRESS` | Email Gmail completo | Seu email @gmail.com |
 | `EMAIL_APP_PASSWORD` | Senha de app de 16 caracteres | myaccount.google.com/apppasswords |
 
-### Teste de Notificacao
-
-Para testar se as notificacoes estao funcionando:
-
-```bash
-# 1. Criar workflow de teste temporario
-# (crie arquivo .github/workflows/test-email.yml)
-
-# 2. Disparar manualmente
-gh workflow run test-email.yml
-
-# 3. Verificar inbox do Gmail
-# Email deve chegar em ~10 segundos
-
-# 4. Deletar workflow de teste
-rm .github/workflows/test-email.yml
-git add -A && git commit -m "chore: Remove test" && git push
-```
 
 ---
 
@@ -1657,23 +1606,6 @@ Solucao:
   4. File size limit: 50MB
 ```
 
-### Problema: Email de notificacao nao chegou
-
-```
-Sintoma: Workflow falhou mas nao recebi email
-Causa 1: Secrets EMAIL_ADDRESS ou EMAIL_APP_PASSWORD incorretos
-Causa 2: App Password expirou ou foi revogado
-Causa 3: Email foi para pasta de Spam
-
-Verificar:
-  1. gh secret list | grep EMAIL
-  2. Verificar pasta Spam do Gmail
-  3. Verificar se App Password ainda existe em myaccount.google.com/apppasswords
-
-Solucao:
-  1. Criar nova App Password no Google
-  2. Atualizar secret: gh secret set EMAIL_APP_PASSWORD
-```
 
 ### Problema: Erro SSL ao enviar email
 
@@ -1931,4 +1863,4 @@ Instalar com: `pip install -r requirements.txt`
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-17 00:45 UTC
+> Ultima atualizacao: 2026-01-17 13:05 UTC
