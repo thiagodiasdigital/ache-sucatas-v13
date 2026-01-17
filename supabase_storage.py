@@ -353,6 +353,39 @@ class SupabaseStorageRepository:
             if f["name"].lower().endswith(".pdf")
         ]
 
+    def listar_pdfs_por_storage_path(self, storage_path: str) -> List[dict]:
+        """
+        Lista PDFs usando storage_path diretamente.
+
+        Args:
+            storage_path: Caminho da pasta no Storage (ex: 93539153000192-1-000001/2026)
+
+        Returns:
+            Lista de dicts com info dos PDFs
+        """
+        if not self.enable_storage or not storage_path:
+            return []
+
+        try:
+            response = self.storage.from_(self.bucket_name).list(path=storage_path)
+
+            pdfs = []
+            for item in response:
+                if item.get("id") and item["name"].lower().endswith(".pdf"):
+                    pdfs.append({
+                        "name": item["name"],
+                        "path": f"{storage_path}/{item['name']}",
+                        "size": item.get("metadata", {}).get("size", 0),
+                        "content_type": item.get("metadata", {}).get("mimetype", ""),
+                        "created_at": item.get("created_at"),
+                    })
+
+            return pdfs
+
+        except Exception as e:
+            logger.error(f"Erro ao listar PDFs em {storage_path}: {e}")
+            return []
+
     def arquivo_existe(self, path: str) -> bool:
         """
         Verifica se arquivo existe no Storage.

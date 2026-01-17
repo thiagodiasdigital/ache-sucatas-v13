@@ -539,28 +539,43 @@ class CloudAuditor:
 
         log.info(f"Processando: {pncp_id}")
 
-        # Se não tem storage_path, tentar pelo pncp_id
-        if not storage_path and pncp_id and self.storage_repo:
-            # Listar arquivos do edital no Storage
-            arquivos = self.storage_repo.listar_pdfs(pncp_id)
-            if arquivos:
-                storage_path = arquivos[0].get("path")
-
-        # Download do PDF
+        # Download do PDF - priorizar storage_path
         pdf_text = ""
-        if storage_path and self.storage_repo:
-            try:
-                pdf_bytesio = self.storage_repo.download_pdf(storage_path)
-                if pdf_bytesio:
-                    pdf_text = extrair_texto_pdf_bytesio(pdf_bytesio)
-                    log.debug(f"PDF extraído: {len(pdf_text)} chars")
-            except Exception as e:
-                log.warning(f"Erro ao baixar PDF {storage_path}: {e}")
+        pdf_path = None
+
+        if self.storage_repo:
+            # Tentar pelo storage_path primeiro (formato: CNPJ-1-SEQ/ANO)
+            if storage_path:
+                arquivos = self.storage_repo.listar_pdfs_por_storage_path(storage_path)
+                if arquivos:
+                    pdf_path = arquivos[0].get("path")
+                    log.debug(f"PDF encontrado via storage_path: {pdf_path}")
+
+            # Fallback: tentar pelo pncp_id
+            if not pdf_path and pncp_id:
+                arquivos = self.storage_repo.listar_pdfs(pncp_id)
+                if arquivos:
+                    pdf_path = arquivos[0].get("path")
+                    log.debug(f"PDF encontrado via pncp_id: {pdf_path}")
+
+            # Baixar o PDF
+            if pdf_path:
+                try:
+                    pdf_bytesio = self.storage_repo.download_pdf(pdf_path)
+                    if pdf_bytesio:
+                        pdf_text = extrair_texto_pdf_bytesio(pdf_bytesio)
+                        log.debug(f"PDF extraído: {len(pdf_text)} chars")
+                except Exception as e:
+                    log.warning(f"Erro ao baixar PDF {pdf_path}: {e}")
 
         # Se não conseguiu do Storage, tentar metadados
         metadados = {}
         if self.storage_repo:
-            metadados = self.storage_repo.download_metadados(pncp_id) or {}
+            # Tentar pelo storage_path primeiro, depois pelo pncp_id
+            if storage_path:
+                metadados = self.storage_repo.download_json(f"{storage_path}/metadados.json") or {}
+            if not metadados and pncp_id:
+                metadados = self.storage_repo.download_metadados(pncp_id) or {}
 
         # Extrair dados usando cascata V12/V13
         descricao = edital.get("descricao", "") or metadados.get("descricao", "")
