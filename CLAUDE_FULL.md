@@ -1,6 +1,6 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 18:00 UTC
+> **Ultima atualizacao:** 2026-01-17 21:00 UTC
 > **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
@@ -1687,6 +1687,7 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `91cd89e` | 2026-01-17 | chore: Bump dashboard version to force Streamlit Cloud redeploy |
 | `bb47f2f` | 2026-01-17 | fix: Add type check to prevent AttributeError in listar_tags_disponiveis |
 | `e5343be` | 2026-01-17 | fix: Resolve 8 critical bugs in dashboard and auditor |
 | `3ef2ac1` | 2026-01-17 | fix: Use correct column name storage_path instead of pdf_storage_url |
