@@ -1,8 +1,8 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 00:00 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14
-> **Status:** 100% Operacional na Nuvem com Notificacoes
+> **Ultima atualizacao:** 2026-01-17 00:45 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14 + CI
+> **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
 ---
@@ -18,13 +18,15 @@
 7. [Seguranca](#seguranca)
 8. [Banco de Dados (Supabase)](#banco-de-dados-supabase)
 9. [GitHub Actions](#github-actions)
-10. [Sistema de Notificacoes](#sistema-de-notificacoes)
-11. [API PNCP](#api-pncp)
-12. [Comandos Uteis](#comandos-uteis)
-13. [Troubleshooting](#troubleshooting)
-14. [Roadmap](#roadmap)
-15. [Historico de Commits](#historico-de-commits)
-16. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
+10. [CI - Integracao Continua](#ci---integracao-continua)
+11. [Testes Unitarios](#testes-unitarios)
+12. [Sistema de Notificacoes](#sistema-de-notificacoes)
+13. [API PNCP](#api-pncp)
+14. [Comandos Uteis](#comandos-uteis)
+15. [Troubleshooting](#troubleshooting)
+16. [Roadmap](#roadmap)
+17. [Historico de Commits](#historico-de-commits)
+18. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
 
 ---
 
@@ -40,6 +42,7 @@
 4. **Persistencia** - Armazena metadados no Supabase PostgreSQL
 5. **Automacao** - Executa 3x/dia via GitHub Actions (sem necessidade de PC local)
 6. **Notificacao** - Envia email automatico quando o workflow falha
+7. **Validacao** - CI automatico com lint e testes em cada push/PR
 
 ### Metricas Atuais
 
@@ -47,9 +50,13 @@
 |---------|-------|
 | Editais no banco (PostgreSQL) | 6 |
 | Editais no Storage (PDFs) | 20 |
-| Workflows executados | 2 (100% sucesso) |
-| Ultima execucao | 2026-01-16 22:43 UTC |
-| Tempo medio de execucao | ~2 minutos |
+| Workflows de coleta executados | 2 (100% sucesso) |
+| Workflows de CI executados | 1 (100% sucesso) |
+| Ultima execucao coleta | 2026-01-16 22:43 UTC |
+| Ultima execucao CI | 2026-01-17 00:40 UTC |
+| Tempo medio coleta | ~2 minutos |
+| Tempo medio CI | ~40 segundos |
+| Testes unitarios | 98 (100% passando) |
 | Notificacoes configuradas | Email (Gmail SMTP) |
 
 ### Funcionalidades Implementadas
@@ -63,6 +70,8 @@
 | Execucao agendada 3x/dia | Operacional | 2026-01-16 |
 | Notificacao de falha por email | Operacional | 2026-01-17 |
 | Pre-commit hook de seguranca | Operacional | 2026-01-16 |
+| CI com ruff (linting) | Operacional | 2026-01-17 |
+| CI com pytest (98 testes) | Operacional | 2026-01-17 |
 
 ---
 
@@ -106,37 +115,39 @@ Criar um banco de dados estruturado de **leiloes publicos municipais** do Brasil
 
 ## Arquitetura
 
-### Arquitetura V11 - 100% Cloud (ATUAL)
+### Arquitetura V11 - 100% Cloud + CI (ATUAL)
 
 ```
 +-----------------------------------------------------------+
 |                    GITHUB ACTIONS                          |
-|              (Cron: 00:00, 08:00, 16:00 UTC)               |
-|              (21:00, 05:00, 13:00 BRT)                     |
 +-----------------------------------------------------------+
-                            |
-       +--------------------+--------------------+
-       |                    |                    |
-       v                    v                    v
-+--------------+    +--------------+    +------------------+
-|  Miner V11   |--->| Auditor V14  |    | Notify Failure   |
-|  (coleta)    |    |  (extracao)  |    | (email Gmail)    |
-|   ~41s       |    |    ~29s      |    | Se falhar        |
-+------+-------+    +------+-------+    +------------------+
-       |                   |                    |
-       |   +---------------+                    |
-       |   |                                    v
-       v   v                          +------------------+
-+---------------------------+         |  thiagodias...   |
-|        SUPABASE           |         |  @gmail.com      |
-|  +----------+ +--------+  |         +------------------+
-|  | Storage  | |PostgreSQL| |
-|  | (PDFs)   | |(metadata)| |
-|  +----------+ +--------+  |
-+---------------------------+
+|                                                           |
+|  WORKFLOW 1: ache-sucatas.yml (Coleta - 3x/dia)          |
+|  +---------+    +----------+    +--------+    +--------+ |
+|  | Miner   |--->| Auditor  |--->| Verify |--->| Notify | |
+|  | V11     |    | V14      |    |        |    |(falha) | |
+|  +---------+    +----------+    +--------+    +--------+ |
+|       |              |                                    |
+|       v              v                                    |
+|  +---------------------------+                            |
+|  |        SUPABASE           |                            |
+|  |  +----------+ +--------+  |                            |
+|  |  | Storage  | |PostgreSQL| |                            |
+|  |  | (PDFs)   | |(metadata)| |                            |
+|  |  +----------+ +--------+  |                            |
+|  +---------------------------+                            |
+|                                                           |
+|  WORKFLOW 2: ci.yml (CI - Push/PR)                       |
+|  +--------+    +--------+                                 |
+|  | Lint   |    | Test   |                                 |
+|  | (ruff) |    |(pytest)|                                 |
+|  | ~8s    |    | ~32s   |                                 |
+|  +--------+    +--------+                                 |
+|                                                           |
++-----------------------------------------------------------+
 ```
 
-### Fluxo Completo de Execucao
+### Fluxo Completo de Execucao (Coleta)
 
 ```
 TRIGGER (Cron 3x/dia ou Manual)
@@ -179,6 +190,27 @@ TRIGGER (Cron 3x/dia ou Manual)
 | - SMTP porta 465     |
 | - SSL/TLS            |
 +----------------------+
+```
+
+### Fluxo de CI (Validacao)
+
+```
+TRIGGER (Push ou PR para master)
+           |
+           v
++----------------------+     +----------------------+
+| Job 1: LINT          |     | Job 2: TEST          |
+| - Checkout           |     | - Checkout           |
+| - Setup Python 3.11  |     | - Setup Python 3.11  |
+| - Install ruff       |     | - Install deps       |
+| - ruff check .       |     | - pytest tests/ -v   |
+| Tempo: ~8s           |     | Tempo: ~32s          |
++----------------------+     +----------------------+
+           |                           |
+           +-------------+-------------+
+                         |
+                         v
+                   [CI PASSOU]
 ```
 
 ### Fluxo Detalhado do Miner V11
@@ -284,11 +316,25 @@ supabase_storage.py
     |-- supabase-py (cliente oficial)
     |-- python-dotenv
 
+tests/
+    |-- test_auditor_extraction.py
+    |   |-- cloud_auditor_v14.py (funcoes puras)
+    |-- test_miner_scoring.py
+    |   |-- ache_sucatas_miner_v11.py (ScoringEngine, FileTypeDetector)
+    |-- test_repository_parsing.py
+        |-- supabase_repository.py (metodos _parse_*)
+
 .github/workflows/ache-sucatas.yml
     |-- dawidd6/action-send-mail@v3 (envio email)
     |-- actions/checkout@v4
     |-- actions/setup-python@v5
     |-- actions/upload-artifact@v4
+
+.github/workflows/ci.yml
+    |-- actions/checkout@v4
+    |-- actions/setup-python@v5
+    |-- ruff (linting)
+    |-- pytest (testes)
 ```
 
 ---
@@ -303,6 +349,24 @@ supabase_storage.py
 | `cloud_auditor_v14.py` | ~600 | Processa PDFs do Storage, extrai dados | supabase, pdfplumber |
 | `supabase_repository.py` | ~300 | Repositorio PostgreSQL (CRUD editais) | supabase |
 | `supabase_storage.py` | ~200 | Repositorio Storage (upload/download PDFs) | supabase |
+
+### Testes Unitarios
+
+| Arquivo | Testes | Funcao | Cobertura |
+|---------|--------|--------|-----------|
+| `tests/test_auditor_extraction.py` | 53 | Testa funcoes de extracao do cloud_auditor_v14 | corrigir_encoding, limpar_texto, formatar_data_br, formatar_valor_br, extrair_urls_de_texto, normalizar_url, extrair_valor_estimado, extrair_quantidade_itens, extrair_nome_leiloeiro, extrair_data_leilao_cascata |
+| `tests/test_miner_scoring.py` | 19 | Testa ScoringEngine e FileTypeDetector | calculate_score, detect_by_content_type, detect_by_magic_bytes |
+| `tests/test_repository_parsing.py` | 26 | Testa metodos de parsing do supabase_repository | _parse_valor, _parse_int, _parse_data, _parse_datetime |
+| `tests/conftest.py` | - | Configuracao e fixtures do pytest | sys.path setup |
+| `tests/__init__.py` | - | Inicializacao do pacote de testes | - |
+
+### Configuracao de CI/Linting
+
+| Arquivo | Linhas | Funcao |
+|---------|--------|--------|
+| `ruff.toml` | 60 | Configuracao do linter ruff (Python 3.11, regras E/F/W, exclusoes) |
+| `pytest.ini` | 8 | Configuracao do pytest (testpaths, addopts) |
+| `.github/workflows/ci.yml` | 75 | Workflow de CI (lint + test) |
 
 ### Scripts de Seguranca
 
@@ -323,13 +387,14 @@ supabase_storage.py
 | `.env.example` | Template de credenciais (82 linhas, documentado) |
 | `requirements.txt` | Dependencias Python (9 pacotes) |
 | `schemas_v13_supabase.sql` | Schema das tabelas PostgreSQL |
-| `.gitignore` | Protecoes (87 linhas, reforcado) |
+| `.gitignore` | Protecoes (96 linhas, reforcado com pytest/ruff) |
 
 ### GitHub Actions
 
-| Arquivo | Linhas | Funcao |
-|---------|--------|--------|
-| `.github/workflows/ache-sucatas.yml` | 247 | Workflow principal com 4 jobs |
+| Arquivo | Linhas | Funcao | Trigger |
+|---------|--------|--------|---------|
+| `.github/workflows/ache-sucatas.yml` | 247 | Workflow principal de coleta (4 jobs) | Cron 3x/dia, manual |
+| `.github/workflows/ci.yml` | 75 | Workflow de CI (lint + test) | Push/PR para master |
 
 ### Scripts Legados (NAO USAR em producao)
 
@@ -348,15 +413,26 @@ testes-12-01-17h/
 |
 |-- .github/
 |   +-- workflows/
-|       +-- ache-sucatas.yml           # Workflow principal (247 linhas)
+|       |-- ache-sucatas.yml           # Workflow de coleta (247 linhas)
+|       +-- ci.yml                     # Workflow de CI (75 linhas)
 |
 |-- .githooks/
 |   +-- pre-commit                     # Hook de seguranca
+|
+|-- tests/                             # NOVO - Testes unitarios
+|   |-- __init__.py                    # Pacote de testes
+|   |-- conftest.py                    # Configuracao pytest
+|   |-- test_auditor_extraction.py     # 53 testes - funcoes de extracao
+|   |-- test_miner_scoring.py          # 19 testes - scoring e deteccao
+|   +-- test_repository_parsing.py     # 26 testes - parsing de dados
 |
 |-- ache_sucatas_miner_v11.py          # PRODUCAO - Miner cloud
 |-- cloud_auditor_v14.py               # PRODUCAO - Auditor cloud
 |-- supabase_repository.py             # PRODUCAO - Repo PostgreSQL
 |-- supabase_storage.py                # PRODUCAO - Repo Storage
+|
+|-- ruff.toml                          # NOVO - Config linter
+|-- pytest.ini                         # NOVO - Config pytest
 |
 |-- rotacionar_credenciais.py          # Seguranca
 |-- instalar_hooks_seguranca.py        # Seguranca
@@ -366,7 +442,7 @@ testes-12-01-17h/
 |
 |-- .env                               # CREDENCIAIS (gitignore)
 |-- .env.example                       # Template documentado
-|-- .gitignore                         # 87 linhas de protecao
+|-- .gitignore                         # 96 linhas de protecao
 |-- CLAUDE.md                          # Este arquivo
 |-- requirements.txt                   # Dependencias Python
 |-- schemas_v13_supabase.sql           # Schema SQL
@@ -387,10 +463,18 @@ testes-12-01-17h/
 |
 |-- .github/
 |   +-- workflows/
-|       +-- ache-sucatas.yml           # GitHub Actions workflow
+|       |-- ache-sucatas.yml           # Workflow de coleta
+|       +-- ci.yml                     # Workflow de CI
 |
 |-- .githooks/
 |   +-- pre-commit                     # Hook de seguranca
+|
+|-- tests/                             # Testes unitarios (98 testes)
+|   |-- __init__.py
+|   |-- conftest.py
+|   |-- test_auditor_extraction.py
+|   |-- test_miner_scoring.py
+|   +-- test_repository_parsing.py
 |
 |-- antes-dia-15-01-26/                # Backup de versoes antigas (gitignore)
 |   |-- mineradores_com_resultados/
@@ -406,10 +490,12 @@ testes-12-01-17h/
 |
 |-- .env                               # CREDENCIAIS (gitignore)
 |-- .env.example                       # Template documentado
-|-- .gitignore                         # 87 linhas de protecao
+|-- .gitignore                         # 96 linhas de protecao
 |-- CLAUDE.md                          # Este arquivo
 |-- requirements.txt                   # Dependencias Python
 |-- schemas_v13_supabase.sql           # Schema SQL
+|-- ruff.toml                          # Config linter
+|-- pytest.ini                         # Config pytest
 |
 |-- [scripts *.py]                     # Scripts do projeto
 +-- [arquivos gerados *.csv, *.xlsx]   # Outputs (gitignore)
@@ -604,7 +690,7 @@ Uma auditoria completa de seguranca foi realizada e todas vulnerabilidades foram
 2. **Rotacao de credenciais** - Service key e senha do banco regeneradas no Supabase
 3. **Pre-commit hook** - Bloqueia automaticamente commits com secrets
 4. **Scripts de seguranca** - Ferramentas para rotacao e instalacao de hooks
-5. **.gitignore reforcado** - 87 linhas com padroes de seguranca
+5. **.gitignore reforcado** - 96 linhas com padroes de seguranca
 
 ### Pre-commit Hook
 
@@ -638,6 +724,7 @@ O hook `.githooks/pre-commit` bloqueia commits contendo:
 | Feature flags | ENABLE_SUPABASE pode desativar integracao | ATIVO |
 | Kill switch | `desligar_supabase.py` disponivel | DISPONIVEL |
 | Notificacao de falha | Email quando workflow falha | ATIVO |
+| CI automatico | Valida codigo em cada push/PR | ATIVO |
 
 ### Como Rotacionar Credenciais
 
@@ -778,7 +865,14 @@ Configuracao do Supabase Storage.
 
 ## GitHub Actions
 
-### Workflow: ache-sucatas.yml
+### Visao Geral dos Workflows
+
+| Workflow | Arquivo | Trigger | Jobs | Tempo |
+|----------|---------|---------|------|-------|
+| Coleta e Processamento | `ache-sucatas.yml` | Cron 3x/dia, manual | 4 (miner, auditor, verify, notify) | ~2 min |
+| CI - Lint & Test | `ci.yml` | Push/PR para master | 2 (lint, test) | ~40s |
+
+### Workflow: ache-sucatas.yml (Coleta)
 
 Configuracao completa do workflow de automacao.
 
@@ -842,6 +936,275 @@ env:
 | Verificacao | 30s |
 | Notificacao | 8s (se falhar) |
 | **Total** | ~2 min |
+
+---
+
+## CI - Integracao Continua
+
+### Visao Geral
+
+O CI (Continuous Integration) valida automaticamente o codigo em cada push ou pull request para a branch master.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Workflow | `.github/workflows/ci.yml` |
+| Trigger | Push/PR para master |
+| Jobs | 2 (lint, test) |
+| Tempo total | ~40 segundos |
+| Linter | ruff (Python) |
+| Framework de testes | pytest |
+| Testes | 98 (100% passando) |
+
+### Workflow: ci.yml
+
+**Arquivo:** `.github/workflows/ci.yml`
+**Linhas:** 75
+
+```yaml
+name: CI - Lint & Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  lint:
+    name: Lint with Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff
+      - run: ruff check .
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - run: |
+          pip install pytest
+          pip install -r requirements.txt
+      - run: pytest tests/ -v --tb=short
+        env:
+          ENABLE_SUPABASE: 'false'
+          ENABLE_SUPABASE_STORAGE: 'false'
+```
+
+### Jobs do CI
+
+| Job | Nome | Tempo | O que faz |
+|-----|------|-------|-----------|
+| lint | Lint with Ruff | ~8s | Verifica erros de codigo com ruff |
+| test | Unit Tests | ~32s | Executa 98 testes unitarios com pytest |
+
+### Configuracao do Ruff (ruff.toml)
+
+```toml
+# Target Python 3.11
+target-version = "py311"
+
+# Line length
+line-length = 120
+
+# Exclude legacy files
+exclude = [
+    ".git", ".venv", "venv", "__pycache__",
+    "antes-dia-*", "ACHE_SUCATAS_DB", "logs"
+]
+
+[lint]
+# Rules enabled
+select = ["E", "F", "W"]  # pycodestyle, Pyflakes, warnings
+
+# Rules ignored (existing code patterns)
+ignore = [
+    "E402",  # Import not at top
+    "E501",  # Line too long
+    "E701",  # Multiple statements on one line
+    "E722",  # Bare except
+    "E731",  # Lambda assignment
+    "F401",  # Import unused
+    "F541",  # f-string without placeholders
+    "F841",  # Variable unused
+    "W291",  # Trailing whitespace
+    "W292",  # No newline at end
+    "W293",  # Blank line whitespace
+    "W605",  # Invalid escape sequence
+]
+
+# Per-file ignores for legacy code
+[lint.per-file-ignores]
+"ache_sucatas_miner_v10.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v9*.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v8*.py" = ["E", "F", "W"]
+"local_auditor_v*.py" = ["E", "F", "W"]
+"migrar_*.py" = ["E", "F", "W"]
+# ... outros arquivos legados
+```
+
+### Configuracao do Pytest (pytest.ini)
+
+```ini
+[pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts = -v --tb=short
+filterwarnings =
+    ignore::DeprecationWarning
+    ignore::PendingDeprecationWarning
+```
+
+### Como Executar CI Localmente
+
+```bash
+# Instalar ferramentas
+pip install ruff pytest
+
+# Executar linting
+ruff check .
+
+# Executar testes
+ENABLE_SUPABASE=false pytest tests/ -v
+
+# Verificar formato (desabilitado no CI por enquanto)
+ruff format --check .
+
+# Formatar codigo automaticamente
+ruff format .
+```
+
+---
+
+## Testes Unitarios
+
+### Visao Geral
+
+| Metrica | Valor |
+|---------|-------|
+| Total de testes | 98 |
+| Passando | 98 (100%) |
+| Falhando | 0 |
+| Tempo de execucao | ~3 segundos |
+| Framework | pytest |
+| Cobertura | Funcoes puras (sem Supabase) |
+
+### Estrutura de Testes
+
+```
+tests/
+|-- __init__.py                    # Pacote de testes
+|-- conftest.py                    # Configuracao e fixtures
+|-- test_auditor_extraction.py     # 53 testes
+|-- test_miner_scoring.py          # 19 testes
++-- test_repository_parsing.py     # 26 testes
+```
+
+### test_auditor_extraction.py (53 testes)
+
+Testa funcoes de extracao do `cloud_auditor_v14.py`.
+
+| Classe de Teste | Testes | Funcao Testada |
+|-----------------|--------|----------------|
+| TestCorrigirEncoding | 4 | `corrigir_encoding()` |
+| TestLimparTexto | 7 | `limpar_texto()` |
+| TestFormatarDataBr | 8 | `formatar_data_br()` |
+| TestFormatarValorBr | 6 | `formatar_valor_br()` |
+| TestExtrairUrlsDeTexto | 5 | `extrair_urls_de_texto()` |
+| TestNormalizarUrl | 6 | `normalizar_url()` |
+| TestExtrairValorEstimado | 4 | `extrair_valor_estimado()` |
+| TestExtrairQuantidadeItens | 4 | `extrair_quantidade_itens()` |
+| TestExtrairNomeLeiloeiro | 3 | `extrair_nome_leiloeiro()` |
+| TestExtrairDataLeilaoCascata | 6 | `extrair_data_leilao_cascata()` |
+
+**Exemplo de teste:**
+```python
+class TestFormatarDataBr:
+    def test_iso_format(self):
+        assert formatar_data_br("2026-01-15") == "15/01/2026"
+
+    def test_none_returns_nd(self):
+        assert formatar_data_br(None) == "N/D"
+```
+
+### test_miner_scoring.py (19 testes)
+
+Testa `ScoringEngine` e `FileTypeDetector` do `ache_sucatas_miner_v11.py`.
+
+| Classe de Teste | Testes | Classe/Funcao Testada |
+|-----------------|--------|----------------------|
+| TestScoringEngine | 8 | `ScoringEngine.calculate_score()` |
+| TestFileTypeDetector | 11 | `FileTypeDetector.detect_by_content_type()`, `detect_by_magic_bytes()` |
+
+**Exemplo de teste:**
+```python
+class TestScoringEngine:
+    def test_base_score(self):
+        """Empty text should return base score of 50"""
+        score = ScoringEngine.calculate_score("", "", "")
+        assert score == 50
+
+    def test_positive_keywords_increase_score(self):
+        score = ScoringEngine.calculate_score(
+            "leilão de veículos",
+            "sucata inservível",
+            ""
+        )
+        assert score > 50
+```
+
+### test_repository_parsing.py (26 testes)
+
+Testa metodos de parsing do `supabase_repository.py`.
+
+| Classe de Teste | Testes | Metodo Testado |
+|-----------------|--------|----------------|
+| TestParseValor | 7 | `_parse_valor()` |
+| TestParseInt | 6 | `_parse_int()` |
+| TestParseData | 6 | `_parse_data()` |
+| TestParseDatetime | 5 | `_parse_datetime()` |
+
+**Exemplo de teste:**
+```python
+class TestParseValor:
+    @pytest.fixture
+    def repo(self):
+        return SupabaseRepository(enable_supabase=False)
+
+    def test_with_currency_symbol(self, repo):
+        assert repo._parse_valor("R$ 1.234,56") == 1234.56
+```
+
+### Funcoes Testadas (Resumo)
+
+| Arquivo Fonte | Funcoes Testadas | Tipo |
+|---------------|------------------|------|
+| `cloud_auditor_v14.py` | corrigir_encoding, limpar_texto, formatar_data_br, formatar_valor_br, extrair_urls_de_texto, normalizar_url, extrair_valor_estimado, extrair_quantidade_itens, extrair_nome_leiloeiro, extrair_data_leilao_cascata | Funcoes puras |
+| `ache_sucatas_miner_v11.py` | ScoringEngine.calculate_score, FileTypeDetector.detect_by_content_type, FileTypeDetector.detect_by_magic_bytes | Metodos estaticos |
+| `supabase_repository.py` | _parse_valor, _parse_int, _parse_data, _parse_datetime | Metodos internos |
+
+### Adicionar Novos Testes
+
+Para adicionar novos testes:
+
+1. Crie um arquivo `tests/test_<modulo>.py`
+2. Use a convenção `Test<Classe>` para classes de teste
+3. Use a convenção `test_<funcionalidade>` para metodos
+4. Execute localmente: `pytest tests/ -v`
+5. Push para validar no CI
 
 ---
 
@@ -1046,7 +1409,7 @@ GET /orgaos/18188243000160/compras/2025/000161/arquivos
 ### Execucao Cloud (RECOMENDADO)
 
 ```bash
-# Disparar workflow manualmente (todos os jobs)
+# Disparar workflow de coleta manualmente (todos os jobs)
 gh workflow run ache-sucatas.yml
 
 # Disparar apenas Miner
@@ -1055,8 +1418,11 @@ gh workflow run ache-sucatas.yml -f run_auditor=false
 # Disparar apenas Auditor (limitar a 5 editais)
 gh workflow run ache-sucatas.yml -f run_miner=false -f auditor_limit=5
 
-# Verificar status dos ultimos workflows
+# Verificar status dos ultimos workflows de coleta
 gh run list --workflow=ache-sucatas.yml --limit 5
+
+# Verificar status dos ultimos workflows de CI
+gh run list --workflow=ci.yml --limit 5
 
 # Acompanhar execucao em tempo real
 gh run watch <RUN_ID>
@@ -1066,6 +1432,40 @@ gh run view <RUN_ID> --log
 
 # Ver logs de um job especifico
 gh run view <RUN_ID> --log --job=<JOB_ID>
+```
+
+### CI e Testes
+
+```bash
+# Instalar ferramentas de CI
+pip install ruff pytest
+
+# Executar linting
+ruff check .
+
+# Executar linting com correcao automatica
+ruff check . --fix
+
+# Verificar formato
+ruff format --check .
+
+# Formatar codigo automaticamente
+ruff format .
+
+# Executar testes (sem Supabase)
+ENABLE_SUPABASE=false pytest tests/ -v
+
+# Executar testes com saida curta
+pytest tests/ --tb=short
+
+# Executar apenas um arquivo de teste
+pytest tests/test_auditor_extraction.py -v
+
+# Executar apenas uma classe de teste
+pytest tests/test_auditor_extraction.py::TestFormatarDataBr -v
+
+# Executar apenas um teste especifico
+pytest tests/test_auditor_extraction.py::TestFormatarDataBr::test_iso_format -v
 ```
 
 ### Execucao Local (Debug/Testes)
@@ -1274,6 +1674,29 @@ Solucao: Ja corrigido - workflow usa porta 465 com SSL
 Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 ```
 
+### Problema: CI falhou no lint
+
+```
+Sintoma: ruff check . falhou
+Causa: Codigo com erros de estilo/sintaxe
+Solucao:
+  1. Executar localmente: ruff check .
+  2. Corrigir erros ou adicionar ao ignore em ruff.toml
+  3. Para correcao automatica: ruff check . --fix
+```
+
+### Problema: CI falhou nos testes
+
+```
+Sintoma: pytest tests/ falhou
+Causa: Teste quebrado ou funcao alterada
+Solucao:
+  1. Executar localmente: pytest tests/ -v
+  2. Ver qual teste falhou
+  3. Corrigir o teste ou a funcao
+  4. Re-executar para validar
+```
+
 ---
 
 ## Roadmap
@@ -1288,8 +1711,9 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 | 4 - Cloud Native | V11 + V14 100% na nuvem | CONCLUIDA | 2026-01-16 |
 | 5 - Seguranca | Auditoria e correcoes | CONCLUIDA | 2026-01-16 |
 | 6 - Notificacoes | Email de falha via Gmail | CONCLUIDA | 2026-01-17 |
+| 7 - CI | Linting (ruff) + Testes (pytest) | CONCLUIDA | 2026-01-17 |
 
-### Fase 7 - Expansao (FUTURO)
+### Fase 8 - Expansao (FUTURO)
 
 | Item | Descricao | Prioridade |
 |------|-----------|------------|
@@ -1303,7 +1727,9 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 | Item | Descricao | Esforco | Status |
 |------|-----------|---------|--------|
 | Notificacao de falha | Email quando workflow falha | Baixo | CONCLUIDO |
-| Testes unitarios | Cobertura para Storage e Repository | Medio | Pendente |
+| Testes unitarios | Cobertura para funcoes puras | Medio | CONCLUIDO (98 testes) |
+| CI/CD | Lint e testes automaticos | Medio | CONCLUIDO |
+| Format check | Verificacao de formatacao | Baixo | Pendente (67 arquivos) |
 | Monitoramento custos | Alerta quando Storage > 500MB | Baixo | Pendente |
 | Limpeza editais antigos | Remover editais > 1 ano | Baixo | Pendente |
 
@@ -1315,6 +1741,8 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `c9b813c` | 2026-01-17 | feat: Add CI workflow with ruff linting and pytest |
+| `80ae043` | 2026-01-17 | docs: Ultra-detailed CLAUDE.md update with notifications system |
 | `e566fd0` | 2026-01-17 | chore: Remove email test workflow |
 | `75548f1` | 2026-01-17 | fix: Use SSL port 465 instead of STARTTLS port 587 for Gmail |
 | `09bc949` | 2026-01-17 | test: Add email notification test workflow |
@@ -1336,6 +1764,7 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 #### Funcionalidades (feat)
 | Hash | Descricao |
 |------|-----------|
+| `c9b813c` | CI workflow com ruff linting e pytest (98 testes) |
 | `c3a9817` | Notificacao por email quando workflow falha |
 | `11ac508` | Arquitetura 100% cloud com Supabase Storage |
 | `a639ebd` | Miner V10 com integracao Supabase |
@@ -1355,6 +1784,7 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 #### Documentacao (docs)
 | Hash | Descricao |
 |------|-----------|
+| `80ae043` | CLAUDE.md com sistema de notificacoes |
 | `cf6cc99` | Reescrita completa do CLAUDE.md |
 | `f437982` | Auditoria de seguranca |
 | `6642d33` | Arquitetura V11 cloud |
@@ -1366,24 +1796,33 @@ Commit: 75548f1 fix: Use SSL port 465 instead of STARTTLS port 587
 Execute estes comandos no inicio de cada sessao Claude:
 
 ```bash
-# 1. Verificar status do ultimo workflow
+# 1. Verificar status do ultimo workflow de coleta
 gh run list --workflow=ache-sucatas.yml --limit 3
 
-# 2. Verificar editais no banco
+# 2. Verificar status do ultimo CI
+gh run list --workflow=ci.yml --limit 3
+
+# 3. Verificar editais no banco
 python -c "from supabase_repository import SupabaseRepository; r = SupabaseRepository(); print(f'Editais no banco: {r.contar_editais()}')"
 
-# 3. Verificar editais no Storage
+# 4. Verificar editais no Storage
 python -c "from supabase_storage import SupabaseStorageRepository; s = SupabaseStorageRepository(); print(f'Editais no Storage: {len(s.listar_editais())}')"
 
-# 4. Verificar secrets configurados (deve mostrar 4)
+# 5. Verificar secrets configurados (deve mostrar 4)
 gh secret list
+
+# 6. Executar testes localmente
+pytest tests/ -v --tb=short
 ```
 
 ### Resultados Esperados
 
 ```
-# Workflow
+# Workflow de coleta
 completed  success  ACHE SUCATAS - Coleta e Processamento  master  ...
+
+# Workflow de CI
+completed  success  CI - Lint & Test  master  ...
 
 # Banco
 Editais no banco: 6
@@ -1396,17 +1835,22 @@ EMAIL_ADDRESS         2026-01-16T23:41:58Z
 EMAIL_APP_PASSWORD    2026-01-16T23:43:24Z
 SUPABASE_SERVICE_KEY  2026-01-16T22:41:56Z
 SUPABASE_URL          2026-01-16T21:21:31Z
+
+# Testes
+98 passed in 3.00s
 ```
 
 ### Se Algum Falhar
 
 | Problema | Acao |
 |----------|------|
-| Workflow falhou | `gh run view <ID> --log` para ver erro |
+| Workflow de coleta falhou | `gh run view <ID> --log` para ver erro |
+| CI falhou | `ruff check .` e `pytest tests/ -v` localmente |
 | Supabase nao conecta | Verificar .env ou GitHub Secrets |
 | Storage nao conecta | Verificar se bucket existe no Dashboard |
 | Secrets nao listados | Configurar via `gh secret set` |
 | Menos de 4 secrets | Configurar EMAIL_ADDRESS e EMAIL_APP_PASSWORD |
+| Testes falharam | Ver output e corrigir teste ou funcao |
 
 ---
 
@@ -1420,6 +1864,8 @@ SUPABASE_URL          2026-01-16T21:21:31Z
 | Actions | https://github.com/thiagodiasdigital/ache-sucatas-v13/actions |
 | Secrets configurados | 4 (SUPABASE_URL, SUPABASE_SERVICE_KEY, EMAIL_ADDRESS, EMAIL_APP_PASSWORD) |
 | Email de notificacao | thiagodias180986@gmail.com |
+| Workflows | 2 (ache-sucatas.yml, ci.yml) |
+| Testes unitarios | 98 (100% passando) |
 
 ---
 
@@ -1440,6 +1886,13 @@ Instalar com: `pip install -r requirements.txt`
 | aiofiles | >=23.0.0 | I/O async |
 | python-docx | >=1.0.0 | Parsing de DOCX (opcional) |
 
+### Dependencias de Desenvolvimento
+
+| Pacote | Versao | Uso |
+|--------|--------|-----|
+| ruff | >=0.1.0 | Linting Python |
+| pytest | >=7.0.0 | Testes unitarios |
+
 ---
 
 ## Notas Importantes
@@ -1456,8 +1909,11 @@ Instalar com: `pip install -r requirements.txt`
 10. **UF invalida vira "XX"** - nao bloqueia por dados ruins da API
 11. **Notificacao por email** - envia automaticamente quando workflow falha
 12. **Gmail SMTP porta 465** - SSL/TLS, nao usar porta 587
+13. **CI automatico** - roda em cada push/PR para master
+14. **98 testes unitarios** - cobrindo funcoes puras (sem Supabase)
+15. **ruff.toml configurado** - regras relaxadas para codigo existente
 
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-17 00:00 UTC
+> Ultima atualizacao: 2026-01-17 00:45 UTC
