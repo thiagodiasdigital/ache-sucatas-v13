@@ -503,7 +503,7 @@ class SupabaseRepository:
                 tags = item.get("tags")
                 if isinstance(tags, list):
                     for tag in tags:
-                        if tag and tag.strip():
+                        if isinstance(tag, str) and tag.strip():
                             all_tags.add(tag.strip())
                 elif isinstance(tags, str) and tags:
                     for tag in tags.split(","):
