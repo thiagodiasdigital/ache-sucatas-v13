@@ -372,7 +372,7 @@ class SupabaseRepository:
                 "id, pncp_id, titulo, orgao, uf, cidade, "
                 "data_publicacao, data_leilao, valor_estimado, "
                 "quantidade_itens, modalidade_leilao, nome_leiloeiro, "
-                "link_pncp, pdf_storage_url, score"
+                "link_pncp, storage_path, score"
             )
 
             # Aplicar filtros

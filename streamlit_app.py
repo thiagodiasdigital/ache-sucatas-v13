@@ -300,7 +300,7 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
                     with link_col1:
                         st.link_button("Ver no PNCP", link_pncp)
 
-                pdf_url = edital.get("pdf_storage_url")
+                pdf_url = edital.get("storage_path")
                 if pdf_url:
                     with link_col2:
                         st.link_button("Download PDF", pdf_url)
