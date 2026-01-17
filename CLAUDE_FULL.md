@@ -1,6 +1,6 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 17:30 UTC
+> **Ultima atualizacao:** 2026-01-17 18:00 UTC
 > **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
@@ -1687,6 +1687,7 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `bb47f2f` | 2026-01-17 | fix: Add type check to prevent AttributeError in listar_tags_disponiveis |
 | `e5343be` | 2026-01-17 | fix: Resolve 8 critical bugs in dashboard and auditor |
 | `3ef2ac1` | 2026-01-17 | fix: Use correct column name storage_path instead of pdf_storage_url |
 | `2fdb234` | 2026-01-17 | feat: Add Streamlit dashboard for visualizing auction notices |
@@ -1725,6 +1726,7 @@ Solucao:
 #### Correcoes (fix)
 | Hash | Descricao |
 |------|-----------|
+| `bb47f2f` | AttributeError em listar_tags_disponiveis - verificacao de tipo antes de .strip() |
 | `e5343be` | 8 bugs criticos: dashboard links, tags, NaN, extracao leiloeiro/itens, UF, modalidade |
 | `3ef2ac1` | Usar storage_path ao inves de pdf_storage_url |
 | `06b615c` | Auditor seta processado_auditor=True |
@@ -1882,6 +1884,7 @@ Instalar com: `pip install -r requirements.txt`
 
 | Bug | Severidade | Arquivo | Correcao |
 |-----|------------|---------|----------|
+| #9 | ALTA | supabase_repository.py | AttributeError em listar_tags_disponiveis() - adicionado isinstance(tag, str) antes de .strip() |
 | #1 | CRITICA | streamlit_app.py | Adicionada coluna link_leiloeiro na tabela com links clicaveis |
 | #2 | CRITICA | cloud_auditor_v14.py | Expandida extrair_nome_leiloeiro() com 9 padroes regex |
 | #3 | ALTA | streamlit_app.py, cloud_auditor_v14.py | Corrigido "R$ nan" - tratamento de NaN/Inf em format_currency() |
@@ -1915,4 +1918,4 @@ def padronizar_modalidade(modalidade: str) -> str
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-17 17:30 UTC
+> Ultima atualizacao: 2026-01-17 18:00 UTC
