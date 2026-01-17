@@ -1,0 +1,66 @@
+# Ruff configuration for ACHE SUCATAS
+
+# Target Python 3.11
+target-version = "py311"
+
+# Line length
+line-length = 120
+
+# Exclude legacy and generated files
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.pyc",
+    "antes-dia-*",
+    "ACHE_SUCATAS_DB",
+    "logs",
+]
+
+[lint]
+# Start with minimal rules, expand later
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "W",   # pycodestyle warnings
+]
+
+# Ignore specific rules that would require large refactoring
+ignore = [
+    "E402",  # Module level import not at top (existing code)
+    "E501",  # Line too long (let formatter handle)
+    "E701",  # Multiple statements on one line (existing code)
+    "E722",  # Bare except (existing code uses it)
+    "E731",  # Lambda assignment (existing code uses it)
+    "F401",  # Import unused (too many in existing code)
+    "F541",  # f-string without placeholders (cosmetic)
+    "F841",  # Local variable assigned but never used (too many false positives)
+    "W291",  # Trailing whitespace (cosmetic)
+    "W292",  # No newline at end of file (cosmetic)
+    "W293",  # Blank line contains whitespace (cosmetic)
+    "W605",  # Invalid escape sequence (existing regex patterns)
+]
+
+# Per-file ignores for legacy code
+[lint.per-file-ignores]
+"ache_sucatas_miner_v10.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v9*.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v8*.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v7*.py" = ["E", "F", "W"]
+"ache_sucatas_miner_v6*.py" = ["E", "F", "W"]
+"local_auditor_v13.py" = ["E", "F", "W"]
+"local_auditor_v12*.py" = ["E", "F", "W"]
+"migrar_*.py" = ["E", "F", "W"]
+"executar_schema*.py" = ["E", "F", "W"]
+"*_backup*.py" = ["E", "F", "W"]
+"desligar_*.py" = ["E", "F", "W"]
+"reativar_*.py" = ["E", "F", "W"]
+"rotacionar_*.py" = ["E", "F", "W"]
+"instalar_*.py" = ["E", "F", "W"]
+"monitorar_*.py" = ["E", "F", "W"]
+
+[format]
+# Format settings
+quote-style = "double"
+indent-style = "space"

@@ -84,3 +84,13 @@ Desktop.ini
 # Temp
 *.tmp
 *.temp
+
+# Test coverage
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/

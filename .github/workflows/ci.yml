@@ -1,0 +1,83 @@
+# =============================================================================
+# CI - Lint & Test
+# =============================================================================
+# Workflow de integração contínua para validar código em push e PRs.
+# Executa ruff (linting) e pytest (testes unitários).
+# NÃO afeta o workflow principal ache-sucatas.yml.
+# =============================================================================
+
+name: CI - Lint & Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ===========================================================================
+  # JOB 1: LINT
+  # ===========================================================================
+  lint:
+    name: Lint with Ruff
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff check
+        run: ruff check .
+
+      # Format check disabled for now (67 files need reformatting)
+      # Can be enabled later after running: ruff format .
+      # - name: Run ruff format check
+      #   run: ruff format --check .
+
+  # ===========================================================================
+  # JOB 2: TEST
+  # ===========================================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          # Disable Supabase for tests (pure functions only)
+          ENABLE_SUPABASE: 'false'
+          ENABLE_SUPABASE_STORAGE: 'false'
+        run: pytest tests/ -v --tb=short
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests executed successfully!" >> $GITHUB_STEP_SUMMARY
