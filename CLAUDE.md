@@ -1,7 +1,7 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 00:45 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14 + CI
+> **Ultima atualizacao:** 2026-01-17 12:50 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14.1 + CI
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
@@ -48,14 +48,14 @@
 
 | Metrica | Valor |
 |---------|-------|
-| Editais no banco (PostgreSQL) | 6 |
+| Editais no banco (PostgreSQL) | 26 |
 | Editais no Storage (PDFs) | 20 |
-| Workflows de coleta executados | 2 (100% sucesso) |
-| Workflows de CI executados | 1 (100% sucesso) |
-| Ultima execucao coleta | 2026-01-16 22:43 UTC |
-| Ultima execucao CI | 2026-01-17 00:40 UTC |
+| Workflows de coleta executados | 3 (100% sucesso) |
+| Workflows de CI executados | 2 (100% sucesso) |
+| Ultima execucao coleta | 2026-01-17 08:17 UTC |
+| Ultima execucao CI | 2026-01-17 12:47 UTC |
 | Tempo medio coleta | ~2 minutos |
-| Tempo medio CI | ~40 segundos |
+| Tempo medio CI | ~36 segundos |
 | Testes unitarios | 98 (100% passando) |
 | Notificacoes configuradas | Email (Gmail SMTP) |
 
@@ -72,6 +72,8 @@
 | Pre-commit hook de seguranca | Operacional | 2026-01-16 |
 | CI com ruff (linting) | Operacional | 2026-01-17 |
 | CI com pytest (98 testes) | Operacional | 2026-01-17 |
+| Sincronizacao Storage-Banco | Operacional | 2026-01-17 |
+| Auditor com storage_path | Operacional | 2026-01-17 |
 
 ---
 
@@ -346,9 +348,17 @@ tests/
 | Arquivo | Linhas | Funcao | Dependencias |
 |---------|--------|--------|--------------|
 | `ache_sucatas_miner_v11.py` | ~800 | Coleta editais, upload Storage, insert PostgreSQL | supabase, requests, pydantic |
-| `cloud_auditor_v14.py` | ~600 | Processa PDFs do Storage, extrai dados | supabase, pdfplumber |
+| `cloud_auditor_v14.py` | ~650 | Processa PDFs do Storage, extrai dados (V14.1 com storage_path) | supabase, pdfplumber |
 | `supabase_repository.py` | ~300 | Repositorio PostgreSQL (CRUD editais) | supabase |
-| `supabase_storage.py` | ~200 | Repositorio Storage (upload/download PDFs) | supabase |
+| `supabase_storage.py` | ~240 | Repositorio Storage (upload/download PDFs, listar_pdfs_por_storage_path) | supabase |
+| `sincronizar_storage_banco.py` | ~280 | Sincroniza PDFs do Storage com registros no banco | supabase, requests |
+
+### Scripts de Migracao
+
+| Arquivo | Funcao |
+|---------|--------|
+| `migrar_schema_v11_storage.sql` | SQL para adicionar colunas storage_path, processado_auditor, score |
+| `schemas_v13_supabase.sql` | Schema completo das tabelas PostgreSQL |
 
 ### Testes Unitarios
 
@@ -1741,6 +1751,7 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `df67098` | 2026-01-17 | fix: Auditor now correctly uses storage_path to download PDFs |
 | `c9b813c` | 2026-01-17 | feat: Add CI workflow with ruff linting and pytest |
 | `80ae043` | 2026-01-17 | docs: Ultra-detailed CLAUDE.md update with notifications system |
 | `e566fd0` | 2026-01-17 | chore: Remove email test workflow |
@@ -1772,6 +1783,7 @@ Solucao:
 #### Correcoes (fix)
 | Hash | Descricao |
 |------|-----------|
+| `df67098` | Auditor usa storage_path para baixar PDFs |
 | `75548f1` | Porta SSL 465 para Gmail SMTP |
 | `f687f46` | Regex do hook para secrets menores |
 | `4deadc2` | Tratamento de UF invalida |
@@ -1825,7 +1837,7 @@ completed  success  ACHE SUCATAS - Coleta e Processamento  master  ...
 completed  success  CI - Lint & Test  master  ...
 
 # Banco
-Editais no banco: 6
+Editais no banco: 26
 
 # Storage
 Editais no Storage: 20
