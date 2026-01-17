@@ -1,6 +1,6 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 12:50 UTC
+> **Ultima atualizacao:** 2026-01-17 13:05 UTC
 > **Versao atual:** V11 (Cloud-Native) + Auditor V14.1 + CI
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
@@ -51,11 +51,11 @@
 | Editais no banco (PostgreSQL) | 26 |
 | Editais no Storage (PDFs) | 20 |
 | Workflows de coleta executados | 3 (100% sucesso) |
-| Workflows de CI executados | 2 (100% sucesso) |
+| Workflows de CI executados | 4 (100% sucesso) |
 | Ultima execucao coleta | 2026-01-17 08:17 UTC |
-| Ultima execucao CI | 2026-01-17 12:47 UTC |
+| Ultima execucao CI | 2026-01-17 12:59 UTC |
 | Tempo medio coleta | ~2 minutos |
-| Tempo medio CI | ~36 segundos |
+| Tempo medio CI | ~30 segundos |
 | Testes unitarios | 98 (100% passando) |
 | Notificacoes configuradas | Email (Gmail SMTP) |
 
@@ -1751,6 +1751,8 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `06b615c` | 2026-01-17 | fix: Auditor now sets processado_auditor=True after processing |
+| `1af9e55` | 2026-01-17 | docs: Update CLAUDE.md with new commit history and metrics |
 | `df67098` | 2026-01-17 | fix: Auditor now correctly uses storage_path to download PDFs |
 | `c9b813c` | 2026-01-17 | feat: Add CI workflow with ruff linting and pytest |
 | `80ae043` | 2026-01-17 | docs: Ultra-detailed CLAUDE.md update with notifications system |
@@ -1783,6 +1785,7 @@ Solucao:
 #### Correcoes (fix)
 | Hash | Descricao |
 |------|-----------|
+| `06b615c` | Auditor seta processado_auditor=True |
 | `df67098` | Auditor usa storage_path para baixar PDFs |
 | `75548f1` | Porta SSL 465 para Gmail SMTP |
 | `f687f46` | Regex do hook para secrets menores |
