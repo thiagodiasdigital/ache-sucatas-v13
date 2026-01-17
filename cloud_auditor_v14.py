@@ -668,6 +668,8 @@ class CloudAuditor:
         try:
             # Remover campos de identificação do update
             update_data = {k: v for k, v in dados_extraidos.items() if k not in ["id_interno", "pncp_id"]}
+            # Marcar como processado
+            update_data["processado_auditor"] = True
 
             response = (
                 self.supabase_repo.client
