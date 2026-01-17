@@ -1,7 +1,7 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 13:05 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14.1 + CI
+> **Ultima atualizacao:** 2026-01-17 17:30 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
@@ -74,6 +74,10 @@
 | CI com pytest (98 testes) | Operacional | 2026-01-17 |
 | Sincronizacao Storage-Banco | Operacional | 2026-01-17 |
 | Auditor com storage_path | Operacional | 2026-01-17 |
+| Dashboard com links clicaveis | Operacional | 2026-01-17 |
+| Dashboard com filtro de tags | Operacional | 2026-01-17 |
+| Validacao de UF (nunca XX) | Operacional | 2026-01-17 |
+| Extracao melhorada (leiloeiro, itens) | Operacional | 2026-01-17 |
 
 ---
 
@@ -1683,6 +1687,9 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `e5343be` | 2026-01-17 | fix: Resolve 8 critical bugs in dashboard and auditor |
+| `3ef2ac1` | 2026-01-17 | fix: Use correct column name storage_path instead of pdf_storage_url |
+| `2fdb234` | 2026-01-17 | feat: Add Streamlit dashboard for visualizing auction notices |
 | `06b615c` | 2026-01-17 | fix: Auditor now sets processado_auditor=True after processing |
 | `1af9e55` | 2026-01-17 | docs: Update CLAUDE.md with new commit history and metrics |
 | `df67098` | 2026-01-17 | fix: Auditor now correctly uses storage_path to download PDFs |
@@ -1709,6 +1716,7 @@ Solucao:
 #### Funcionalidades (feat)
 | Hash | Descricao |
 |------|-----------|
+| `2fdb234` | Dashboard Streamlit para visualizar editais |
 | `c9b813c` | CI workflow com ruff linting e pytest (98 testes) |
 | `c3a9817` | Notificacao por email quando workflow falha |
 | `11ac508` | Arquitetura 100% cloud com Supabase Storage |
@@ -1717,6 +1725,8 @@ Solucao:
 #### Correcoes (fix)
 | Hash | Descricao |
 |------|-----------|
+| `e5343be` | 8 bugs criticos: dashboard links, tags, NaN, extracao leiloeiro/itens, UF, modalidade |
+| `3ef2ac1` | Usar storage_path ao inves de pdf_storage_url |
 | `06b615c` | Auditor seta processado_auditor=True |
 | `df67098` | Auditor usa storage_path para baixar PDFs |
 | `75548f1` | Porta SSL 465 para Gmail SMTP |
@@ -1853,14 +1863,56 @@ Instalar com: `pip install -r requirements.txt`
 7. **Execucao automatica 3x/dia** - 00:00, 08:00, 16:00 UTC
 8. **4 GitHub Secrets configurados** - SUPABASE_URL, SUPABASE_SERVICE_KEY, EMAIL_ADDRESS, EMAIL_APP_PASSWORD
 9. **Bucket `editais-pdfs`** ja criado e funcionando
-10. **UF invalida vira "XX"** - nao bloqueia por dados ruins da API
+10. **UF invalida vira "DF"** - sistema extrai UF do municipio/orgao ou usa DF como fallback (nunca XX)
 11. **Notificacao por email** - envia automaticamente quando workflow falha
 12. **Gmail SMTP porta 465** - SSL/TLS, nao usar porta 587
 13. **CI automatico** - roda em cada push/PR para master
 14. **98 testes unitarios** - cobrindo funcoes puras (sem Supabase)
 15. **ruff.toml configurado** - regras relaxadas para codigo existente
+16. **Dashboard com links clicaveis** - Link PNCP e Link Leilao na tabela
+17. **Dashboard com filtro de tags** - filtra por categoria de veiculo/orgao
+18. **Modalidade padronizada** - Eletronico, Presencial, Hibrido, N/D
+19. **Extracao melhorada** - 9 padroes regex para nome_leiloeiro, padroes explicitos para quantidade_itens
+
+---
+
+## Hotfix V14.2 - Correcoes de Bugs (2026-01-17)
+
+### Bugs Corrigidos
+
+| Bug | Severidade | Arquivo | Correcao |
+|-----|------------|---------|----------|
+| #1 | CRITICA | streamlit_app.py | Adicionada coluna link_leiloeiro na tabela com links clicaveis |
+| #2 | CRITICA | cloud_auditor_v14.py | Expandida extrair_nome_leiloeiro() com 9 padroes regex |
+| #3 | ALTA | streamlit_app.py, cloud_auditor_v14.py | Corrigido "R$ nan" - tratamento de NaN/Inf em format_currency() |
+| #4 | ALTA | streamlit_app.py | Adicionada coluna link_pncp na tabela com links clicaveis |
+| #5 | ALTA | streamlit_app.py, supabase_repository.py | Implementadas tags: coluna, filtro sidebar, listar_tags_disponiveis() |
+| #6 | MEDIA | cloud_auditor_v14.py | Expandida extrair_quantidade_itens() com padroes explicitos |
+| #7 | MEDIA | supabase_repository.py | Validacao UF com _validar_e_corrigir_uf() - nunca retorna XX |
+| #8 | BAIXA | cloud_auditor_v14.py | Padronizada extrair_modalidade() → Eletronico/Presencial/Hibrido/N/D |
+
+### Novas Funcoes Adicionadas
+
+```python
+# supabase_repository.py
+def listar_tags_disponiveis() -> List[str]
+def _extrair_uf_de_texto(texto: str) -> Optional[str]
+def _validar_e_corrigir_uf(uf_raw: str, municipio: str, orgao: str) -> str
+
+# cloud_auditor_v14.py
+def padronizar_modalidade(modalidade: str) -> str
+```
+
+### Melhorias no Dashboard
+
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| Colunas da tabela | 10 colunas | 13 colunas (+ Tags, Link PNCP, Link Leilao) |
+| Links | Texto simples | Clicaveis (st.column_config.LinkColumn) |
+| Filtros | UF, Data, Modalidade | + Tag |
+| Detalhes | 2 botoes | 3 botoes (+ Site do Leilao) + Tags |
 
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-17 13:05 UTC
+> Ultima atualizacao: 2026-01-17 17:30 UTC
