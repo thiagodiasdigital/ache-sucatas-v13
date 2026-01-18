@@ -1,6 +1,6 @@
 # CLAUDE.md - ACHE SUCATAS (Quick Start)
 
-> **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica
+> **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica + Frontend React
 > **Documento completo:** [CLAUDE_FULL.md](./CLAUDE_FULL.md) (consultar se precisar de detalhes)
 
 ---
@@ -12,6 +12,7 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 - Armazena PDFs no Supabase Storage + metadados no PostgreSQL
 - Extrai dados dos PDFs (data, valor, leiloeiro, itens)
 - Envia email se workflow falhar
+- **Frontend React** com dashboard multi-view (Grid/Mapa/Calendario)
 
 ---
 
@@ -35,6 +36,10 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 | `cloud_auditor_v14.py` | Extrai dados dos PDFs |
 | `supabase_repository.py` | CRUD PostgreSQL |
 | `supabase_storage.py` | Upload/download Storage |
+
+**Frontend React (Semana 2):**
+- `frontend/` - Dashboard React + Vite + TypeScript + Tailwind
+- `frontend/supabase/week2_schema.sql` - Schema de notificacoes
 
 **Workflows GitHub Actions:**
 - `.github/workflows/ache-sucatas.yml` - Coleta automatica
@@ -60,6 +65,11 @@ pytest tests/ -v --tb=short
 
 # Executar linting
 ruff check .
+
+# Frontend React
+cd frontend && npm install
+npm run dev      # Rodar em http://localhost:5173
+npm run build    # Build para producao
 ```
 
 ---
@@ -97,6 +107,7 @@ pytest tests/ -v --tb=short
 - Historico de commits
 - Configuracao de seguranca
 - API PNCP (endpoints, parametros)
+- **Frontend React (Semana 2)** - componentes, hooks, schema SQL
 
 ---
 
@@ -105,6 +116,10 @@ pytest tests/ -v --tb=short
 ```
 testes-12-01-17h/
 |-- .github/workflows/     # ache-sucatas.yml, ci.yml
+|-- frontend/              # Dashboard React + Vite + TypeScript
+|   |-- src/components/    # NotificationBell, MapView, CalendarView, etc
+|   |-- src/hooks/         # useNotifications, useUserFilters, useViewMode
+|   +-- supabase/          # week2_schema.sql (notificacoes)
 |-- tests/                 # 98 testes unitarios
 |-- ache_sucatas_miner_v11.py
 |-- coleta_historica_30d.py   # Script coleta historica

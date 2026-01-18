@@ -1,8 +1,8 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-18 11:00 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard + Coleta Historica
-> **Status:** 100% Operacional na Nuvem com CI/CD
+> **Ultima atualizacao:** 2026-01-18 18:00 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard + Coleta Historica + **Frontend React**
+> **Status:** 100% Operacional na Nuvem com CI/CD + Dashboard Multi-view
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
 ---
@@ -22,11 +22,12 @@
 11. [Testes Unitarios](#testes-unitarios)
 12. [Sistema de Notificacoes](#sistema-de-notificacoes)
 13. [API PNCP](#api-pncp)
-14. [Comandos Uteis](#comandos-uteis)
-15. [Troubleshooting](#troubleshooting)
-16. [Roadmap](#roadmap)
-17. [Historico de Commits](#historico-de-commits)
-18. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
+14. [Frontend React (Semana 2)](#frontend-react-semana-2)
+15. [Comandos Uteis](#comandos-uteis)
+16. [Troubleshooting](#troubleshooting)
+17. [Roadmap](#roadmap)
+18. [Historico de Commits](#historico-de-commits)
+19. [Checklist para Nova Sessao](#checklist-para-nova-sessao)
 
 ---
 
@@ -43,6 +44,7 @@
 5. **Automacao** - Executa 3x/dia via GitHub Actions (sem necessidade de PC local)
 6. **Notificacao** - Envia email automatico quando o workflow falha
 7. **Validacao** - CI automatico com lint e testes em cada push/PR
+8. **Frontend React** - Dashboard multi-view (Grid/Mapa/Calendario) com sistema de notificacoes
 
 ### Metricas Atuais
 
@@ -82,6 +84,13 @@
 | Coleta historica 30 dias | Operacional | 2026-01-18 |
 | Deduplicacao com normalizacao pncp_id | Operacional | 2026-01-18 |
 | Listagem paginada de pncp_ids | Operacional | 2026-01-18 |
+| **Frontend React - Semana 2** | Operacional | 2026-01-18 |
+| Dashboard multi-view (Grid/Mapa/Calendario) | Operacional | 2026-01-18 |
+| Sistema de notificacoes Supabase Realtime | Operacional | 2026-01-18 |
+| Filtros salvos do usuario (alertas) | Operacional | 2026-01-18 |
+| Visualizacao em mapa com MapLibre GL | Operacional | 2026-01-18 |
+| Visualizacao em calendario com react-day-picker | Operacional | 2026-01-18 |
+| Atalhos de teclado (G/M/C) para modos de visualizacao | Operacional | 2026-01-18 |
 
 ---
 
@@ -1371,6 +1380,258 @@ GET /orgaos/18188243000160/compras/2025/000161/arquivos
 
 ---
 
+## Frontend React (Semana 2)
+
+### Visao Geral
+
+O frontend foi implementado usando React + Vite + TypeScript + Tailwind CSS, integrando com o Supabase para autenticacao e dados.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Framework | React 19 + Vite 7 |
+| Linguagem | TypeScript |
+| Estilizacao | Tailwind CSS 4 + Shadcn/UI |
+| Mapa | MapLibre GL JS + react-map-gl |
+| Calendario | react-day-picker |
+| Estado | TanStack React Query |
+| Realtime | Supabase Realtime |
+| Diretorio | `frontend/` |
+
+### Estrutura de Arquivos do Frontend
+
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── AuctionCard.tsx          # Card de leilao
+│   │   ├── AuctionDrawer.tsx        # Drawer lateral (calendario)
+│   │   ├── AuctionGrid.tsx          # Grid de leiloes
+│   │   ├── CalendarView.tsx         # Visualizacao em calendario
+│   │   ├── Layout.tsx               # Layout principal
+│   │   ├── MapView.tsx              # Visualizacao em mapa
+│   │   ├── ModeSwitcher.tsx         # Alternador Grid/Mapa/Calendario
+│   │   ├── NotificationBell.tsx     # Sino de notificacoes
+│   │   ├── TopFilterBar.tsx         # Barra de filtros
+│   │   └── ui/                      # Componentes Shadcn
+│   │       ├── badge.tsx
+│   │       ├── button.tsx
+│   │       ├── drawer.tsx           # NOVO
+│   │       ├── input.tsx
+│   │       ├── popover.tsx
+│   │       └── toggle-group.tsx     # NOVO
+│   ├── contexts/
+│   │   ├── AuthContext.tsx          # Autenticacao
+│   │   └── NotificationContext.tsx  # NOVO - Notificacoes Realtime
+│   ├── hooks/
+│   │   ├── useAuctions.ts           # Busca leiloes
+│   │   ├── useNotifications.ts      # NOVO - Hook de notificacoes
+│   │   ├── useUserFilters.ts        # NOVO - Filtros salvos
+│   │   └── useViewMode.ts           # NOVO - Modo de visualizacao
+│   ├── pages/
+│   │   ├── Dashboard.tsx            # Pagina principal
+│   │   └── Login.tsx                # Login
+│   ├── lib/
+│   │   ├── supabase.ts              # Cliente Supabase
+│   │   └── utils.ts                 # Utilitarios
+│   ├── types/
+│   │   └── database.ts              # Tipos TypeScript
+│   ├── App.tsx                      # Router principal
+│   └── main.tsx                     # Entrada
+├── supabase/
+│   └── week2_schema.sql             # Schema SQL de notificacoes
+├── package.json
+├── tailwind.config.js
+├── tsconfig.json
+└── vite.config.ts
+```
+
+### Componentes Principais
+
+#### ModeSwitcher
+
+Alternador entre modos de visualizacao (Grid, Mapa, Calendario).
+
+| Propriedade | Descricao |
+|-------------|-----------|
+| Modos | Grid, Mapa, Calendario |
+| Sincronizacao | URL param `view` + localStorage |
+| Atalhos | G (Grid), M (Mapa), C (Calendario) |
+| Persistencia | Salva preferencia no localStorage |
+
+#### MapView
+
+Visualizacao em mapa usando MapLibre GL.
+
+| Propriedade | Descricao |
+|-------------|-----------|
+| Biblioteca | MapLibre GL JS + react-map-gl |
+| Tiles | OpenStreetMap |
+| Pins | Verde (Sucata), Azul (Documentado) |
+| Popup | AuctionCard ao clicar |
+| Requisito | Selecionar UF primeiro |
+
+#### CalendarView
+
+Visualizacao em calendario com indicadores de leiloes.
+
+| Propriedade | Descricao |
+|-------------|-----------|
+| Biblioteca | react-day-picker |
+| Indicadores | Dots verdes (Sucata) e azuis (Documentado) |
+| Interacao | Clique no dia abre Drawer lateral |
+| Locale | ptBR (portugues) |
+
+#### NotificationBell
+
+Sino de notificacoes no header.
+
+| Propriedade | Descricao |
+|-------------|-----------|
+| Badge | Contador de nao lidas (verde) |
+| Dropdown | Ultimas 5 notificacoes |
+| Realtime | Atualiza via Supabase subscription |
+| Acao | Clique aplica filtros no dashboard |
+
+### Schema SQL de Notificacoes
+
+Arquivo: `frontend/supabase/week2_schema.sql`
+
+**Tabelas:**
+
+| Tabela | Descricao |
+|--------|-----------|
+| `pub.user_filters` | Filtros salvos pelo usuario (alertas) |
+| `pub.notifications` | Notificacoes geradas por match |
+
+**Campos user_filters:**
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| id | UUID | PK |
+| user_id | UUID | FK auth.users |
+| label | TEXT | Nome do filtro |
+| filter_params | JSONB | Parametros (uf, cidade, tags, valor_min, valor_max) |
+| is_active | BOOLEAN | Filtro ativo |
+| created_at | TIMESTAMPTZ | Data criacao |
+
+**Campos notifications:**
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| id | UUID | PK |
+| user_id | UUID | FK auth.users |
+| auction_id | BIGINT | FK raw.leiloes |
+| filter_id | UUID | FK user_filters |
+| is_read | BOOLEAN | Lida |
+| created_at | TIMESTAMPTZ | Data criacao |
+
+**Trigger de Match-Making:**
+
+```sql
+-- Dispara a cada INSERT em raw.leiloes
+-- Verifica todos os filtros ativos
+-- Cria notificacao se houver match (UF, cidade, tags, valores)
+CREATE TRIGGER trg_check_matches_on_insert
+AFTER INSERT ON raw.leiloes
+FOR EACH ROW
+EXECUTE FUNCTION audit.fn_match_and_notify();
+```
+
+### Hooks do Frontend
+
+#### useNotifications
+
+```typescript
+// Retorna:
+{
+  notifications: Notification[]  // Lista de notificacoes
+  unreadCount: number           // Contador de nao lidas
+  markAsRead: (id) => void      // Marcar como lida
+  markAllAsRead: () => void     // Marcar todas como lidas
+  refetch: () => void           // Atualizar manualmente
+}
+```
+
+#### useUserFilters
+
+```typescript
+// Retorna:
+{
+  filters: UserFilter[]         // Filtros salvos
+  isLoading: boolean
+  saveFilter: (label, params) => Promise  // Salvar novo
+  deleteFilter: (id) => Promise           // Deletar
+  toggleFilter: (id, active) => Promise   // Ativar/desativar
+}
+```
+
+#### useViewMode
+
+```typescript
+// Retorna:
+{
+  viewMode: 'grid' | 'map' | 'calendar'  // Modo atual
+}
+```
+
+### Dependencias do Frontend
+
+```json
+{
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.5.1",
+    "@supabase/supabase-js": "^2.50.0",
+    "@tanstack/react-query": "^5.75.5",
+    "maplibre-gl": "^5.5.0",
+    "react-map-gl": "^8.0.4",
+    "react-day-picker": "^9.7.0",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-toggle-group": "^1.1.5",
+    "lucide-react": "^0.511.0",
+    "tailwindcss": "^4.1.5",
+    "class-variance-authority": "^0.7.1"
+  }
+}
+```
+
+### Comandos do Frontend
+
+```bash
+# Instalar dependencias
+cd frontend && npm install
+
+# Rodar em desenvolvimento
+npm run dev
+
+# Build para producao
+npm run build
+
+# Lint
+npm run lint
+
+# Preview do build
+npm run preview
+```
+
+### Configuracao Necessaria
+
+1. **Variavels de ambiente** - Criar `frontend/.env`:
+```env
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+2. **Schema SQL** - Executar `frontend/supabase/week2_schema.sql` no Supabase SQL Editor
+
+3. **Supabase Realtime** - Habilitar para tabela `pub.notifications`:
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE pub.notifications;
+```
+
+---
+
 ## Comandos Uteis
 
 ### Execucao Cloud (RECOMENDADO)
@@ -1662,15 +1923,18 @@ Solucao:
 | 5 - Seguranca | Auditoria e correcoes | CONCLUIDA | 2026-01-16 |
 | 6 - Notificacoes | Email de falha via Gmail | CONCLUIDA | 2026-01-17 |
 | 7 - CI | Linting (ruff) + Testes (pytest) | CONCLUIDA | 2026-01-17 |
+| **8 - Frontend React** | Dashboard multi-view + notificacoes | **CONCLUIDA** | 2026-01-18 |
 
-### Fase 8 - Expansao (FUTURO)
+### Fase 9 - Expansao (FUTURO)
 
 | Item | Descricao | Prioridade |
 |------|-----------|------------|
-| Dashboard | Interface web para visualizar dados | Alta |
+| ~~Dashboard~~ | ~~Interface web para visualizar dados~~ | ~~Alta~~ **CONCLUIDO** |
 | API REST | Endpoint para consultas externas | Alta |
-| Alertas de novos editais | Notificacao quando novos editais sao coletados | Media |
+| ~~Alertas de novos editais~~ | ~~Notificacao quando novos editais sao coletados~~ | ~~Media~~ **CONCLUIDO** |
 | Retry backoff | Retry exponencial para API PNCP | Media |
+| Deploy do Frontend | Deploy em Vercel/Netlify/Cloudflare | Alta |
+| Geocodificacao | Coordenadas reais dos municipios para o mapa | Media |
 
 ### Dividas Tecnicas
 
@@ -1691,7 +1955,8 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
-| `(pending)` | 2026-01-18 | feat: Add historical collection script (30 days) with duplicate detection |
+| `fa6f18f` | 2026-01-18 | feat: Add Week 2 frontend - notifications, multi-view dashboard |
+| `9839b3b` | 2026-01-18 | feat: Add historical collection script with duplicate detection |
 | `91cd89e` | 2026-01-17 | chore: Bump dashboard version to force Streamlit Cloud redeploy |
 | `bb47f2f` | 2026-01-17 | fix: Add type check to prevent AttributeError in listar_tags_disponiveis |
 | `e5343be` | 2026-01-17 | fix: Resolve 8 critical bugs in dashboard and auditor |
@@ -1723,6 +1988,8 @@ Solucao:
 #### Funcionalidades (feat)
 | Hash | Descricao |
 |------|-----------|
+| `fa6f18f` | Frontend React Semana 2 - notificacoes, multi-view dashboard |
+| `9839b3b` | Script de coleta historica com deteccao de duplicados |
 | `2fdb234` | Dashboard Streamlit para visualizar editais |
 | `c9b813c` | CI workflow com ruff linting e pytest (98 testes) |
 | `c3a9817` | Notificacao por email quando workflow falha |
@@ -1881,6 +2148,10 @@ Instalar com: `pip install -r requirements.txt`
 17. **Dashboard com filtro de tags** - filtra por categoria de veiculo/orgao
 18. **Modalidade padronizada** - Eletronico, Presencial, Hibrido, N/D
 19. **Extracao melhorada** - 9 padroes regex para nome_leiloeiro, padroes explicitos para quantidade_itens
+20. **Frontend React (Semana 2)** - Dashboard multi-view em `frontend/`
+21. **Schema SQL notificacoes** - Executar `frontend/supabase/week2_schema.sql` no Supabase
+22. **Atalhos de teclado** - G (Grid), M (Mapa), C (Calendario) no frontend
+23. **MapLibre GL** - Requer selecionar UF para visualizar mapa
 
 ---
 
@@ -1924,4 +2195,4 @@ def padronizar_modalidade(modalidade: str) -> str
 ---
 
 > Documento gerado e mantido pelo Claude Code
-> Ultima atualizacao: 2026-01-17 18:00 UTC
+> Ultima atualizacao: 2026-01-18 18:00 UTC
