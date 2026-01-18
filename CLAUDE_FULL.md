@@ -1,7 +1,7 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-17 21:00 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard
+> **Ultima atualizacao:** 2026-01-18 11:00 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard + Coleta Historica
 > **Status:** 100% Operacional na Nuvem com CI/CD
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
@@ -48,11 +48,12 @@
 
 | Metrica | Valor |
 |---------|-------|
-| Editais no banco (PostgreSQL) | 26 |
-| Editais no Storage (PDFs) | 20 |
+| Editais no banco (PostgreSQL) | 294 |
+| Editais no Storage (PDFs) | 698+ |
 | Workflows de coleta executados | 3 (100% sucesso) |
 | Workflows de CI executados | 4 (100% sucesso) |
 | Ultima execucao coleta | 2026-01-17 08:17 UTC |
+| Ultima coleta historica | 2026-01-18 10:52 UTC (268 novos) |
 | Ultima execucao CI | 2026-01-17 12:59 UTC |
 | Tempo medio coleta | ~2 minutos |
 | Tempo medio CI | ~30 segundos |
@@ -78,6 +79,9 @@
 | Dashboard com filtro de tags | Operacional | 2026-01-17 |
 | Validacao de UF (nunca XX) | Operacional | 2026-01-17 |
 | Extracao melhorada (leiloeiro, itens) | Operacional | 2026-01-17 |
+| Coleta historica 30 dias | Operacional | 2026-01-18 |
+| Deduplicacao com normalizacao pncp_id | Operacional | 2026-01-18 |
+| Listagem paginada de pncp_ids | Operacional | 2026-01-18 |
 
 ---
 
@@ -1687,6 +1691,7 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `(pending)` | 2026-01-18 | feat: Add historical collection script (30 days) with duplicate detection |
 | `91cd89e` | 2026-01-17 | chore: Bump dashboard version to force Streamlit Cloud redeploy |
 | `bb47f2f` | 2026-01-17 | fix: Add type check to prevent AttributeError in listar_tags_disponiveis |
 | `e5343be` | 2026-01-17 | fix: Resolve 8 critical bugs in dashboard and auditor |

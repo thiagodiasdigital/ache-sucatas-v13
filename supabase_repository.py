@@ -420,6 +420,51 @@ class SupabaseRepository:
             logger.error("Erro ao listar editais: %s", e)
             return []
 
+    def listar_todos_pncp_ids(self) -> set:
+        """
+        Lista todos os pncp_ids existentes no banco.
+        Usa paginação para superar limite do PostgREST.
+
+        Returns:
+            Set com todos os pncp_ids
+        """
+        if not self.enable_supabase:
+            return set()
+
+        try:
+            all_ids = set()
+            page_size = 1000
+            offset = 0
+
+            while True:
+                response = (
+                    self.client.table("editais_leilao")
+                    .select("pncp_id")
+                    .range(offset, offset + page_size - 1)
+                    .execute()
+                )
+
+                if not response.data:
+                    break
+
+                for item in response.data:
+                    pncp_id = item.get("pncp_id")
+                    if pncp_id:
+                        all_ids.add(pncp_id)
+
+                # Se retornou menos que page_size, acabou
+                if len(response.data) < page_size:
+                    break
+
+                offset += page_size
+
+            logger.info("Carregados %d pncp_ids do banco", len(all_ids))
+            return all_ids
+
+        except Exception as e:
+            logger.error("Erro ao listar pncp_ids: %s", e)
+            return set()
+
     # =========================================================================
     # MÉTODOS PARA DASHBOARD - Filtros e consultas
     # =========================================================================

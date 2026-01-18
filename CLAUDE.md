@@ -1,6 +1,6 @@
 # CLAUDE.md - ACHE SUCATAS (Quick Start)
 
-> **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI
+> **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica
 > **Documento completo:** [CLAUDE_FULL.md](./CLAUDE_FULL.md) (consultar se precisar de detalhes)
 
 ---
@@ -19,8 +19,8 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 
 | Metrica | Valor |
 |---------|-------|
-| Editais no banco | 26 |
-| PDFs no Storage | 20 |
+| Editais no banco | 294 |
+| PDFs no Storage | 698+ |
 | Testes unitarios | 98 (100% pass) |
 | Custo mensal | $0 (free tier) |
 
@@ -30,7 +30,8 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 
 | Arquivo | Funcao |
 |---------|--------|
-| `ache_sucatas_miner_v11.py` | Coleta editais da API PNCP |
+| `ache_sucatas_miner_v11.py` | Coleta editais da API PNCP (diaria) |
+| `coleta_historica_30d.py` | Coleta historica dos ultimos 30 dias |
 | `cloud_auditor_v14.py` | Extrai dados dos PDFs |
 | `supabase_repository.py` | CRUD PostgreSQL |
 | `supabase_storage.py` | Upload/download Storage |
@@ -50,6 +51,9 @@ gh run list --workflow=ci.yml --limit 3
 
 # Disparar coleta manualmente
 gh workflow run ache-sucatas.yml
+
+# Coleta historica (30 dias) - script standalone
+python coleta_historica_30d.py
 
 # Executar testes localmente
 pytest tests/ -v --tb=short
@@ -103,6 +107,7 @@ testes-12-01-17h/
 |-- .github/workflows/     # ache-sucatas.yml, ci.yml
 |-- tests/                 # 98 testes unitarios
 |-- ache_sucatas_miner_v11.py
+|-- coleta_historica_30d.py   # Script coleta historica
 |-- cloud_auditor_v14.py
 |-- supabase_repository.py
 |-- supabase_storage.py
