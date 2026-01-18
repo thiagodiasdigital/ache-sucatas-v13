@@ -18,6 +18,7 @@ if hasattr(st, "secrets") and "SUPABASE_URL" in st.secrets:
     )
 
 from supabase_repository import SupabaseRepository
+from supabase_storage import SupabaseStorageRepository
 
 # =============================================================================
 # CONFIGURACAO DA PAGINA
@@ -38,6 +39,12 @@ st.set_page_config(
 def get_repository():
     """Instancia cached do repositorio Supabase."""
     return SupabaseRepository()
+
+
+@st.cache_resource
+def get_storage():
+    """Instancia cached do repositorio Storage."""
+    return SupabaseStorageRepository()
 
 
 @st.cache_data(ttl=300)
@@ -357,10 +364,20 @@ SUPABASE_ANON_KEY = "sua-chave-anon"
                     with link_col2:
                         st.link_button("Site do Leilao", link_leiloeiro)
 
-                pdf_url = edital.get("storage_path")
-                if pdf_url:
-                    with link_col3:
-                        st.link_button("Download PDF", pdf_url)
+                # Gerar URL de download do PDF do Storage
+                storage_path = edital.get("storage_path")
+                if storage_path:
+                    storage = get_storage()
+                    pdfs = storage.listar_pdfs_por_storage_path(storage_path)
+                    if pdfs:
+                        # Pegar o primeiro PDF
+                        pdf_path = pdfs[0].get("path", "")
+                        if pdf_path:
+                            # Gerar URL signed (valida por 1 hora)
+                            pdf_url = storage.get_signed_url(pdf_path, expires_in=3600)
+                            if pdf_url:
+                                with link_col3:
+                                    st.link_button("Download PDF", pdf_url)
 
                 # Tags
                 tags = edital.get("tags")

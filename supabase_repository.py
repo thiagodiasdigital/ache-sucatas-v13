@@ -5,12 +5,70 @@ Supabase Repository - Camada de persistência
 ACHE SUCATAS DaaS V13
 """
 import os
+import re
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def gerar_link_pncp_correto(cnpj: str, ano: str, sequencial: str) -> str:
+    """
+    Gera link PNCP no formato OFICIAL CORRETO.
+
+    Formato: https://pncp.gov.br/app/editais/{CNPJ}/{ANO}/{SEQUENCIAL}
+    Exemplo: https://pncp.gov.br/app/editais/18188243000160/2025/161
+    """
+    # Limpar CNPJ (apenas números)
+    cnpj_limpo = re.sub(r'\D', '', str(cnpj)) if cnpj else ""
+
+    # Validar CNPJ (14 dígitos)
+    if len(cnpj_limpo) != 14:
+        return ""
+
+    # Limpar e validar ano
+    ano_limpo = str(ano).strip() if ano else ""
+    if not ano_limpo.isdigit() or len(ano_limpo) != 4:
+        return ""
+
+    # Limpar sequencial (remover zeros à esquerda para URL mais limpa)
+    sequencial_str = str(sequencial).strip() if sequencial else ""
+    if not sequencial_str:
+        return ""
+    # Remover zeros à esquerda mas manter pelo menos 1 dígito
+    sequencial_limpo = sequencial_str.lstrip('0') or '0'
+
+    # FORMATO CORRETO: /CNPJ/ANO/SEQUENCIAL
+    return f"https://pncp.gov.br/app/editais/{cnpj_limpo}/{ano_limpo}/{sequencial_limpo}"
+
+
+def corrigir_link_pncp_do_pncp_id(pncp_id: str) -> str:
+    """
+    Extrai CNPJ, ANO e SEQUENCIAL do pncp_id e gera link correto.
+
+    pncp_id formato: "18188243000160-1-000161-2025" ou "18188243000160-1-000161/2025"
+    Resultado: https://pncp.gov.br/app/editais/18188243000160/2025/161
+    """
+    if not pncp_id:
+        return ""
+
+    # Normalizar separadores
+    pncp_id_norm = pncp_id.replace("/", "-")
+
+    # Dividir por hífen
+    partes = pncp_id_norm.split("-")
+
+    # Esperamos pelo menos 4 partes: CNPJ, algo, SEQUENCIAL, ANO
+    if len(partes) < 4:
+        return ""
+
+    cnpj = partes[0]  # 18188243000160
+    sequencial = partes[2]  # 000161
+    ano = partes[3]  # 2025
+
+    return gerar_link_pncp_correto(cnpj, ano, sequencial)
 
 # Configurar logging
 logger = logging.getLogger("SupabaseRepository")
@@ -421,7 +479,16 @@ class SupabaseRepository:
             query = query.order("data_publicacao", desc=True).limit(limit)
 
             response = query.execute()
-            return response.data
+
+            # Corrigir link_pncp de todos os editais retornados
+            editais = response.data
+            for edital in editais:
+                pncp_id = edital.get("pncp_id", "")
+                link_correto = corrigir_link_pncp_do_pncp_id(pncp_id)
+                if link_correto:
+                    edital["link_pncp"] = link_correto
+
+            return editais
 
         except Exception as e:
             logger.error("Erro ao listar editais filtrados: %s", e)
@@ -838,8 +905,8 @@ class SupabaseRepository:
             "objeto_resumido": str(edital.get("objeto", ""))[:500] if edital.get("objeto") else None,
             # Tags - Miner adiciona tag inicial, Auditor enriquece
             "tags": ["miner_v10"],
-            # Links
-            "link_pncp": edital.get("link_pncp", ""),
+            # Links - Gerar link PNCP no formato correto: /CNPJ/ANO/SEQUENCIAL
+            "link_pncp": gerar_link_pncp_correto(cnpj, ano, seq) or edital.get("link_pncp", ""),
             "link_leiloeiro": None,  # Auditor extrai do PDF
             # Comercial - Auditor extrai esses campos
             "modalidade_leilao": edital.get("modalidade", "N/D"),
