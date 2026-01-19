@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { Search, Loader2 } from "lucide-react"
+import { Search, LoaderCircle } from "lucide-react"
 
 export function LoginPage() {
   const [email, setEmail] = useState("")
@@ -101,7 +101,9 @@ export function LoginPage() {
 
             {/* Submit */}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <LoaderCircle
+                className={`mr-2 h-4 w-4 animate-spin ${loading ? "opacity-100" : "opacity-0 w-0 mr-0"}`}
+              />
               {isSignUp ? "Criar conta" : "Entrar"}
             </Button>
 
