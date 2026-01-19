@@ -16,6 +16,8 @@ exclude = [
     "antes-dia-*",
     "ACHE_SUCATAS_DB",
     "logs",
+    "_DESCARTE_AUDITORIA",
+    "thony_reorganizar.py",
 ]
 
 [lint]
