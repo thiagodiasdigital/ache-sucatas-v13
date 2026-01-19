@@ -174,7 +174,7 @@ class SupabaseRepository:
             edital_data = self._mapear_v12_para_v13(dados)
 
             # Tentar inserir
-            response = self.client.table("editais_leilao").insert(edital_data).execute()
+            self.client.table("editais_leilao").insert(edital_data).execute()
 
             logger.info("Edital inserido: %s", edital_data["id_interno"])
             return True
@@ -209,7 +209,7 @@ class SupabaseRepository:
             edital_data["updated_at"] = datetime.now().isoformat()
 
             # Atualizar
-            response = (
+            (
                 self.client.table("editais_leilao")
                 .update(edital_data)
                 .eq("id_interno", id_interno)
@@ -287,8 +287,6 @@ class SupabaseRepository:
         Exemplo: "SP_CAMPINAS/2025-11-19_S60_51885242000140-1-001095-2025"
         Retorna: "51885242000140-1-001095-2025"
         """
-        import re
-
         match = re.search(r"(\d{14}-\d+-\d+-\d{4})", arquivo_origem)
         if match:
             return match.group(1)
@@ -307,7 +305,7 @@ class SupabaseRepository:
             # Trocar vírgula por ponto
             valor_str = valor_str.replace(",", ".")
             return float(valor_str)
-        except:
+        except (ValueError, AttributeError):
             return None
 
     def _parse_int(self, valor_str) -> Optional[int]:
@@ -317,7 +315,7 @@ class SupabaseRepository:
 
         try:
             return int(str(valor_str).strip())
-        except:
+        except (ValueError, AttributeError):
             return None
 
     def _parse_data(self, data_str) -> Optional[str]:
@@ -342,7 +340,7 @@ class SupabaseRepository:
                 return f"{ano}-{mes.zfill(2)}-{dia.zfill(2)}"
 
             return None
-        except:
+        except (ValueError, AttributeError):
             return None
 
     def _parse_datetime(self, data_str) -> Optional[str]:
@@ -369,7 +367,7 @@ class SupabaseRepository:
                 return f"{data_iso}T00:00:00"
 
             return None
-        except:
+        except (ValueError, AttributeError):
             return None
 
     def contar_editais(self) -> int:
@@ -795,7 +793,6 @@ class SupabaseRepository:
         texto_lower = texto.lower().strip()
 
         # 1. Tentar match direto com UF no final (ex: "São Paulo/SP", "DETRAN-RJ")
-        import re
         match = re.search(r'[-/\s]([A-Za-z]{2})$', texto)
         if match:
             uf_candidate = match.group(1).upper()

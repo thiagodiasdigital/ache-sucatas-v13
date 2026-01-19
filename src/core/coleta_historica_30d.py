@@ -381,7 +381,7 @@ class ColetaHistorica:
             return None
         try:
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        except:
+        except ValueError:
             return None
 
     def _normalize_pncp_id(self, pncp_id: str) -> str:

@@ -66,7 +66,7 @@ def extrair_data_abertura_proposta(json_completo: Dict) -> Optional[str]:
         if match:
             ano, mes, dia = match.groups()
             return f"{dia}/{mes}/{ano}"
-    except:
+    except (ValueError, AttributeError):
         pass
 
     return None

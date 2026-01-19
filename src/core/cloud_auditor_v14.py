@@ -50,12 +50,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("CloudAuditor_V14")
 
-try:
-    from docx import Document as DocxDocument
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-    log.warning("python-docx não instalado. DOCX será ignorado.")
+# Note: DOCX support removed - not used in V14 cloud workflow
 
 
 # ==============================================================================
@@ -572,7 +567,7 @@ def extrair_data_leilao_cascata(pdf_text: str, descricao: str = "") -> str:
                         data_obj = datetime(int(partes[2]), int(partes[1]), int(partes[0]))
                         if data_obj.year >= 2020:
                             return data_formatada
-                    except:
+                    except (ValueError, IndexError):
                         return data_formatada
 
     return "N/D"
@@ -768,7 +763,7 @@ class CloudAuditor:
                     try:
                         valor_num = float(valor.replace("R$ ", "").replace(".", "").replace(",", "."))
                         dados_extraidos["valor_estimado"] = valor_num
-                    except:
+                    except ValueError:
                         pass
 
             # Quantidade de itens
@@ -835,7 +830,7 @@ class CloudAuditor:
             # Marcar como processado
             update_data["processado_auditor"] = True
 
-            response = (
+            (
                 self.supabase_repo.client
                 .table("editais_leilao")
                 .update(update_data)

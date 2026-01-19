@@ -71,11 +71,12 @@ def estimate_storage_mb():
 
 def calculate_costs():
     """Calcula custos unitarios."""
-    # Constantes de pricing (Free Tier)
-    SUPABASE_FREE_DB_MB = 500
-    SUPABASE_FREE_STORAGE_MB = 1024  # 1 GB
-    SUPABASE_FREE_BANDWIDTH_MB = 2048  # 2 GB
+    # Constantes de pricing (Free Tier) - unused but documented for reference
+    # SUPABASE_FREE_DB_MB = 500
+    # SUPABASE_FREE_STORAGE_MB = 1024  # 1 GB
+    SUPABASE_FREE_BANDWIDTH_MB = 2048  # 2 GB (not currently used but kept for future)
     GITHUB_FREE_MINUTES = 2000
+    _ = SUPABASE_FREE_BANDWIDTH_MB  # Acknowledge unused constant
 
     # Estimativas de uso
     github_minutes_per_exec = 1.0

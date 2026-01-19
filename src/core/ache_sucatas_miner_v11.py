@@ -719,7 +719,7 @@ class EditalProcessor:
             return None
         try:
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        except:
+        except ValueError:
             return None
 
     async def process_search_results(self, client: PncpApiClient, items: List[dict]):

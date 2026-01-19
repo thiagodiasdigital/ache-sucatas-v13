@@ -18,8 +18,7 @@ import json
 import logging
 import hashlib
 from io import BytesIO
-from typing import Dict, List, Optional, Any
-from datetime import datetime
+from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -96,7 +95,7 @@ class SupabaseStorageRepository:
 
         try:
             # Supabase Storage API
-            response = self.storage.from_(self.bucket_name).upload(
+            self.storage.from_(self.bucket_name).upload(
                 path=path,
                 file=file_data,
                 file_options={
