@@ -22,12 +22,22 @@ export function TopFilterBar() {
     currentUF || undefined
   )
 
-  const updateFilter = (key: string, value: string) => {
+  const updateFilter = (key: string, value: string, additionalUpdates?: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams)
     if (value) {
       newParams.set(key, value)
     } else {
       newParams.delete(key)
+    }
+    // Aplicar atualizações adicionais (ex: limpar cidade ao mudar UF)
+    if (additionalUpdates) {
+      for (const [k, v] of Object.entries(additionalUpdates)) {
+        if (v) {
+          newParams.set(k, v)
+        } else {
+          newParams.delete(k)
+        }
+      }
     }
     // Reset página ao mudar filtros
     newParams.delete("page")
@@ -67,9 +77,8 @@ export function TopFilterBar() {
               id="uf"
               value={currentUF}
               onChange={(e) => {
-                updateFilter("uf", e.target.value)
-                // Limpar cidade quando mudar UF
-                updateFilter("cidade", "")
+                // Atualizar UF e limpar cidade em uma única operação
+                updateFilter("uf", e.target.value, { cidade: "" })
               }}
               options={ufOptions}
               disabled={loadingUFs}

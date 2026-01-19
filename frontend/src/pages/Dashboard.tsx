@@ -2,7 +2,7 @@ import { useSearchParams } from "react-router-dom"
 import { TopFilterBar } from "../components/TopFilterBar"
 import { AuctionGrid } from "../components/AuctionGrid"
 import { ModeSwitcher, type ViewMode } from "../components/ModeSwitcher"
-import { MapView } from "../components/MapView"
+import { AuctionMap } from "../components/dashboard"
 import { CalendarView } from "../components/CalendarView"
 import { useDashboardStats } from "../hooks/useAuctions"
 import { Card, CardContent } from "../components/ui/card"
@@ -92,7 +92,7 @@ export function DashboardPage() {
       {/* Visualização condicional */}
       <div className="container py-6">
         {currentView === "map" ? (
-          <MapView />
+          <AuctionMap />
         ) : currentView === "calendar" ? (
           <CalendarView />
         ) : (
