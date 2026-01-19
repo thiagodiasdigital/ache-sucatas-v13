@@ -52,15 +52,22 @@
 ### SEC-005: Decisao de Negocio - Acesso Anonimo
 **Pergunta:** Os dados de editais do PNCP devem ser acessiveis sem autenticacao?
 
-- [ ] **SIM** - Dados sao publicos por natureza (PNCP e portal publico)
-  - [ ] Manter policies `anon_read_access` como estao
-  - [ ] Documentar decisao em ADR (Architecture Decision Record)
+**ANALISE (2026-01-19):**
+- Dados do PNCP sao publicos por lei (transparencia governamental)
+- Frontend JA exige autenticacao (ProtectedRoute bloqueia anonimos)
+- Grants para `anon` no banco sao REDUNDANTES
+- Remover anon = defesa em profundidade sem impacto funcional
 
-- [ ] **NAO** - Apenas usuarios autenticados podem consultar
-  - [ ] Remover policy `anon_read_access` de `editais_leilao`
-  - [ ] Remover policy `Permitir leitura publica`
-  - [ ] Remover GRANT para `anon` nas funcoes RPC
-  - [ ] Testar frontend com usuario autenticado
+**RECOMENDACAO TECNICA:** Remover grants para `anon`
+
+- [ ] **DECISAO: REMOVER ACESSO ANONIMO** (Recomendado)
+  - [ ] Executar script: `data/sql/remove_anon_grants.sql` no Supabase SQL Editor
+  - [ ] Verificar que frontend continua funcionando (deve funcionar)
+  - [ ] Testar chamada direta a API sem token (deve retornar 403)
+
+- [ ] **DECISAO: MANTER ACESSO ANONIMO** (Apenas se necessario)
+  - [ ] Documentar motivo (API publica futura, landing page com preview, etc)
+  - [ ] Aceitar risco de scraping/abuso
 
 **Decisao tomada:** ________________
 **Data:** ____/____/____
