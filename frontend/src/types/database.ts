@@ -156,6 +156,20 @@ export interface AuctionFilters {
   valor_max?: number
   data_inicio?: string
   data_fim?: string
+  // Novos filtros de data com intervalo
+  data_publicacao_de?: string
+  data_publicacao_ate?: string
+  data_leilao_de?: string
+  data_leilao_ate?: string
   limit?: number
   offset?: number
+}
+
+// Tipo para resposta paginada
+export interface PaginatedAuctionsResponse {
+  data: Auction[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
 }

@@ -27,6 +27,11 @@ interface AuctionMapState {
   allAuctions: Auction[]
   visibleAuctions: Auction[]
 
+  // Paginação
+  currentPage: number
+  totalPages: number
+  totalItems: number
+
   // Estado do Mapa
   currentBounds: MapBounds | null
   isMapActive: boolean
@@ -53,15 +58,18 @@ const AuctionMapContext = createContext<AuctionMapState | null>(null)
  * - Bounding box atual do mapa (currentBounds)
  */
 export function AuctionMapProvider({ children }: { children: ReactNode }) {
-  // Fonte de dados única
-  const { data: auctions, isLoading, isError, error } = useAuctions()
+  // Fonte de dados única (agora retorna dados paginados)
+  const { data: paginatedData, isLoading, isError, error } = useAuctions()
 
   // Estado do bounds do mapa
   const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
   const [isMapActive, setIsMapActive] = useState(false)
 
-  // Todos os leilões (com fallback para array vazio)
-  const allAuctions = useMemo(() => auctions || [], [auctions])
+  // Extrair dados da resposta paginada
+  const allAuctions = useMemo(() => paginatedData?.data || [], [paginatedData])
+  const currentPage = paginatedData?.page || 1
+  const totalPages = paginatedData?.totalPages || 1
+  const totalItems = paginatedData?.total || 0
 
   // Filtrar leilões pelo bounding box
   const visibleAuctions = useMemo(() => {
@@ -105,6 +113,9 @@ export function AuctionMapProvider({ children }: { children: ReactNode }) {
   const value: AuctionMapState = {
     allAuctions,
     visibleAuctions,
+    currentPage,
+    totalPages,
+    totalItems,
     currentBounds,
     isMapActive,
     isLoading,

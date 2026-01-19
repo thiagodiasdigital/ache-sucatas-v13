@@ -387,7 +387,7 @@ function MapContent({
 
 export function MapView() {
   const [searchParams] = useSearchParams()
-  const { data: auctions, isLoading } = useAuctions()
+  const { data: paginatedData, isLoading } = useAuctions()
 
   // Read all active filters from URL
   const currentUF = searchParams.get("uf")
@@ -396,6 +396,7 @@ export function MapView() {
 
   // Filter auctions with valid coordinates
   const markers: MarkerData[] = useMemo(() => {
+    const auctions = paginatedData?.data
     if (!auctions) return []
     return auctions
       .filter(
@@ -410,7 +411,7 @@ export function MapView() {
         longitude: auction.longitude!,
         latitude: auction.latitude!,
       }))
-  }, [auctions])
+  }, [paginatedData])
 
   // Create a key to remount MapContent when markers change significantly
   const markersKey = useMemo(

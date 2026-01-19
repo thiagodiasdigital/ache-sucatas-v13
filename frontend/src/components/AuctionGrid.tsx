@@ -1,10 +1,11 @@
 import { useAuctionMap } from "../contexts/AuctionMapContext"
 import { AuctionCard } from "./AuctionCard"
 import { AuctionCardSkeleton } from "./AuctionCardSkeleton"
+import { Pagination } from "./Pagination"
 import { AlertCircle, MapIcon } from "lucide-react"
 
 /**
- * Grid responsivo de leilões.
+ * Grid responsivo de leilões com paginação server-side.
  * Layout: 1 col mobile, 2 col tablet, 3-4 col desktop
  *
  * Sincronizado com Mapa via AuctionMapContext.
@@ -15,6 +16,9 @@ export function AuctionGrid() {
   const {
     visibleAuctions: auctions,
     allAuctions,
+    currentPage,
+    totalPages,
+    totalItems,
     isLoading,
     isError,
     error,
@@ -22,11 +26,11 @@ export function AuctionGrid() {
     clearBoundsFilter,
   } = useAuctionMap()
 
-  // Loading state com skeletons
+  // Loading state com skeletons (20 itens por página)
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {Array.from({ length: 12 }).map((_, index) => (
+        {Array.from({ length: 20 }).map((_, index) => (
           <AuctionCardSkeleton key={index} />
         ))}
       </div>
@@ -61,7 +65,7 @@ export function AuctionGrid() {
     )
   }
 
-  // Grid de leilões
+  // Grid de leilões com paginação
   return (
     <div className="space-y-4">
       {/* Indicador de filtro por mapa */}
@@ -88,6 +92,15 @@ export function AuctionGrid() {
           <AuctionCard key={auction.id} auction={auction} />
         ))}
       </div>
+
+      {/* Paginação (não exibir quando mapa está ativo pois filtra client-side) */}
+      {!isMapActive && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+        />
+      )}
     </div>
   )
 }
