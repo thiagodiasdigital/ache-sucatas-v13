@@ -2,52 +2,53 @@
 
 > **Projeto:** Ache Sucatas - DaaS de Leiloes Publicos Veiculares
 > **Data da Auditoria:** 2026-01-19
-> **Risk Level Atual:** CRITICAL
+> **Risk Level Atual:** LOW (atualizado em 19/01/2026)
 > **Proxima Auditoria:** 2026-01-26
+> **Status:** DEPLOY AUTORIZADO
 
 ---
 
 ## BLOCKING ISSUES (Impedem Deploy)
 
 ### BLOCK-001: Storage Bucket Publico
-- [ ] Acessar: `Supabase Dashboard > Storage > editais-pdfs`
-- [ ] Clicar em "Settings" do bucket
-- [ ] Escolher UMA das opcoes:
-  - [ ] **Opcao A:** Tornar bucket PRIVATE
+- [x] Acessar: `Supabase Dashboard > Storage > editais-pdfs`
+- [x] Clicar em "Settings" do bucket
+- [x] Escolher UMA das opcoes:
+  - [x] **Opcao A:** Tornar bucket PRIVATE
   - [ ] **Opcao B:** Adicionar policies restritivas (authenticated only)
-- [ ] Testar: Tentar acessar um PDF sem autenticacao (deve falhar)
-- [ ] Data conclusao: ____/____/____
+- [x] Testar: Tentar acessar um PDF sem autenticacao (deve falhar)
+- [x] Data conclusao: 19/01/2026
 
 ### BLOCK-002: SSL Enforcement Desativado
-- [ ] Acessar: `Supabase Dashboard > Database > Settings`
-- [ ] Localizar secao "SSL Configuration"
-- [ ] Ativar toggle "Enforce SSL on incoming connections"
-- [ ] Aguardar aplicacao (pode levar alguns segundos)
-- [ ] Testar: Conexao sem SSL deve ser recusada
-- [ ] Data conclusao: ____/____/____
+- [x] Acessar: `Supabase Dashboard > Database > Settings`
+- [x] Localizar secao "SSL Configuration"
+- [x] Ativar toggle "Enforce SSL on incoming connections"
+- [x] Aguardar aplicacao (pode levar alguns segundos)
+- [x] Testar: Conexao sem SSL deve ser recusada
+- [x] Data conclusao: 19/01/2026
 
 ---
 
 ## ALTA PRIORIDADE (Esta Semana)
 
 ### SEC-003: Habilitar Secret Scanning no GitHub
-- [ ] Acessar: `GitHub > Settings > Code security and analysis`
-- [ ] Localizar "Secret scanning"
-- [ ] Clicar "Enable"
-- [ ] Verificar se "Push protection" tambem esta habilitado
-- [ ] Data conclusao: ____/____/____
+- [x] Acessar: `GitHub > Settings > Code security and analysis`
+- [x] Localizar "Secret scanning"
+- [x] Clicar "Enable"
+- [x] Verificar se "Push protection" tambem esta habilitado
+- [x] Data conclusao: 19/01/2026
 
 ### SEC-004: Configurar Branch Protection
-- [ ] Acessar: `GitHub > Settings > Branches`
-- [ ] Clicar "Add branch protection rule"
-- [ ] Branch name pattern: `master`
-- [ ] Marcar opcoes:
-  - [ ] Require a pull request before merging
-  - [ ] Require status checks to pass before merging
-  - [ ] Require branches to be up to date before merging
-  - [ ] Do not allow bypassing the above settings
-- [ ] Clicar "Create"
-- [ ] Data conclusao: ____/____/____
+- [x] Acessar: `GitHub > Settings > Branches`
+- [x] Clicar "Add branch protection rule"
+- [x] Branch name pattern: `master`
+- [x] Marcar opcoes:
+  - [x] Require a pull request before merging
+  - [x] Require status checks to pass before merging
+  - [x] Require branches to be up to date before merging
+  - [x] Do not allow bypassing the above settings
+- [x] Clicar "Create"
+- [x] Data conclusao: 19/01/2026
 
 ### SEC-005: Decisao de Negocio - Acesso Anonimo
 **Pergunta:** Os dados de editais do PNCP devem ser acessiveis sem autenticacao?
@@ -155,8 +156,11 @@ Apos completar BLOCK-001 e BLOCK-002:
 | 2026-01-19 | Dependabot configurado | DONE | Claude Code |
 | 2026-01-19 | CodeQL configurado | DONE | Claude Code |
 | 2026-01-19 | SECURITY.md criado | DONE | Claude Code |
-| | | | |
-| | | | |
+| 2026-01-19 | SSL Enforcement ativado | DONE | Usuario (UI) |
+| 2026-01-19 | Bucket editais-pdfs privado | DONE | Usuario (UI) |
+| 2026-01-19 | Secret Scanning habilitado | DONE | Usuario (UI) |
+| 2026-01-19 | Branch Protection configurado | DONE | Usuario (UI) |
+| 2026-01-19 | Dependabot Alerts habilitado | DONE | Usuario (UI) |
 | | | | |
 
 ---
@@ -171,6 +175,6 @@ Apos completar BLOCK-001 e BLOCK-002:
 
 ---
 
-**Status do Deploy:** :x: NAO AUTORIZADO (2 blocking issues pendentes)
+**Status do Deploy:** :white_check_mark: AUTORIZADO (blocking issues resolvidos em 19/01/2026)
 
 *Ultima atualizacao: 2026-01-19*

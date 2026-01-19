@@ -14,8 +14,8 @@
     ]
   },
 
-  "risk_level": "CRITICAL",
-  "risk_level_justification": "Bucket de storage publico sem policies + SSL nao obrigatorio constituem riscos criticos que permitem acesso nao autorizado a dados e interceptacao de credenciais em transito.",
+  "risk_level": "LOW",
+  "risk_level_justification": "Todos os blocking issues foram resolvidos em 19/01/2026. SSL enforcement ativado, bucket privado, secret scanning e branch protection habilitados. Restam apenas itens de baixa prioridade.",
 
   "executive_summary": {
     "total_findings": 24,
@@ -29,28 +29,24 @@
     "remediation_pending_ui": 5
   },
 
-  "blocking_issues": [
+  "blocking_issues": [],
+
+  "resolved_blocking_issues": [
     {
       "id": "BLOCK-001",
       "severity": "CRITICAL",
-      "source": "BROWSER",
-      "issue": "Storage bucket 'editais-pdfs' configurado como PUBLIC com 0 policies",
-      "impact": "Qualquer pessoa na internet pode acessar todos os PDFs de editais",
-      "data_at_risk": "Documentos de leilao (PDFs)",
-      "required_action": "Supabase Dashboard > Storage > editais-pdfs > Configurar como PRIVATE ou adicionar policies restritivas",
-      "can_fix_via_code": false,
-      "effort": "MEDIUM"
+      "issue": "Storage bucket 'editais-pdfs' configurado como PUBLIC",
+      "resolution": "Bucket convertido para PRIVATE",
+      "resolved_date": "2026-01-19",
+      "resolved_by": "Usuario (UI)"
     },
     {
       "id": "BLOCK-002",
       "severity": "CRITICAL",
-      "source": "BROWSER",
-      "issue": "SSL enforcement DESATIVADO no banco de dados",
-      "impact": "Conexoes ao banco podem ser interceptadas (man-in-the-middle). Credenciais e dados em transito expostos.",
-      "data_at_risk": "Todas as queries SQL, incluindo dados de editais e credenciais de conexao",
-      "required_action": "Supabase Dashboard > Database > Settings > SSL Configuration > Toggle ON",
-      "can_fix_via_code": false,
-      "effort": "LOW"
+      "issue": "SSL enforcement DESATIVADO",
+      "resolution": "SSL enforcement ativado",
+      "resolved_date": "2026-01-19",
+      "resolved_by": "Usuario (UI)"
     }
   ],
 
@@ -293,11 +289,15 @@
   },
 
   "deployment_authorization": {
-    "authorized": false,
-    "reason": "2 blocking issues pendentes (BLOCK-001, BLOCK-002)",
-    "conditions_for_approval": [
-      "SSL enforcement ativado",
-      "Bucket editais-pdfs protegido com policies ou configurado como private"
+    "authorized": true,
+    "authorized_date": "2026-01-19",
+    "reason": "Todos os blocking issues resolvidos",
+    "resolved_conditions": [
+      "SSL enforcement ativado - 19/01/2026",
+      "Bucket editais-pdfs configurado como private - 19/01/2026",
+      "Secret scanning habilitado - 19/01/2026",
+      "Branch protection configurado - 19/01/2026",
+      "Dependabot alerts habilitado - 19/01/2026"
     ]
   },
 
