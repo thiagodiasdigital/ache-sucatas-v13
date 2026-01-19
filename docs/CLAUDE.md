@@ -107,11 +107,42 @@ pytest tests/ -v --tb=short
 
 ## Seguranca
 
+### Status da Auditoria (2026-01-19)
+
+```
+╔════════════════════════════════════════════╗
+║  AUDITORIA COMPLETA: 15/15 itens (100%)   ║
+║  Risk Level: LOW                           ║
+║  Deploy: AUTORIZADO                        ║
+╚════════════════════════════════════════════╝
+```
+
+### Controles Implementados
+
+| Categoria | Controle | Status |
+|-----------|----------|--------|
+| **Supabase** | SSL Enforcement | ON |
+| **Supabase** | Storage Bucket Privado | ON |
+| **Supabase** | RLS em todas as tabelas | ON |
+| **Supabase** | Anon grants removidos | ON |
+| **Supabase** | JWT ECC P-256 (legado revogado) | ON |
+| **GitHub** | Secret Scanning | ON |
+| **GitHub** | Branch Protection (PR + 1 approval) | ON |
+| **GitHub** | Dependabot Alerts | ON |
+| **GitHub** | CodeQL (SAST) | ON |
+| **Codigo** | Pre-commit hooks | ON |
+
 ### Ativar Pre-commit Hooks (Obrigatorio para Desenvolvedores)
 
 ```bash
 # Ativar hooks de seguranca que bloqueiam commits com secrets
 git config core.hooksPath .githooks
+
+# Testar se esta funcionando
+echo "SUPABASE_SERVICE_KEY=teste123" > teste.txt
+git add teste.txt
+git commit -m "teste"  # Deve ser BLOQUEADO
+rm teste.txt
 ```
 
 ### Arquivos de Seguranca
@@ -119,17 +150,25 @@ git config core.hooksPath .githooks
 | Arquivo | Descricao |
 |---------|-----------|
 | `SECURITY.md` | Politica de vulnerabilidades |
-| `SECURITY_AUDIT_CONSOLIDATED.json` | Resultado da auditoria |
-| `SECURITY_REMEDIATION_CHECKLIST.md` | Checklist de correcoes |
-| `.github/dependabot.yml` | Monitoramento de vulnerabilidades |
-| `.github/workflows/codeql-analysis.yml` | Analise estatica (SAST) |
-| `.githooks/pre-commit` | Hook que bloqueia secrets |
+| `SECURITY_AUDIT_CONSOLIDATED.json` | Resultado consolidado da auditoria |
+| `SECURITY_AUDIT_LOCAL.json` | Auditoria de codigo local |
+| `SECURITY_AUDIT_BROWSER.json` | Auditoria via Supabase/GitHub UI |
+| `SECURITY_REMEDIATION_CHECKLIST.md` | Checklist de correcoes (100% completo) |
+| `.github/dependabot.yml` | Monitoramento de vulnerabilidades (pip, npm, actions) |
+| `.github/workflows/codeql-analysis.yml` | Analise estatica (Python + JS/TS) |
+| `.githooks/pre-commit` | Hook que bloqueia secrets antes do commit |
+| `data/sql/remove_anon_grants.sql` | Script que removeu acesso anonimo |
 
-### Ultima Auditoria: 2026-01-19
+### Historico de Auditorias
 
-- **Risk Level:** LOW
-- **Deploy:** AUTORIZADO
-- **Proxima auditoria:** 2026-01-26
+| Data | Risk Level | Itens | Status |
+|------|------------|-------|--------|
+| 2026-01-19 | LOW | 15/15 (100%) | COMPLETO |
+
+### Proxima Auditoria
+
+- **Data:** 2026-01-26
+- **Escopo:** Verificar vulnerabilidades Dependabot + CodeQL findings
 
 ---
 
