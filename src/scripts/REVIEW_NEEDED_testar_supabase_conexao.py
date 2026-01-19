@@ -27,7 +27,7 @@ if not SUPABASE_KEY:
     exit(1)
 
 print(f"[OK] SUPABASE_URL: {SUPABASE_URL}")
-print(f"[OK] SUPABASE_SERVICE_KEY: {SUPABASE_KEY[:20]}...{SUPABASE_KEY[-10:]}")
+print(f"[OK] SUPABASE_SERVICE_KEY: [CONFIGURADA - {len(SUPABASE_KEY)} caracteres]")
 
 # Importar supabase
 print(f"\n[2] Importando biblioteca supabase...")

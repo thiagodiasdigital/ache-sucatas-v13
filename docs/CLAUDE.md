@@ -105,6 +105,34 @@ pytest tests/ -v --tb=short
 
 ---
 
+## Seguranca
+
+### Ativar Pre-commit Hooks (Obrigatorio para Desenvolvedores)
+
+```bash
+# Ativar hooks de seguranca que bloqueiam commits com secrets
+git config core.hooksPath .githooks
+```
+
+### Arquivos de Seguranca
+
+| Arquivo | Descricao |
+|---------|-----------|
+| `SECURITY.md` | Politica de vulnerabilidades |
+| `SECURITY_AUDIT_CONSOLIDATED.json` | Resultado da auditoria |
+| `SECURITY_REMEDIATION_CHECKLIST.md` | Checklist de correcoes |
+| `.github/dependabot.yml` | Monitoramento de vulnerabilidades |
+| `.github/workflows/codeql-analysis.yml` | Analise estatica (SAST) |
+| `.githooks/pre-commit` | Hook que bloqueia secrets |
+
+### Ultima Auditoria: 2026-01-19
+
+- **Risk Level:** LOW
+- **Deploy:** AUTORIZADO
+- **Proxima auditoria:** 2026-01-26
+
+---
+
 ## Documentacao Completa (6 arquivos)
 
 | # | Arquivo | Conteudo | Quando Consultar |
