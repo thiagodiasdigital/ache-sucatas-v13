@@ -336,4 +336,25 @@ testes-12-01-17h/
 
 ---
 
+### 2026-01-19 - Validacao de Mudancas de Escopo
+
+**Requisitos verificados:**
+
+| Requisito | Status | Evidencia |
+|-----------|--------|-----------|
+| Remover `valor_inicial` | N/A | Campo nunca existiu no schema |
+| Remover `edital_url` | N/A | Campo nunca existiu no schema |
+| Adicionar `pncp_url` | JA EXISTE | Implementado como `link_pncp` |
+| Adicionar `leiloeiro_url` | JA EXISTE | Implementado como `link_leiloeiro` |
+| Evento sem data_leilao nao vende | IMPLEMENTADO | View `pub.v_auction_discovery` filtra com `data_leilao IS NOT NULL` |
+
+**Conclusao:** Todas as mudancas de escopo ja estavam implementadas na infraestrutura atual.
+
+**Arquivos verificados:**
+- `frontend/supabase/supabase_infrastructure.sql` - View de producao com filtros
+- `data/sql/schemas_v13_supabase.sql` - Schema principal
+- `frontend/src/types/database.ts` - Tipos TypeScript
+
+---
+
 > Ao finalizar trabalho: atualizar o arquivo `docs/CLAUDE_FULL_*.md` correspondente com mudancas realizadas
