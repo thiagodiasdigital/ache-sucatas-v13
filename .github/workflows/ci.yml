@@ -102,3 +102,38 @@ jobs:
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Tests executed successfully!" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # JOB 3: BANDIT - Python Security Linter (SAST)
+  # ===========================================================================
+  bandit:
+    needs: gitleaks  # Run after gitleaks passes
+    name: Bandit Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install bandit
+        run: pip install bandit[sarif]
+
+      - name: Run bandit
+        run: |
+          bandit -r src/ -f sarif -o bandit-results.sarif --configfile config/bandit.yaml || true
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-results.sarif
+
+      - name: Run bandit (console output)
+        run: |
+          echo "## Bandit Security Scan" >> $GITHUB_STEP_SUMMARY
+          bandit -r src/ -ll --configfile config/bandit.yaml || true

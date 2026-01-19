@@ -1,0 +1,33 @@
+{
+  "data": "2026-01-19",
+  "custos": {
+    "supabase": 0.0,
+    "github_actions": 0.0,
+    "total_mensal": 0.0
+  },
+  "uso": {
+    "github_minutes_mes": 90.0,
+    "github_minutes_limite": 2000,
+    "github_pct": 4.5,
+    "storage_mb": 300,
+    "storage_limite_mb": 1024,
+    "storage_pct": 29.296875
+  },
+  "metricas": {
+    "execucoes_mes": 19,
+    "editais_novos_mes": 5217
+  },
+  "unit_costs": {
+    "por_execucao": 0.0,
+    "por_edital": 0.0,
+    "por_mb_storage": 0.0
+  },
+  "status": "FREE_TIER",
+  "supabase_metrics": {
+    "total_editais": 294,
+    "editais_novos_mes": 5217,
+    "execucoes_mes": 19,
+    "execucoes_sucesso": 19,
+    "taxa_sucesso": 100.0
+  }
+}

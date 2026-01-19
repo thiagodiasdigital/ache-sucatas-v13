@@ -1,0 +1,52 @@
+# Bandit Configuration - Ache Sucatas
+# ====================================
+# Configuracao do Bandit SAST para Python
+#
+# Documentacao: https://bandit.readthedocs.io/en/latest/config.html
+#
+# Uso local:
+#   bandit -r src/ --configfile config/bandit.yaml
+#   bandit -r src/ -ll --configfile config/bandit.yaml  # apenas medium+high
+
+# Arquivos e diretorios a serem excluidos da analise
+exclude_dirs:
+  - tests
+  - _DESCARTE_AUDITORIA
+  - frontend
+  - node_modules
+  - .venv
+  - venv
+  - __pycache__
+  - .git
+
+# Testes a serem ignorados (falsos positivos conhecidos)
+# B101: assert_used - usamos assert em testes
+# B311: random - nao usado para criptografia
+# B104: hardcoded_bind_all_interfaces - nao aplicavel (sem servidor web)
+skips:
+  - B101
+  - B311
+  - B104
+
+# Nivel minimo de severidade para reportar
+# LOW, MEDIUM, HIGH
+# severity: MEDIUM
+
+# Nivel minimo de confianca para reportar
+# LOW, MEDIUM, HIGH
+# confidence: MEDIUM
+
+# Plugins especificos (opcional)
+# tests:
+#   - B201
+#   - B301
+
+# Blacklist de imports perigosos
+blacklist:
+  calls:
+    # Exemplo: bloquear uso de eval/exec
+    # - pickle.loads
+    # - eval
+  imports:
+    # Imports potencialmente perigosos
+    # - telnetlib

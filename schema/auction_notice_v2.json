@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://achesucatas.com.br/schema/auction_notice_v2.json",
+  "title": "Ache Sucatas - Edital de Leilao Schema v2",
+  "description": "Schema canonico para editais de leilao publico coletados do PNCP",
+  "version": "2.0.0",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "ID interno auto-incrementado"
+    },
+    "pncp_id": {
+      "type": "string",
+      "description": "Identificador unico do edital no PNCP (chave natural)",
+      "pattern": "^[A-Z]{2}_[A-Z_]+_[0-9]+-[0-9]+-[0-9]+/[0-9]+$"
+    },
+    "orgao_nome": {
+      "type": "string",
+      "description": "Nome do orgao licitante",
+      "minLength": 1
+    },
+    "orgao_cnpj": {
+      "type": ["string", "null"],
+      "description": "CNPJ do orgao (14 digitos)",
+      "pattern": "^[0-9]{14}$"
+    },
+    "uf": {
+      "type": "string",
+      "description": "Sigla da Unidade Federativa (2 caracteres) ou XX para invalido",
+      "pattern": "^([A-Z]{2}|XX)$"
+    },
+    "municipio": {
+      "type": "string",
+      "description": "Nome do municipio",
+      "minLength": 1
+    },
+    "titulo": {
+      "type": "string",
+      "description": "Titulo do edital",
+      "minLength": 1
+    },
+    "descricao": {
+      "type": ["string", "null"],
+      "description": "Descricao completa do edital"
+    },
+    "objeto": {
+      "type": ["string", "null"],
+      "description": "Objeto da licitacao"
+    },
+    "data_publicacao": {
+      "type": ["string", "null"],
+      "description": "Data de publicacao no PNCP (ISO 8601)",
+      "format": "date-time"
+    },
+    "data_atualizacao": {
+      "type": ["string", "null"],
+      "description": "Data da ultima atualizacao no PNCP"
+    },
+    "data_inicio_propostas": {
+      "type": ["string", "null"],
+      "description": "Data de inicio do prazo para propostas"
+    },
+    "data_fim_propostas": {
+      "type": ["string", "null"],
+      "description": "Data de fim do prazo para propostas"
+    },
+    "data_leilao": {
+      "type": ["string", "null"],
+      "description": "Data e hora do leilao (ISO 8601)",
+      "format": "date-time"
+    },
+    "modalidade": {
+      "type": ["string", "null"],
+      "description": "Modalidade da licitacao (Leilao, Alienacao, etc.)"
+    },
+    "situacao": {
+      "type": ["string", "null"],
+      "description": "Status atual (Publicado, Encerrado, etc.)"
+    },
+    "score": {
+      "type": "integer",
+      "description": "Score de relevancia calculado (0-100)",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0
+    },
+    "files_url": {
+      "type": ["string", "null"],
+      "description": "URL da API PNCP para listar arquivos",
+      "format": "uri"
+    },
+    "link_pncp": {
+      "type": ["string", "null"],
+      "description": "Link direto para o edital no portal PNCP",
+      "format": "uri"
+    },
+    "link_leiloeiro": {
+      "type": ["string", "null"],
+      "description": "Link do site do leiloeiro ou plataforma de leilao",
+      "format": "uri"
+    },
+    "ano_compra": {
+      "type": ["string", "null"],
+      "description": "Ano da compra/licitacao"
+    },
+    "numero_sequencial": {
+      "type": ["string", "null"],
+      "description": "Numero sequencial da licitacao"
+    },
+    "storage_path": {
+      "type": ["string", "null"],
+      "description": "Caminho do arquivo no Supabase Storage"
+    },
+    "pdf_storage_url": {
+      "type": ["string", "null"],
+      "description": "URL publica do PDF principal",
+      "format": "uri"
+    },
+    "valor_estimado": {
+      "type": ["number", "null"],
+      "description": "Valor estimado/avaliacao (em BRL)",
+      "minimum": 0
+    },
+    "quantidade_itens": {
+      "type": ["integer", "null"],
+      "description": "Quantidade de lotes ou itens no leilao",
+      "minimum": 0
+    },
+    "nome_leiloeiro": {
+      "type": ["string", "null"],
+      "description": "Nome do leiloeiro oficial designado"
+    },
+    "latitude": {
+      "type": ["number", "null"],
+      "description": "Latitude do municipio (geocoding)",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "longitude": {
+      "type": ["number", "null"],
+      "description": "Longitude do municipio (geocoding)",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Data de insercao no banco (ISO 8601)",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "Data da ultima atualizacao no banco (ISO 8601)",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "pncp_id",
+    "orgao_nome",
+    "uf",
+    "municipio",
+    "titulo",
+    "score"
+  ],
+  "additionalProperties": false
+}
