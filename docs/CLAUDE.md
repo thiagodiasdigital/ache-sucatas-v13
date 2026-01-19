@@ -23,7 +23,8 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 |---------|-------|
 | Editais no banco | 294 |
 | PDFs no Storage | 698+ |
-| Testes unitarios | 98 (100% pass) |
+| Testes unitarios | 104 (100% pass) |
+| Cobertura geocoding | 100% |
 | Custo mensal | $0 (free tier) |
 
 ---
@@ -246,6 +247,32 @@ testes-12-01-17h/
 ---
 
 ## Historico de Sessoes
+
+### RESUMO SESSAO 2026-01-19
+
+**18 commits realizados** | **Todas as tarefas concluidas**
+
+| Tarefa | Status | Commit |
+|--------|--------|--------|
+| Auditoria CRAUDIO (3 partes) | ✅ 100% | `191254a` |
+| Correcoes ESLint Frontend | ✅ | `a317909` |
+| Gitleaks no CI | ✅ | `bba878a` |
+| Validacao Bugs Criticos (#1,#2,#3) | ✅ | `5c19b83` |
+| Validacao Mudancas de Escopo | ✅ | `965839c` |
+| Cobertura Geocoding 100% | ✅ | `1100a97` |
+| Indicador Filtros no MapView | ✅ | `607e010` |
+
+**Scripts criados:**
+- `src/scripts/diagnostico_geocoding.py`
+- `src/scripts/corrigir_uf_invalida.py`
+
+**Proximos passos restantes:**
+- Tiles offline para MapView (baixa prioridade)
+- Infraestrutura: PR infra, Terraform, AWS
+- Frontend: Testes automatizados, Error Boundary, PWA
+- Proxima auditoria: 2026-01-26
+
+---
 
 ### 2026-01-19 - Auditoria CRAUDIO Completa (100%)
 
