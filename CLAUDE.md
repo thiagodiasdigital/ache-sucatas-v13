@@ -1,7 +1,7 @@
 # CLAUDE.md - ACHE SUCATAS (Quick Start)
 
 > **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica + Frontend React
-> **Documento completo:** [CLAUDE_FULL.md](./CLAUDE_FULL.md) (consultar se precisar de detalhes)
+> **Documentacao completa:** Dividida em 6 arquivos (ver tabela abaixo)
 
 ---
 
@@ -98,16 +98,16 @@ pytest tests/ -v --tb=short
 
 ---
 
-## Quando Consultar CLAUDE_FULL.md
+## Documentacao Completa (6 arquivos)
 
-- Detalhes de arquitetura e fluxos
-- Schema completo do banco de dados
-- Configuracao de variaveis de ambiente
-- Troubleshooting detalhado
-- Historico de commits
-- Configuracao de seguranca
-- API PNCP (endpoints, parametros)
-- **Frontend React (Semana 2)** - componentes, hooks, schema SQL
+| # | Arquivo | Conteudo | Quando Consultar |
+|---|---------|----------|------------------|
+| 1 | [CLAUDE_FULL_1.md](./CLAUDE_FULL_1.md) | Estado atual, Frontend React, Hotfixes | Primeiro a ler, estado mais recente |
+| 2 | [CLAUDE_FULL_2.md](./CLAUDE_FULL_2.md) | Arquitetura e Fluxos | Entender como o sistema funciona |
+| 3 | [CLAUDE_FULL_3.md](./CLAUDE_FULL_3.md) | CI/CD, Testes, Workflows | Config de CI, adicionar testes |
+| 4 | [CLAUDE_FULL_4.md](./CLAUDE_FULL_4.md) | Banco de Dados e API PNCP | Schema, queries, endpoints |
+| 5 | [CLAUDE_FULL_5.md](./CLAUDE_FULL_5.md) | Seguranca e Configuracao | Variaveis, secrets, hooks |
+| 6 | [CLAUDE_FULL_6.md](./CLAUDE_FULL_6.md) | Operacoes e Historico | Comandos, troubleshooting, commits |
 
 ---
 
@@ -126,11 +126,16 @@ testes-12-01-17h/
 |-- cloud_auditor_v14.py
 |-- supabase_repository.py
 |-- supabase_storage.py
-|-- CLAUDE.md              # Este arquivo (leve)
-|-- CLAUDE_FULL.md         # Documentacao completa
+|-- CLAUDE.md              # Este arquivo (resumo)
+|-- CLAUDE_FULL_1.md       # Estado atual, Frontend React
+|-- CLAUDE_FULL_2.md       # Arquitetura e Fluxos
+|-- CLAUDE_FULL_3.md       # CI/CD, Testes, Workflows
+|-- CLAUDE_FULL_4.md       # Banco de Dados e API
+|-- CLAUDE_FULL_5.md       # Seguranca e Configuracao
+|-- CLAUDE_FULL_6.md       # Operacoes e Historico
 +-- .env                   # Credenciais (gitignore)
 ```
 
 ---
 
-> Ao finalizar trabalho: atualizar CLAUDE_FULL.md com mudancas realizadas
+> Ao finalizar trabalho: atualizar o arquivo CLAUDE_FULL_*.md correspondente com mudancas realizadas
