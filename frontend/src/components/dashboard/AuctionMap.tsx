@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import Map, { Popup, NavigationControl, Source, Layer } from "react-map-gl/maplibre"
-import type { MapRef, MapLayerMouseEvent } from "react-map-gl/maplibre"
+import type { MapRef, MapLayerMouseEvent, ViewStateChangeEvent } from "react-map-gl/maplibre"
 import type { LayerProps } from "react-map-gl/maplibre"
 import { MapPin } from "lucide-react"
-import { useAuctions } from "../../hooks/useAuctions"
+import { useAuctionMap, type MapBounds } from "../../contexts/AuctionMapContext"
+import { useDebounce } from "../../hooks/useDebounce"
 import type { Auction } from "../../types/database"
 import "maplibre-gl/dist/maplibre-gl.css"
 
@@ -162,15 +163,47 @@ function MapContent({
   markers,
   initialView,
   onMarkerClick,
+  onBoundsChange,
 }: {
   markers: MarkerData[]
   initialView: ViewState
   onMarkerClick: (auction: Auction) => void
+  onBoundsChange: (bounds: MapBounds) => void
 }) {
   const mapRef = useRef<MapRef>(null)
   const [viewState, setViewState] = useState<ViewState>(initialView)
   const [hoveredAuction, setHoveredAuction] = useState<Auction | null>(null)
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
+
+  // Debounced bounds update (400ms) - evita re-renders durante pan
+  const debouncedBoundsChange = useDebounce((bounds: MapBounds) => {
+    onBoundsChange(bounds)
+  }, 400)
+
+  // Extrair bounds do mapa e notificar
+  const handleMoveEnd = useCallback(() => {
+    const map = mapRef.current?.getMap()
+    if (!map) return
+
+    const mapBounds = map.getBounds()
+    if (!mapBounds) return
+
+    const bounds: MapBounds = {
+      north: mapBounds.getNorth(),
+      south: mapBounds.getSouth(),
+      east: mapBounds.getEast(),
+      west: mapBounds.getWest(),
+    }
+
+    debouncedBoundsChange(bounds)
+  }, [debouncedBoundsChange])
+
+  // Emitir bounds inicial quando o mapa carregar
+  useEffect(() => {
+    // Pequeno delay para garantir que o mapa renderizou
+    const timer = setTimeout(handleMoveEnd, 100)
+    return () => clearTimeout(timer)
+  }, [handleMoveEnd])
 
   // Create GeoJSON data for clustering
   const geojsonData = useMemo(
@@ -287,6 +320,7 @@ function MapContent({
         ref={mapRef}
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
+        onMoveEnd={handleMoveEnd}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -387,10 +421,15 @@ function MapContent({
 
 /**
  * AuctionMap - Mapa Tático para visualização geoespacial de leilões.
+ *
+ * Sincronizado com Grid via AuctionMapContext.
+ * Emite bounds no moveend (debounced) para filtrar o Grid.
  */
 export function AuctionMap() {
   const [searchParams] = useSearchParams()
-  const { data: auctions, isLoading } = useAuctions()
+
+  // Usar contexto compartilhado (Single Source of Truth)
+  const { allAuctions, isLoading, setBounds, setMapActive } = useAuctionMap()
 
   // UF Safety Lock - Check if UF is selected
   const currentUF = searchParams.get("uf")
@@ -398,8 +437,8 @@ export function AuctionMap() {
   // IMPORTANT: All hooks must be called before any conditional returns!
   // Filter auctions with valid coordinates
   const markers: MarkerData[] = useMemo(() => {
-    if (!auctions) return []
-    return auctions
+    if (!allAuctions) return []
+    return allAuctions
       .filter(
         (auction) =>
           auction.latitude !== null &&
@@ -413,7 +452,7 @@ export function AuctionMap() {
         latitude: auction.latitude!,
         tipo: getAuctionTipo(auction.tags),
       }))
-  }, [auctions])
+  }, [allAuctions])
 
   // Calculate initial view from markers
   const initialView = useMemo(() => calculateViewFromMarkers(markers), [markers])
@@ -428,6 +467,15 @@ export function AuctionMap() {
   const handleMarkerClick = useCallback((auction: Auction) => {
     console.log("Marker clicked:", auction)
   }, [])
+
+  // Handle bounds change from map (sync with Grid)
+  const handleBoundsChange = useCallback(
+    (bounds: MapBounds) => {
+      setBounds(bounds)
+      setMapActive(true)
+    },
+    [setBounds, setMapActive]
+  )
 
   // Requirement #1: UF Safety Lock
   // If no UF selected, render gray placeholder
@@ -483,6 +531,7 @@ export function AuctionMap() {
       markers={markers}
       initialView={initialView}
       onMarkerClick={handleMarkerClick}
+      onBoundsChange={handleBoundsChange}
     />
   )
 }

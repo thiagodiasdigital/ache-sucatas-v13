@@ -1,14 +1,26 @@
-import { useAuctions } from "../hooks/useAuctions"
+import { useAuctionMap } from "../contexts/AuctionMapContext"
 import { AuctionCard } from "./AuctionCard"
 import { AuctionCardSkeleton } from "./AuctionCardSkeleton"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, MapIcon } from "lucide-react"
 
 /**
  * Grid responsivo de leilões.
  * Layout: 1 col mobile, 2 col tablet, 3-4 col desktop
+ *
+ * Sincronizado com Mapa via AuctionMapContext.
+ * Exibe apenas leilões visíveis no viewport do mapa (quando ativo).
  */
 export function AuctionGrid() {
-  const { data: auctions, isLoading, isError, error } = useAuctions()
+  // Usar contexto compartilhado (Single Source of Truth)
+  const {
+    visibleAuctions: auctions,
+    allAuctions,
+    isLoading,
+    isError,
+    error,
+    isMapActive,
+    clearBoundsFilter,
+  } = useAuctionMap()
 
   // Loading state com skeletons
   if (isLoading) {
@@ -51,10 +63,31 @@ export function AuctionGrid() {
 
   // Grid de leilões
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {auctions.map((auction) => (
-        <AuctionCard key={auction.id} auction={auction} />
-      ))}
+    <div className="space-y-4">
+      {/* Indicador de filtro por mapa */}
+      {isMapActive && (
+        <div className="flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 rounded-lg px-4 py-2">
+          <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <MapIcon className="h-4 w-4" />
+            <span>
+              Mostrando <strong>{auctions.length}</strong> de{" "}
+              <strong>{allAuctions.length}</strong> leilões no viewport do mapa
+            </span>
+          </div>
+          <button
+            onClick={clearBoundsFilter}
+            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+          >
+            Mostrar todos
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {auctions.map((auction) => (
+          <AuctionCard key={auction.id} auction={auction} />
+        ))}
+      </div>
     </div>
   )
 }
