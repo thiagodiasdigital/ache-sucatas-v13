@@ -147,7 +147,10 @@ class TestExtrairUrlsDeTexto:
         text = "Portal disponível em www.portal.net"
         urls = extrair_urls_de_texto(text)
         assert len(urls) == 1
-        assert "portal.net" in urls[0]
+        # CodeQL: py/incomplete-url-substring-sanitization - False positive
+        # This is a test assertion, not URL validation in production code.
+        # The test verifies URL extraction works, not security sanitization.
+        assert "portal.net" in urls[0]  # lgtm[py/incomplete-url-substring-sanitization]
 
     def test_bug3_dominio_net_br(self):
         """Bug #3: Regex deve capturar domínios .net.br"""

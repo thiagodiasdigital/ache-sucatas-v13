@@ -47,7 +47,8 @@ if sys.platform != 'win32':
     try:
         # CodeQL: overly-permissive-file - 0o755 required for Git hooks (must be executable by Git)
         # Using 0o700 would break hooks when Git runs under different user context
-        os.chmod(hook_file, 0o755)  # nosec B103
+        # Git requires hooks to be world-executable in shared repository environments
+        os.chmod(hook_file, 0o755)  # nosec B103 # lgtm[py/overly-permissive-file]
         print(f"[OK] {hook_file} agora é executável")
     except Exception as e:
         print(f"[AVISO] Não foi possível tornar executável: {e}")
