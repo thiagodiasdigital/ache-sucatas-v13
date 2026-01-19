@@ -3,6 +3,7 @@ Tests for extraction functions in cloud_auditor_v14.py
 These are pure functions that don't require Supabase connection.
 """
 import pytest
+from urllib.parse import urlparse
 
 from cloud_auditor_v14 import (
     corrigir_encoding,
@@ -147,10 +148,9 @@ class TestExtrairUrlsDeTexto:
         text = "Portal disponível em www.portal.net"
         urls = extrair_urls_de_texto(text)
         assert len(urls) == 1
-        # CodeQL: py/incomplete-url-substring-sanitization - False positive
-        # This is a test assertion, not URL validation in production code.
-        # The test verifies URL extraction works, not security sanitization.
-        assert "portal.net" in urls[0]  # lgtm[py/incomplete-url-substring-sanitization]
+        # Use urlparse for secure host validation (avoids substring bypass attacks)
+        parsed = urlparse(urls[0] if urls[0].startswith('http') else f'https://{urls[0]}')
+        assert parsed.netloc.endswith('portal.net')
 
     def test_bug3_dominio_net_br(self):
         """Bug #3: Regex deve capturar domínios .net.br"""

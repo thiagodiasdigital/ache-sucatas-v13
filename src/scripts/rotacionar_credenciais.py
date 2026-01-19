@@ -119,11 +119,15 @@ if new_db_password:
         env_content += f"\nSUPABASE_DB_PASSWORD={new_db_password}\n"
         changes_made.append("SUPABASE_DB_PASSWORD (adicionado)")
 
-# Salvar .env atualizado
-# nosec B602 - This script's purpose is to write credentials to .env file
-# CodeQL: clear-text-storage-sensitive-data - Intentional: .env is gitignored
+# Salvar .env atualizado com permissões restritas
 with open(env_file, 'w', encoding='utf-8') as f:
     f.write(env_content)
+
+# Definir permissões restritas no arquivo .env (somente owner pode ler/escrever)
+# Isso mitiga o alerta CodeQL py/clear-text-storage-sensitive-data
+if sys.platform != 'win32':
+    os.chmod(env_file, 0o600)
+    print("[OK] Permissões do .env definidas para 600 (somente owner)")
 
 print(f"\n[OK] .env atualizado com: {', '.join(changes_made)}")
 

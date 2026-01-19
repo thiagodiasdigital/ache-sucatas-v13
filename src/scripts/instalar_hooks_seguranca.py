@@ -45,11 +45,10 @@ except subprocess.CalledProcessError as e:
 if sys.platform != 'win32':
     print("\n[2] Tornando hook executável...")
     try:
-        # CodeQL: overly-permissive-file - 0o755 required for Git hooks (must be executable by Git)
-        # Using 0o700 would break hooks when Git runs under different user context
-        # Git requires hooks to be world-executable in shared repository environments
-        os.chmod(hook_file, 0o755)  # nosec B103 # lgtm[py/overly-permissive-file]
-        print(f"[OK] {hook_file} agora é executável")
+        # Usar 0o750 (rwxr-x---) - owner e group podem executar, outros não
+        # Mais seguro que 0o755 e suficiente para Git hooks em ambiente local
+        os.chmod(hook_file, 0o750)
+        print(f"[OK] {hook_file} agora é executável (permissões: 750)")
     except Exception as e:
         print(f"[AVISO] Não foi possível tornar executável: {e}")
 
