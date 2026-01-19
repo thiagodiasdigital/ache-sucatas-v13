@@ -73,6 +73,7 @@ jobs:
           # Disable Supabase for tests (pure functions only)
           ENABLE_SUPABASE: 'false'
           ENABLE_SUPABASE_STORAGE: 'false'
+          PYTHONPATH: src/core
         run: pytest tests/ -v --tb=short
 
       - name: Generate test summary

@@ -53,6 +53,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Verify Supabase connection
+        env:
+          PYTHONPATH: src/core
         run: |
           python -c "
           from supabase_repository import SupabaseRepository
@@ -66,7 +68,9 @@ jobs:
           "
 
       - name: Run Miner V11
-        run: python ache_sucatas_miner_v11.py
+        env:
+          PYTHONPATH: src/core
+        run: python src/core/ache_sucatas_miner_v11.py
         timeout-minutes: 30
 
       - name: Upload metrics artifact
@@ -107,12 +111,14 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Auditor V14
+        env:
+          PYTHONPATH: src/core
         run: |
           LIMIT="${{ github.event.inputs.auditor_limit }}"
           if [ "$LIMIT" != "0" ] && [ -n "$LIMIT" ]; then
-            python cloud_auditor_v14.py --limit $LIMIT
+            python src/core/cloud_auditor_v14.py --limit $LIMIT
           else
-            python cloud_auditor_v14.py
+            python src/core/cloud_auditor_v14.py
           fi
         timeout-minutes: 60
 
@@ -151,6 +157,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Verify database status
+        env:
+          PYTHONPATH: src/core
         run: |
           python -c "
           from supabase_repository import SupabaseRepository
