@@ -357,4 +357,27 @@ testes-12-01-17h/
 
 ---
 
+### 2026-01-19 - Verificacao de Cobertura de Geocoding
+
+**Diagnostico executado:**
+
+| Metrica | Antes | Depois |
+|---------|-------|--------|
+| Total de leiloes | 294 | 294 |
+| Com geocoding | 293 (99.7%) | 294 (100%) |
+| Sem geocoding | 1 (0.3%) | 0 (0%) |
+
+**Gap identificado e corrigido:**
+- Leilao ID 33: "Carmo de Minas" com UF = "XX" (invalida)
+- Correcao aplicada: UF = "MG" (Minas Gerais)
+- ID interno atualizado: `MG_CARMO_DE_MINAS_18188243000160-1-000161/2025`
+
+**Scripts criados:**
+- `src/scripts/diagnostico_geocoding.py` - Analisa cobertura de geocoding
+- `src/scripts/corrigir_uf_invalida.py` - Corrige UFs invalidas
+
+**Resultado:** Cobertura de geocoding em 100%
+
+---
+
 > Ao finalizar trabalho: atualizar o arquivo `docs/CLAUDE_FULL_*.md` correspondente com mudancas realizadas
