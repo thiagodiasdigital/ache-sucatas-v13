@@ -1,12 +1,12 @@
 # =============================================================================
-# CI - Lint & Test
+# CI - Lint & Test & Security
 # =============================================================================
 # Workflow de integração contínua para validar código em push e PRs.
-# Executa ruff (linting) e pytest (testes unitários).
+# Executa gitleaks (secrets), ruff (linting) e pytest (testes unitários).
 # NÃO afeta o workflow principal ache-sucatas.yml.
 # =============================================================================
 
-name: CI - Lint & Test
+name: CI - Lint & Test & Security
 
 on:
   push:
@@ -19,9 +19,28 @@ env:
 
 jobs:
   # ===========================================================================
+  # JOB 0: GITLEAKS - Secret Detection
+  # ===========================================================================
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive scan
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ===========================================================================
   # JOB 1: LINT
   # ===========================================================================
   lint:
+    needs: gitleaks  # Run after gitleaks passes
     name: Lint with Ruff
     runs-on: ubuntu-latest
 
@@ -49,6 +68,7 @@ jobs:
   # JOB 2: TEST
   # ===========================================================================
   test:
+    needs: gitleaks  # Run after gitleaks passes
     name: Unit Tests
     runs-on: ubuntu-latest
 

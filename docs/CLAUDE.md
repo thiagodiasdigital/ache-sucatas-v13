@@ -108,15 +108,24 @@ pytest tests/ -v --tb=short
 
 ## Seguranca
 
-### Status da Auditoria (2026-01-19)
+### Status da Auditoria CRAUDIO (2026-01-19)
 
 ```
-╔════════════════════════════════════════════╗
-║  AUDITORIA COMPLETA: 15/15 itens (100%)   ║
-║  Risk Level: LOW                           ║
-║  Deploy: AUTORIZADO                        ║
-╚════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════╗
+║  AUDITORIA CRAUDIO: 11 itens OK / 3 pendentes HIGH       ║
+║  Risk Level: MEDIO                                        ║
+║  Deploy: AUTORIZADO (com ressalvas)                       ║
+║  Documento completo: docs/AUDITORIA_CRAUDIO_2026-01-19.md ║
+╚═══════════════════════════════════════════════════════════╝
 ```
+
+#### Pendencias Alta Prioridade
+
+| ID | Item | Status |
+|----|------|--------|
+| HIGH-001 | Secret Scanning Alert (1 alerta) | PENDENTE |
+| HIGH-002 | Branch Protection (0 branches) | PENDENTE |
+| HIGH-003 | CodeQL (130 alertas p/ triagem) | PENDENTE |
 
 ### Controles Implementados
 
@@ -131,6 +140,7 @@ pytest tests/ -v --tb=short
 | **GitHub** | Branch Protection (PR + 1 approval) | ON |
 | **GitHub** | Dependabot Alerts | ON |
 | **GitHub** | CodeQL (SAST) | ON |
+| **CI/CD** | Gitleaks Secret Scan | ON |
 | **Codigo** | Pre-commit hooks | ON |
 
 ### Ativar Pre-commit Hooks (Obrigatorio para Desenvolvedores)
@@ -162,9 +172,10 @@ rm teste.txt
 
 ### Historico de Auditorias
 
-| Data | Risk Level | Itens | Status |
-|------|------------|-------|--------|
-| 2026-01-19 | LOW | 15/15 (100%) | COMPLETO |
+| Data | Tipo | Risk Level | Status | Documento |
+|------|------|------------|--------|-----------|
+| 2026-01-19 | CRAUDIO 3-Partes | MEDIO | 3 HIGH pendentes | [AUDITORIA_CRAUDIO_2026-01-19.md](./AUDITORIA_CRAUDIO_2026-01-19.md) |
+| 2026-01-19 | Seguranca Inicial | LOW | COMPLETO | SECURITY_AUDIT_CONSOLIDATED.json |
 
 ### Proxima Auditoria
 
@@ -235,6 +246,36 @@ testes-12-01-17h/
 ---
 
 ## Historico de Sessoes
+
+### 2026-01-19 - Auditoria CRAUDIO Completa
+
+**Atividades realizadas:**
+
+1. **PARTE 1: Auditoria Local (sem navegador)**
+   - Mapeamento completo da estrutura do repositorio
+   - Analise de 30 commits recentes
+   - Inspecao de workflows CI/CD, schema SQL, testes
+   - Identificacao de 11 itens OK + findings
+
+2. **PARTE 2: Coleta via Navegador (Chrome)**
+   - 11 tarefas executadas no Supabase e GitHub
+   - SSL, RLS, JWT, Branch Protection verificados
+   - Outputs salvos em `output_navegador_relatorio.txt`
+
+3. **PARTE 3: Analise Final**
+   - Veredito: Deploy AUTORIZADO com ressalvas
+   - 3 itens HIGH pendentes identificados
+   - Plano de correcao e criterios de aceite definidos
+
+**Pendencias identificadas:**
+- [EXEC-01] Resolver 1 alerta Secret Scanning
+- [EXEC-02] Corrigir Branch Protection (0 branches)
+- [EXEC-03] Triar 130 alertas CodeQL
+
+**Documentacao gerada:**
+- `docs/AUDITORIA_CRAUDIO_2026-01-19.md` (relatorio completo)
+
+---
 
 ### 2026-01-19 - Correcoes Frontend
 
