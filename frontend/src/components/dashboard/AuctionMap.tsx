@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import Map, { Popup, NavigationControl, Source, Layer } from "react-map-gl/maplibre"
-import type { MapRef, MapLayerMouseEvent, ViewStateChangeEvent } from "react-map-gl/maplibre"
+import type { MapRef, MapLayerMouseEvent } from "react-map-gl/maplibre"
 import type { LayerProps } from "react-map-gl/maplibre"
 import { MapPin } from "lucide-react"
 import { useAuctionMap, type MapBounds } from "../../contexts/AuctionMapContext"
@@ -249,14 +249,16 @@ function MapContent({
         const clusterId = clusterFeatures[0].properties?.cluster_id
         if (clusterId !== undefined) {
           const source = map.getSource("auctions") as maplibregl.GeoJSONSource
-          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err || zoom === undefined) return
+          source.getClusterExpansionZoom(clusterId).then((zoom) => {
+            if (zoom === undefined) return
             const coords = (clusterFeatures[0].geometry as GeoJSON.Point).coordinates
             setViewState({
               longitude: coords[0],
               latitude: coords[1],
               zoom: Math.min(zoom, 16),
             })
+          }).catch(() => {
+            // Silently ignore cluster zoom errors
           })
         }
         return

@@ -7,7 +7,7 @@ import { useRef, useCallback, useEffect } from "react"
  * @param callback Função a ser executada após o debounce
  * @param delay Tempo de espera em ms (default: 300ms)
  */
-export function useDebounce<T extends (...args: unknown[]) => void>(
+export function useDebounce<T extends (...args: never[]) => void>(
   callback: T,
   delay: number = 300
 ): T {
