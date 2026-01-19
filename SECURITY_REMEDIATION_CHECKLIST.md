@@ -61,10 +61,11 @@
 
 **RECOMENDACAO TECNICA:** Remover grants para `anon`
 
-- [ ] **DECISAO: REMOVER ACESSO ANONIMO** (Recomendado)
-  - [ ] Executar script: `data/sql/remove_anon_grants.sql` no Supabase SQL Editor
-  - [ ] Verificar que frontend continua funcionando (deve funcionar)
-  - [ ] Testar chamada direta a API sem token (deve retornar 403)
+- [x] **DECISAO: REMOVER ACESSO ANONIMO** (Recomendado)
+  - [x] Executar script: `data/sql/remove_anon_grants.sql` no Supabase SQL Editor
+  - [x] REVOKE em 4 funcoes RPC concluido
+  - [x] Verificacao: 16 grants (antes eram 17 com anon)
+  - [x] Data conclusao: 19/01/2026
 
 - [ ] **DECISAO: MANTER ACESSO ANONIMO** (Apenas se necessario)
   - [ ] Documentar motivo (API publica futura, landing page com preview, etc)
@@ -161,6 +162,7 @@ Apos completar BLOCK-001 e BLOCK-002:
 | 2026-01-19 | Secret Scanning habilitado | DONE | Usuario (UI) |
 | 2026-01-19 | Branch Protection configurado | DONE | Usuario (UI) |
 | 2026-01-19 | Dependabot Alerts habilitado | DONE | Usuario (UI) |
+| 2026-01-19 | Anon grants removidos (SQL) | DONE | Usuario (SQL Editor) |
 | | | | |
 
 ---
