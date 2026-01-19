@@ -148,9 +148,11 @@ class TestExtrairUrlsDeTexto:
         text = "Portal disponível em www.portal.net"
         urls = extrair_urls_de_texto(text)
         assert len(urls) == 1
-        # Use urlparse for secure host validation (avoids substring bypass attacks)
+        # Secure host validation: exact domain OR legitimate subdomain (with dot prefix)
+        # This prevents attacks like "evil-portal.net" bypassing validation
         parsed = urlparse(urls[0] if urls[0].startswith('http') else f'https://{urls[0]}')
-        assert parsed.netloc.endswith('portal.net')
+        host = parsed.netloc
+        assert host == 'portal.net' or host.endswith('.portal.net')
 
     def test_bug3_dominio_net_br(self):
         """Bug #3: Regex deve capturar domínios .net.br"""
