@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import Map, { Marker, Popup, NavigationControl } from "react-map-gl/maplibre"
 import type { MapRef } from "react-map-gl/maplibre"
-import { MapPin, Map as MapIcon } from "lucide-react"
+import { MapPin, Map as MapIcon, Filter } from "lucide-react"
 import Supercluster from "supercluster"
 import { useAuctions } from "../hooks/useAuctions"
 import { AuctionCard } from "./AuctionCard"
@@ -66,6 +66,52 @@ type ClusterPointProperties = {
 type PointFeature = GeoJSON.Feature<GeoJSON.Point, AuctionPointProperties>
 type ClusterFeature = GeoJSON.Feature<GeoJSON.Point, ClusterPointProperties>
 
+// Active filters indicator component
+function ActiveFiltersIndicator({
+  uf,
+  cidade,
+  valorMin,
+  totalResults,
+}: {
+  uf: string | null
+  cidade: string | null
+  valorMin: string | null
+  totalResults: number
+}) {
+  const hasFilters = uf || cidade || valorMin
+
+  if (!hasFilters) return null
+
+  return (
+    <div className="absolute top-4 left-4 z-10 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 max-w-xs">
+      <div className="flex items-center gap-2 mb-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Filtros ativos</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {uf && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+            UF: {uf}
+          </span>
+        )}
+        {cidade && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-600 text-xs font-medium rounded-full">
+            {cidade}
+          </span>
+        )}
+        {valorMin && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-600 text-xs font-medium rounded-full">
+            Min: R$ {Number(valorMin).toLocaleString("pt-BR")}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
+        {totalResults} {totalResults === 1 ? "leilão encontrado" : "leilões encontrados"}
+      </div>
+    </div>
+  )
+}
+
 function getMarkerColor(tags: string[] | null): string {
   if (!tags) return "#6B7280" // gray
   if (tags.some((t) => t.toUpperCase().includes("SUCATA"))) return "#10B981" // green
@@ -128,9 +174,15 @@ function calculateViewFromMarkers(markers: MarkerData[]): ViewState {
 function MapContent({
   markers,
   initialView,
+  filters,
 }: {
   markers: MarkerData[]
   initialView: ViewState
+  filters: {
+    uf: string | null
+    cidade: string | null
+    valorMin: string | null
+  }
 }) {
   const mapRef = useRef<MapRef>(null)
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
@@ -211,7 +263,15 @@ function MapContent({
   }, [])
 
   return (
-    <div className="h-[600px] w-full rounded-lg overflow-hidden border">
+    <div className="h-[600px] w-full rounded-lg overflow-hidden border relative">
+      {/* Active filters indicator */}
+      <ActiveFiltersIndicator
+        uf={filters.uf}
+        cidade={filters.cidade}
+        valorMin={filters.valorMin}
+        totalResults={markers.length}
+      />
+
       <Map
         ref={mapRef}
         {...viewState}
@@ -329,7 +389,10 @@ export function MapView() {
   const [searchParams] = useSearchParams()
   const { data: auctions, isLoading } = useAuctions()
 
+  // Read all active filters from URL
   const currentUF = searchParams.get("uf")
+  const currentCidade = searchParams.get("cidade")
+  const currentValorMin = searchParams.get("valor_min")
 
   // Filter auctions with valid coordinates
   const markers: MarkerData[] = useMemo(() => {
@@ -396,5 +459,16 @@ export function MapView() {
   const initialView = calculateViewFromMarkers(markers)
 
   // Use key to remount when markers change, ensuring fresh initial view calculation
-  return <MapContent key={markersKey} markers={markers} initialView={initialView} />
+  return (
+    <MapContent
+      key={markersKey}
+      markers={markers}
+      initialView={initialView}
+      filters={{
+        uf: currentUF,
+        cidade: currentCidade,
+        valorMin: currentValorMin,
+      }}
+    />
+  )
 }

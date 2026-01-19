@@ -380,4 +380,25 @@ testes-12-01-17h/
 
 ---
 
+### 2026-01-19 - Sincronizacao de Filtros TopFilterBar com MapView
+
+**Analise realizada:**
+
+A sincronizacao de dados ja estava funcionando - todos os componentes usam `useAuctions()` que le filtros da URL.
+
+**Melhoria implementada:**
+
+Adicionado componente `ActiveFiltersIndicator` no MapView que exibe:
+- UF selecionada (badge primario)
+- Cidade selecionada (badge azul)
+- Valor minimo (badge verde)
+- Contagem de resultados encontrados
+
+**Arquivo modificado:**
+- `frontend/src/components/MapView.tsx` - Novo componente ActiveFiltersIndicator
+
+**Build:** OK (vite build)
+
+---
+
 > Ao finalizar trabalho: atualizar o arquivo `docs/CLAUDE_FULL_*.md` correspondente com mudancas realizadas
