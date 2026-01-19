@@ -3,6 +3,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { buttonVariants } from "./ui/button"
 import { formatCurrency, formatDateTime, cn } from "../lib/utils"
+import { getPncpLinkFromId } from "../utils/pncp"
 import { Calendar, MapPin, ExternalLink, Gavel } from "lucide-react"
 
 interface AuctionCardProps {
@@ -35,10 +36,14 @@ export function AuctionCard({ auction }: AuctionCardProps) {
     data_leilao,
     valor_estimado,
     tags,
-    link_pncp,
+    pncp_id,
     link_leiloeiro,
     nome_leiloeiro,
   } = auction
+
+  // CORRECAO: Gerar link PNCP correto a partir do pncp_id
+  // Formato correto: /CNPJ/ANO/SEQUENCIAL (nunca /CNPJ/1/SEQUENCIAL/ANO)
+  const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
 
   const showValue = valor_estimado !== null && valor_estimado > 0
 
