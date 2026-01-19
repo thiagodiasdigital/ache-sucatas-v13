@@ -60,7 +60,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     try {
       const { data, error } = await supabase.rpc(
         "get_unread_notifications" as never,
-        { p_limit: 10 } as never
+        { p_limit: 20 } as never
       )
 
       if (error) {

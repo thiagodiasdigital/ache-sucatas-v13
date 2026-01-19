@@ -1,7 +1,9 @@
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import Map, { Marker, Popup, NavigationControl } from "react-map-gl/maplibre"
+import type { MapRef } from "react-map-gl/maplibre"
 import { MapPin, Map as MapIcon } from "lucide-react"
+import Supercluster from "supercluster"
 import { useAuctions } from "../hooks/useAuctions"
 import { AuctionCard } from "./AuctionCard"
 import type { Auction } from "../types/database"
@@ -47,11 +49,43 @@ interface ViewState {
   zoom: number
 }
 
+// GeoJSON Point type for supercluster
+type AuctionPointProperties = {
+  cluster: false
+  auctionId: number
+  auction: Auction
+}
+
+type ClusterPointProperties = {
+  cluster: true
+  cluster_id: number
+  point_count: number
+  point_count_abbreviated: string
+}
+
+type PointFeature = GeoJSON.Feature<GeoJSON.Point, AuctionPointProperties>
+type ClusterFeature = GeoJSON.Feature<GeoJSON.Point, ClusterPointProperties>
+
 function getMarkerColor(tags: string[] | null): string {
   if (!tags) return "#6B7280" // gray
   if (tags.some((t) => t.toUpperCase().includes("SUCATA"))) return "#10B981" // green
   if (tags.some((t) => t.toUpperCase().includes("DOCUMENTADO"))) return "#3B82F6" // blue
   return "#6B7280" // gray
+}
+
+function getClusterColor(leaves: PointFeature[]): string {
+  // Check if any auction in the cluster has SUCATA or DOCUMENTADO tags
+  const hasSucata = leaves.some((leaf) =>
+    leaf.properties.auction.tags?.some((t) => t.toUpperCase().includes("SUCATA"))
+  )
+  const hasDocumentado = leaves.some((leaf) =>
+    leaf.properties.auction.tags?.some((t) => t.toUpperCase().includes("DOCUMENTADO"))
+  )
+
+  // Prioritize Sucata (Emerald) color
+  if (hasSucata) return "#10B981"
+  if (hasDocumentado) return "#3B82F6"
+  return "#6B7280"
 }
 
 function calculateViewFromMarkers(markers: MarkerData[]): ViewState {
@@ -98,8 +132,79 @@ function MapContent({
   markers: MarkerData[]
   initialView: ViewState
 }) {
+  const mapRef = useRef<MapRef>(null)
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
   const [viewState, setViewState] = useState<ViewState>(initialView)
+  const [bounds, setBounds] = useState<[number, number, number, number] | null>(null)
+
+  // Create GeoJSON points from markers
+  const points: PointFeature[] = useMemo(
+    () =>
+      markers.map((marker) => ({
+        type: "Feature" as const,
+        properties: {
+          cluster: false as const,
+          auctionId: marker.auction.id,
+          auction: marker.auction,
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [marker.longitude, marker.latitude],
+        },
+      })),
+    [markers]
+  )
+
+  // Create supercluster instance
+  const supercluster = useMemo(() => {
+    const index = new Supercluster<AuctionPointProperties, ClusterPointProperties>({
+      radius: 60,
+      maxZoom: 16,
+    })
+    index.load(points)
+    return index
+  }, [points])
+
+  // Get clusters for current view
+  const clusters = useMemo(() => {
+    if (!bounds) return []
+    const zoom = Math.floor(viewState.zoom)
+    return supercluster.getClusters(bounds, zoom) as (PointFeature | ClusterFeature)[]
+  }, [supercluster, bounds, viewState.zoom])
+
+  // Update bounds when map moves
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map) return
+
+    const updateBounds = () => {
+      const b = map.getBounds()
+      if (b) {
+        setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
+      }
+    }
+
+    // Initial bounds
+    updateBounds()
+
+    // Update on move end
+    map.on("moveend", updateBounds)
+    return () => {
+      map.off("moveend", updateBounds)
+    }
+  }, [])
+
+  const handleClusterClick = useCallback(
+    (clusterId: number, longitude: number, latitude: number) => {
+      const zoom = supercluster.getClusterExpansionZoom(clusterId)
+      setViewState({
+        longitude,
+        latitude,
+        zoom: Math.min(zoom, 16),
+      })
+    },
+    [supercluster]
+  )
 
   const handleMarkerClick = useCallback((auction: Auction) => {
     setSelectedAuction(auction)
@@ -108,6 +213,7 @@ function MapContent({
   return (
     <div className="h-[600px] w-full rounded-lg overflow-hidden border">
       <Map
+        ref={mapRef}
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
         mapStyle={MAP_STYLE}
@@ -115,26 +221,67 @@ function MapContent({
       >
         <NavigationControl position="top-right" />
 
-        {/* Markers */}
-        {markers.map((marker) => (
-          <Marker
-            key={marker.auction.id}
-            longitude={marker.longitude}
-            latitude={marker.latitude}
-            anchor="bottom"
-            onClick={(e) => {
-              e.originalEvent.stopPropagation()
-              handleMarkerClick(marker.auction)
-            }}
-          >
-            <div
-              className="cursor-pointer transform hover:scale-110 transition-transform"
-              style={{ color: getMarkerColor(marker.auction.tags) }}
+        {/* Clusters and Markers */}
+        {clusters.map((feature) => {
+          const [longitude, latitude] = feature.geometry.coordinates
+          const properties = feature.properties
+
+          // Cluster marker
+          if (properties.cluster) {
+            const { cluster_id, point_count } = properties
+            const leaves = supercluster.getLeaves(cluster_id, Infinity) as PointFeature[]
+            const clusterColor = getClusterColor(leaves)
+
+            // Size based on point count
+            const size = Math.min(40 + (point_count / markers.length) * 30, 60)
+
+            return (
+              <Marker
+                key={`cluster-${cluster_id}`}
+                longitude={longitude}
+                latitude={latitude}
+                anchor="center"
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation()
+                  handleClusterClick(cluster_id, longitude, latitude)
+                }}
+              >
+                <div
+                  className="cursor-pointer flex items-center justify-center rounded-full text-white font-bold shadow-lg hover:scale-110 transition-transform"
+                  style={{
+                    width: size,
+                    height: size,
+                    backgroundColor: clusterColor,
+                  }}
+                >
+                  {point_count}
+                </div>
+              </Marker>
+            )
+          }
+
+          // Individual marker
+          const { auction } = properties
+          return (
+            <Marker
+              key={`marker-${auction.id}`}
+              longitude={longitude}
+              latitude={latitude}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation()
+                handleMarkerClick(auction)
+              }}
             >
-              <MapPin className="h-8 w-8 drop-shadow-md" fill="currentColor" />
-            </div>
-          </Marker>
-        ))}
+              <div
+                className="cursor-pointer transform hover:scale-110 transition-transform"
+                style={{ color: getMarkerColor(auction.tags) }}
+              >
+                <MapPin className="h-8 w-8 drop-shadow-md" fill="currentColor" />
+              </div>
+            </Marker>
+          )
+        })}
 
         {/* Popup */}
         {selectedAuction && selectedAuction.latitude && selectedAuction.longitude && (
@@ -166,6 +313,12 @@ function MapContent({
         <div className="flex items-center gap-2">
           <MapPin className="h-4 w-4 text-gray-500" fill="#6B7280" />
           <span>Outros</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full bg-sucata text-[8px] text-white flex items-center justify-center font-bold">
+            N
+          </div>
+          <span>Cluster</span>
         </div>
       </div>
     </div>

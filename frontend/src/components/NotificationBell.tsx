@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, CheckCheck } from "lucide-react"
 import { useNotifications } from "../hooks/useNotifications"
 import { Button } from "./ui/button"
+import { ScrollArea } from "./ui/scroll-area"
 import { cn, formatDateTime } from "../lib/utils"
 
 function getTimeAgo(dateString: string): string {
@@ -54,8 +55,8 @@ export function NotificationBell() {
     if (notification.uf) {
       params.set("uf", notification.uf)
     }
-    if (notification.cidade) {
-      params.set("cidade", notification.cidade)
+    if (notification.auction_id) {
+      params.set("id", notification.auction_id.toString())
     }
 
     setIsOpen(false)
@@ -74,11 +75,16 @@ export function NotificationBell() {
         aria-label={`Notificações${unreadCount > 0 ? ` (${unreadCount} não lidas)` : ""}`}
       >
         <Bell className="h-5 w-5" />
-        {/* Badge with count */}
+        {/* Badge with count and ping animation */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-sucata text-[10px] font-bold text-white">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
+          <>
+            {/* Ping animation layer */}
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-sucata animate-ping opacity-75" />
+            {/* Static badge with count */}
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-sucata text-[10px] font-bold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          </>
         )}
       </Button>
 
@@ -102,7 +108,7 @@ export function NotificationBell() {
           </div>
 
           {/* Notifications List */}
-          <div className="max-h-80 overflow-y-auto">
+          <ScrollArea className="h-80">
             {isLoading ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                 Carregando...
@@ -113,7 +119,7 @@ export function NotificationBell() {
               </div>
             ) : (
               <ul className="divide-y">
-                {notifications.slice(0, 5).map((notification) => (
+                {notifications.slice(0, 20).map((notification) => (
                   <li key={notification.id}>
                     <button
                       className={cn(
@@ -146,7 +152,7 @@ export function NotificationBell() {
                 ))}
               </ul>
             )}
-          </div>
+          </ScrollArea>
 
           {/* Footer */}
           {notifications.length > 0 && (

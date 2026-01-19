@@ -37,7 +37,7 @@ export function LoginPage() {
       } else {
         navigate("/dashboard")
       }
-    } catch (err) {
+    } catch {
       setError("Ocorreu um erro. Tente novamente.")
     } finally {
       setLoading(false)
