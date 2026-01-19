@@ -1,8 +1,8 @@
 # CLAUDE.md - Contexto do Projeto ACHE SUCATAS
 
-> **Ultima atualizacao:** 2026-01-18 18:00 UTC
-> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard + Coleta Historica + **Frontend React**
-> **Status:** 100% Operacional na Nuvem com CI/CD + Dashboard Multi-view
+> **Ultima atualizacao:** 2026-01-18 22:00 UTC
+> **Versao atual:** V11 (Cloud-Native) + Auditor V14.2 + CI + Dashboard + Coleta Historica + **Frontend React (Semana 2 Completa)**
+> **Status:** 100% Operacional na Nuvem com CI/CD + Dashboard Multi-view + Realtime + Geo-Intel
 > **Seguranca:** Auditada e Corrigida (16/01/2026)
 
 ---
@@ -91,6 +91,9 @@
 | Visualizacao em mapa com MapLibre GL | Operacional | 2026-01-18 |
 | Visualizacao em calendario com react-day-picker | Operacional | 2026-01-18 |
 | Atalhos de teclado (G/M/C) para modos de visualizacao | Operacional | 2026-01-18 |
+| Clusterizacao de pins no mapa (Supercluster) | Operacional | 2026-01-18 |
+| Badge animado (animate-ping) no sino | Operacional | 2026-01-18 |
+| Cores B2B: Emerald (Sucata), Royal Blue (Documentado), Cinza (Erros) | Operacional | 2026-01-18 |
 
 ---
 
@@ -1415,10 +1418,11 @@ frontend/
 │   │   └── ui/                      # Componentes Shadcn
 │   │       ├── badge.tsx
 │   │       ├── button.tsx
-│   │       ├── drawer.tsx           # NOVO
+│   │       ├── drawer.tsx
 │   │       ├── input.tsx
 │   │       ├── popover.tsx
-│   │       └── toggle-group.tsx     # NOVO
+│   │       ├── scroll-area.tsx      # NOVO
+│   │       └── toggle-group.tsx
 │   ├── contexts/
 │   │   ├── AuthContext.tsx          # Autenticacao
 │   │   └── NotificationContext.tsx  # NOVO - Notificacoes Realtime
@@ -1466,9 +1470,10 @@ Visualizacao em mapa usando MapLibre GL.
 |-------------|-----------|
 | Biblioteca | MapLibre GL JS + react-map-gl |
 | Tiles | OpenStreetMap |
-| Pins | Verde (Sucata), Azul (Documentado) |
+| Pins | Emerald (#10B981) para Sucata, Royal Blue (#3B82F6) para Documentado |
+| Clusterizacao | Supercluster com cores dinamicas por tipo |
 | Popup | AuctionCard ao clicar |
-| Requisito | Selecionar UF primeiro |
+| UF Lock | Mapa so renderiza com UF selecionado |
 
 #### CalendarView
 
@@ -1487,10 +1492,11 @@ Sino de notificacoes no header.
 
 | Propriedade | Descricao |
 |-------------|-----------|
-| Badge | Contador de nao lidas (verde) |
-| Dropdown | Ultimas 5 notificacoes |
+| Badge | Contador de nao lidas (Emerald #10B981) |
+| Animacao | `animate-ping` quando ha novos itens |
+| Dropdown | Ultimas 20 notificacoes com ScrollArea |
 | Realtime | Atualiza via Supabase subscription |
-| Acao | Clique aplica filtros no dashboard |
+| Acao | Clique navega para `?uf=...&id=...` |
 
 ### Schema SQL de Notificacoes
 
@@ -1955,6 +1961,7 @@ Solucao:
 
 | Hash | Data | Descricao |
 |------|------|-----------|
+| `dfe15df` | 2026-01-18 | feat: Week 2 realtime & geo-intel enhancements |
 | `fa6f18f` | 2026-01-18 | feat: Add Week 2 frontend - notifications, multi-view dashboard |
 | `9839b3b` | 2026-01-18 | feat: Add historical collection script with duplicate detection |
 | `91cd89e` | 2026-01-17 | chore: Bump dashboard version to force Streamlit Cloud redeploy |
@@ -1988,6 +1995,7 @@ Solucao:
 #### Funcionalidades (feat)
 | Hash | Descricao |
 |------|-----------|
+| `dfe15df` | Week 2 enhancements - clusterizacao, animate-ping, cores Emerald/Royal Blue |
 | `fa6f18f` | Frontend React Semana 2 - notificacoes, multi-view dashboard |
 | `9839b3b` | Script de coleta historica com deteccao de duplicados |
 | `2fdb234` | Dashboard Streamlit para visualizar editais |
