@@ -182,8 +182,12 @@ def montar_registro(storage_info, metadados, pncp_data):
     if pncp_data and pncp_data.get('dataAberturaProposta'):
         data_leilao = pncp_data['dataAberturaProposta']
 
-    # Link PNCP
-    link_pncp = f"https://pncp.gov.br/app/editais/{pncp_id.replace('-', '/')}"
+    # Link PNCP - FORMATO CORRETO: /CNPJ/ANO/SEQUENCIAL (NUNCA /CNPJ/1/SEQUENCIAL/ANO)
+    # Usar storage_info que ja tem os valores separados corretamente
+    cnpj_limpo = storage_info['cnpj'].replace('.', '').replace('/', '').replace('-', '')
+    ano = storage_info['ano']
+    seq = str(storage_info['sequencial']).lstrip('0') or '0'  # Remover zeros a esquerda
+    link_pncp = f"https://pncp.gov.br/app/editais/{cnpj_limpo}/{ano}/{seq}"
 
     # Score
     score = metadados.get('score', 50) if metadados else 50
