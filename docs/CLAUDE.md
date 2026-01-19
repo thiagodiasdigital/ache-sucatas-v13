@@ -1,6 +1,7 @@
 # CLAUDE.md - ACHE SUCATAS (Quick Start)
 
 > **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica + Frontend React
+> **Ultima atualizacao:** 2026-01-19
 > **Documentacao completa:** Dividida em 6 arquivos em `docs/` (ver tabela abaixo)
 
 ---
@@ -228,6 +229,40 @@ testes-12-01-17h/
 |
 +-- .env                          # Credenciais (gitignore)
 ```
+
+---
+
+---
+
+## Historico de Sessoes
+
+### 2026-01-19 - Correcoes Frontend
+
+**Atividades realizadas:**
+
+1. **Teste do Frontend**
+   - Servidor Vite iniciado em `http://localhost:5173`
+   - Build e lint executados
+
+2. **Correcao de 5 erros ESLint**
+   - `badge.tsx`: eslint-disable para `react-refresh/only-export-components`
+   - `button.tsx`: eslint-disable para `react-refresh/only-export-components`
+   - `input.tsx`: Convertido interface vazia para type alias
+   - `AuthContext.tsx`: eslint-disable para hook `useAuth`
+   - `NotificationContext.tsx`: eslint-disable para hook `useNotifications`
+
+3. **Build de producao**
+   - TypeScript: OK
+   - Vite build: OK (dist/ gerado)
+
+4. **Commit das correcoes**
+   - `a317909 fix: Resolve ESLint errors in frontend components`
+
+5. **Atualizacao da chave API Supabase**
+   - Chave JWT legada (HS256) substituida pela nova chave ECC P-256
+   - Arquivo: `frontend/.env` - `VITE_SUPABASE_ANON_KEY`
+
+**Status:** Frontend operacional com nova chave API
 
 ---
 
