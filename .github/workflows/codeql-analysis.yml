@@ -1,0 +1,59 @@
+# ==============================================================================
+# CodeQL - Static Application Security Testing (SAST)
+# ==============================================================================
+# Configurado em: 2026-01-19
+# Motivo: COMP-003 - Code scanning nao configurado (SECURITY_AUDIT_BROWSER)
+# ==============================================================================
+
+name: "CodeQL Security Analysis"
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Executa toda segunda-feira as 06:00 UTC
+    - cron: '0 6 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['python', 'javascript-typescript']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Queries de seguranca + qualidade
+          queries: +security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ../results/${{ matrix.language }}.sarif
+          category: codeql-${{ matrix.language }}
