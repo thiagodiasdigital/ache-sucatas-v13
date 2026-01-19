@@ -131,6 +131,63 @@ class TestExtrairUrlsDeTexto:
         # Should have only unique URLs
         assert len(urls) == len(set(urls))
 
+    # ==========================================================================
+    # BUG FIX VALIDATION TESTS (2026-01-19)
+    # ==========================================================================
+
+    def test_bug2_www_sem_protocolo(self):
+        """Bug #2: Regex deve capturar URLs com 'www.' sem protocolo http(s)://"""
+        text = "Acesse www.leiloeiro.com.br para participar"
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 1
+        assert "leiloeiro.com.br" in urls[0]
+
+    def test_bug2_www_sem_protocolo_net(self):
+        """Bug #2: URLs com www. sem protocolo em domínios .net"""
+        text = "Portal disponível em www.portal.net"
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 1
+        assert "portal.net" in urls[0]
+
+    def test_bug3_dominio_net_br(self):
+        """Bug #3: Regex deve capturar domínios .net.br"""
+        text = "Cadastre-se em https://www.leiloes.net.br/cadastro"
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 1
+        assert ".net.br" in urls[0]
+
+    def test_bug3_net_br_sem_protocolo(self):
+        """Bug #3: Domínios .net.br sem protocolo também devem ser capturados"""
+        text = "Acesse www.sistema.net.br para mais detalhes"
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 1
+        assert ".net.br" in urls[0]
+
+    def test_bug2_bug3_combinados(self):
+        """Bugs #2 e #3 combinados: múltiplas URLs com e sem protocolo"""
+        text = """
+        Plataformas disponíveis:
+        - www.leiloeiro.com.br (sem protocolo)
+        - https://www.outro.net.br (com protocolo .net.br)
+        - www.terceiro.net (sem protocolo .net)
+        - http://quarto.org.br (com protocolo http)
+        """
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 4
+        # Verificar que todos os domínios foram capturados
+        url_text = " ".join(urls)
+        assert "leiloeiro.com.br" in url_text
+        assert ".net.br" in url_text
+        assert ".net" in url_text
+        assert ".org.br" in url_text
+
+    def test_dominio_leilao_br(self):
+        """Domínio especial .leilao.br deve ser capturado"""
+        text = "Participe em www.exemplo.leilao.br"
+        urls = extrair_urls_de_texto(text)
+        assert len(urls) == 1
+        assert ".leilao.br" in urls[0]
+
 
 class TestNormalizarUrl:
     def test_add_https(self):

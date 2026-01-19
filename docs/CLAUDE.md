@@ -311,4 +311,29 @@ testes-12-01-17h/
 
 ---
 
+### 2026-01-19 - Validacao de Bugs Criticos
+
+**Bugs identificados na auditoria CRAUDIO:**
+
+| Bug | Descricao | Status | Resolucao |
+|-----|-----------|--------|-----------|
+| #1 | `encontrar_pasta_dados` so pega primeira subpasta | NAO APLICAVEL | Funcao existe apenas em codigo legado descartado (`_DESCARTE_AUDITORIA/`). Codigo de producao (V11/V14) e 100% cloud-native. |
+| #2 | Regex URL nao captura `www.` sem protocolo | CORRIGIDO | Regex em `cloud_auditor_v14.py` ja usa `(?:https?://)?` (protocolo opcional) |
+| #3 | Regex nao contempla dominios `.net.br` | CORRIGIDO | `SUPPORTED_TLDS` ja inclui `.net.br` desde V14 |
+
+**Testes de validacao adicionados:**
+- `test_bug2_www_sem_protocolo` - URLs com www. sem http://
+- `test_bug2_www_sem_protocolo_net` - URLs .net sem protocolo
+- `test_bug3_dominio_net_br` - Dominios .net.br com protocolo
+- `test_bug3_net_br_sem_protocolo` - Dominios .net.br sem protocolo
+- `test_bug2_bug3_combinados` - Multiplas URLs combinadas
+- `test_dominio_leilao_br` - Dominio especial .leilao.br
+
+**Resultado:** 11/11 testes passando (100%)
+
+**Arquivo modificado:**
+- `tests/test_auditor_extraction.py` - 6 novos testes de validacao
+
+---
+
 > Ao finalizar trabalho: atualizar o arquivo `docs/CLAUDE_FULL_*.md` correspondente com mudancas realizadas
