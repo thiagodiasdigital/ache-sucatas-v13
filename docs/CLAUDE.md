@@ -1,7 +1,7 @@
 # CLAUDE.md - ACHE SUCATAS (Quick Start)
 
 > **Status:** 100% Operacional | **Versao:** V11 + Auditor V14.1 + CI + Coleta Historica + Frontend React
-> **Documentacao completa:** Dividida em 6 arquivos (ver tabela abaixo)
+> **Documentacao completa:** Dividida em 6 arquivos em `docs/` (ver tabela abaixo)
 
 ---
 
@@ -29,13 +29,14 @@ Sistema automatizado de coleta de **editais de leilao publico** do Brasil via AP
 
 ## Arquivos de Producao (usar estes)
 
-| Arquivo | Funcao |
-|---------|--------|
-| `ache_sucatas_miner_v11.py` | Coleta editais da API PNCP (diaria) |
-| `coleta_historica_30d.py` | Coleta historica dos ultimos 30 dias |
-| `cloud_auditor_v14.py` | Extrai dados dos PDFs |
-| `supabase_repository.py` | CRUD PostgreSQL |
-| `supabase_storage.py` | Upload/download Storage |
+| Arquivo | Local | Funcao |
+|---------|-------|--------|
+| `ache_sucatas_miner_v11.py` | `src/core/` | Coleta editais da API PNCP (diaria) |
+| `coleta_historica_30d.py` | `src/core/` | Coleta historica dos ultimos 30 dias |
+| `cloud_auditor_v14.py` | `src/core/` | Extrai dados dos PDFs |
+| `supabase_repository.py` | `src/core/` | CRUD PostgreSQL |
+| `supabase_storage.py` | `src/core/` | Upload/download Storage |
+| `streamlit_app.py` | `src/core/` | Dashboard Streamlit |
 
 **Frontend React (Semana 2):**
 - `frontend/` - Dashboard React + Vite + TypeScript + Tailwind
@@ -57,14 +58,20 @@ gh run list --workflow=ci.yml --limit 3
 # Disparar coleta manualmente
 gh workflow run ache-sucatas.yml
 
-# Coleta historica (30 dias) - script standalone
-python coleta_historica_30d.py
+# Executar miner localmente
+PYTHONPATH=src/core python src/core/ache_sucatas_miner_v11.py
+
+# Executar auditor localmente
+PYTHONPATH=src/core python src/core/cloud_auditor_v14.py
+
+# Coleta historica (30 dias)
+PYTHONPATH=src/core python src/core/coleta_historica_30d.py
 
 # Executar testes localmente
 pytest tests/ -v --tb=short
 
 # Executar linting
-ruff check .
+ruff check src/core/
 
 # Frontend React
 cd frontend && npm install
@@ -81,7 +88,7 @@ npm run build    # Build para producao
 gh run list --workflow=ache-sucatas.yml --limit 1
 
 # 2. Contar editais
-python -c "from supabase_repository import SupabaseRepository; print(SupabaseRepository().contar_editais())"
+PYTHONPATH=src/core python -c "from supabase_repository import SupabaseRepository; print(SupabaseRepository().contar_editais())"
 
 # 3. Testes passando?
 pytest tests/ -v --tb=short
@@ -111,31 +118,50 @@ pytest tests/ -v --tb=short
 
 ---
 
-## Estrutura Resumida
+## Estrutura do Projeto
 
 ```
 testes-12-01-17h/
-|-- .github/workflows/     # ache-sucatas.yml, ci.yml
-|-- frontend/              # Dashboard React + Vite + TypeScript
-|   |-- src/components/    # NotificationBell, MapView, CalendarView, etc
-|   |-- src/hooks/         # useNotifications, useUserFilters, useViewMode
-|   +-- supabase/          # week2_schema.sql (notificacoes)
-|-- tests/                 # 98 testes unitarios
-|-- ache_sucatas_miner_v11.py
-|-- coleta_historica_30d.py   # Script coleta historica
-|-- cloud_auditor_v14.py
-|-- supabase_repository.py
-|-- supabase_storage.py
-|-- CLAUDE.md              # Este arquivo (resumo)
-|-- CLAUDE_FULL_1.md       # Estado atual, Frontend React
-|-- CLAUDE_FULL_2.md       # Arquitetura e Fluxos
-|-- CLAUDE_FULL_3.md       # CI/CD, Testes, Workflows
-|-- CLAUDE_FULL_4.md       # Banco de Dados e API
-|-- CLAUDE_FULL_5.md       # Seguranca e Configuracao
-|-- CLAUDE_FULL_6.md       # Operacoes e Historico
-+-- .env                   # Credenciais (gitignore)
+|
+|-- src/                          # CODIGO FONTE
+|   |-- core/                     # Arquivos de producao
+|   |   |-- ache_sucatas_miner_v11.py
+|   |   |-- cloud_auditor_v14.py
+|   |   |-- coleta_historica_30d.py
+|   |   |-- supabase_repository.py
+|   |   |-- supabase_storage.py
+|   |   +-- streamlit_app.py
+|   |-- scripts/                  # Scripts utilitarios
+|   +-- migrations/               # Scripts de migracao
+|
+|-- docs/                         # DOCUMENTACAO
+|   |-- CLAUDE.md                 # Este arquivo (quick start)
+|   |-- CLAUDE_FULL_*.md          # Documentacao completa (6 arquivos)
+|   +-- reports/                  # Relatorios historicos
+|
+|-- config/                       # CONFIGURACAO
+|   |-- .env.example
+|   |-- pytest.ini
+|   +-- ruff.toml
+|
+|-- data/sql/                     # Scripts SQL
+|
+|-- tests/                        # 98 testes unitarios
+|
+|-- frontend/                     # Dashboard React + Vite + TypeScript
+|   |-- src/components/           # NotificationBell, MapView, CalendarView
+|   |-- src/hooks/                # useNotifications, useUserFilters
+|   +-- supabase/                 # week2_schema.sql
+|
+|-- .github/workflows/            # CI/CD
+|   |-- ache-sucatas.yml          # Coleta automatica 3x/dia
+|   +-- ci.yml                    # Lint + Testes
+|
+|-- ACHE_SUCATAS_DB/              # Database local de PDFs (1.3 GB)
+|
++-- .env                          # Credenciais (gitignore)
 ```
 
 ---
 
-> Ao finalizar trabalho: atualizar o arquivo CLAUDE_FULL_*.md correspondente com mudancas realizadas
+> Ao finalizar trabalho: atualizar o arquivo `docs/CLAUDE_FULL_*.md` correspondente com mudancas realizadas
