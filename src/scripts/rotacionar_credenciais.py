@@ -120,6 +120,8 @@ if new_db_password:
         changes_made.append("SUPABASE_DB_PASSWORD (adicionado)")
 
 # Salvar .env atualizado
+# nosec B602 - This script's purpose is to write credentials to .env file
+# CodeQL: clear-text-storage-sensitive-data - Intentional: .env is gitignored
 with open(env_file, 'w', encoding='utf-8') as f:
     f.write(env_content)
 

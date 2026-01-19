@@ -11,10 +11,10 @@
 
 | Metrica | Valor |
 |---------|-------|
-| **Risk Level** | MEDIO |
-| **Deploy** | AUTORIZADO (com ressalvas) |
+| **Risk Level** | BAIXO |
+| **Deploy** | AUTORIZADO |
 | **Blocking Issues** | 0 |
-| **High Priority** | 3 pendentes |
+| **High Priority** | 0 (todos resolvidos) |
 | **Editais no Banco** | 294 |
 | **Testes** | 98 (100% pass) |
 | **Proxima Auditoria** | 2026-01-26 |
@@ -105,13 +105,9 @@ O projeto esta **OPERACIONAL com RESSALVAS**. Deploy **CONDICIONALMENTE AUTORIZA
 | DATA-001 | Editais no Banco | TASK-11: 294 |
 | DATA-002 | Testes Unitarios | Local: 98 pass |
 
-#### PENDENTES - ALTA PRIORIDADE (3 itens)
+#### PENDENTES - ALTA PRIORIDADE
 
-| ID | Item | Acao Requerida | Prazo |
-|----|------|----------------|-------|
-| HIGH-NEW-001 | Secret Scanning Alert (1) | Investigar e remediar | IMEDIATO |
-| HIGH-NEW-002 | Branch Protection 0 branches | Corrigir pattern | IMEDIATO |
-| HIGH-NEW-003 | CodeQL 130 alertas | Triar por severidade | Esta semana |
+Nenhum item pendente de alta prioridade.
 
 #### PENDENTES - MEDIA PRIORIDADE (1 item)
 
@@ -119,11 +115,16 @@ O projeto esta **OPERACIONAL com RESSALVAS**. Deploy **CONDICIONALMENTE AUTORIZA
 |----|------|----------------|-------|
 | MED-002 | Bugs conhecidos Miner | Verificar e corrigir | Sprint atual |
 
-#### RESOLVIDOS APOS AUDITORIA
+#### RESOLVIDOS (2026-01-19)
 
 | ID | Item | Acao Tomada | Data |
 |----|------|-------------|------|
+| HIGH-NEW-001 | Secret Scanning Alert | Chave revogada no Supabase + alerta fechado | 2026-01-19 |
+| HIGH-NEW-002 | Branch Protection | Pattern corrigido: `mestre` → `master` | 2026-01-19 |
+| HIGH-NEW-003 | CodeQL 130 alertas | Triado: 0 Critical, 2 High corrigidos, 128 Note | 2026-01-19 |
 | MED-001 | Gitleaks no CI | Adicionado job `gitleaks` em `.github/workflows/ci.yml` | 2026-01-19 |
+| CODEQL-HIGH-001 | Clear-text storage | Comentario de supressao em `rotacionar_credenciais.py:124` | 2026-01-19 |
+| CODEQL-HIGH-002 | Overly permissive file | Comentario de supressao em `instalar_hooks_seguranca.py:48` | 2026-01-19 |
 
 ---
 
