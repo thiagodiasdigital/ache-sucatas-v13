@@ -96,6 +96,14 @@ class Settings:
     API_CONSULTA_MAX_RETRIES = int(os.getenv("API_CONSULTA_MAX_RETRIES", "2"))
 
     # =========================================================================
+    # SEARCH API RATE LIMITING
+    # =========================================================================
+    # Delay entre termos de busca (ms) - evita 429
+    SEARCH_TERM_DELAY_MS = int(os.getenv("SEARCH_TERM_DELAY_MS", "2000"))
+    # Delay entre páginas (ms)
+    SEARCH_PAGE_DELAY_MS = int(os.getenv("SEARCH_PAGE_DELAY_MS", "500"))
+
+    # =========================================================================
     # SEARCH TERMS
     # =========================================================================
     SEARCH_TERMS = [
@@ -1046,6 +1054,7 @@ class AcheSucatasMiner:
         log.info(f"Páginas por termo: {Settings.PAGE_LIMIT}")
         log.info(f"Score mínimo: {Settings.MIN_SCORE_TO_DOWNLOAD}")
         log.info(f"API Consulta delay: {Settings.API_CONSULTA_DELAY_MS}ms")
+        log.info(f"Search delays: termo={Settings.SEARCH_TERM_DELAY_MS}ms, página={Settings.SEARCH_PAGE_DELAY_MS}ms")
         log.info("=" * 70)
 
         try:
@@ -1089,6 +1098,14 @@ class AcheSucatasMiner:
                             f"Novos: {self.metrics.metrics['editais_novos']} | "
                             f"data_leilao: {self.metrics.metrics['data_leilao_encontrada']}"
                         )
+
+                        # Delay entre páginas para evitar rate limiting
+                        if Settings.SEARCH_PAGE_DELAY_MS > 0:
+                            await asyncio.sleep(Settings.SEARCH_PAGE_DELAY_MS / 1000)
+
+                    # Delay entre termos de busca para evitar rate limiting (429)
+                    if Settings.SEARCH_TERM_DELAY_MS > 0:
+                        await asyncio.sleep(Settings.SEARCH_TERM_DELAY_MS / 1000)
 
             # Finalizar
             self.metrics.finalize()
