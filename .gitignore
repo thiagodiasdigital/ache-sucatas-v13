@@ -60,7 +60,7 @@ ACHE_SUCATAS_DB/
 *.xls
 
 # Runtime/State
-.ache_sucatas_checkpoint.json
+.ache_sucatas_checkpoint*.json
 *.jsonl
 
 # Backups locais
