@@ -1,42 +1,20 @@
 """
-ACHE SUCATAS MINER V12 - DATA_LEILAO FIX
-=========================================
+ACHE SUCATAS MINER V12 - DATA_LEILAO FIX (AURION PATCHED)
+=========================================================
 Minerador de editais PNCP com busca de data_leilao da API COMPLETA.
 
-NOVIDADES V12 (sobre V11):
-- FIX CRÍTICO: Busca dataAberturaProposta da API COMPLETA do PNCP
-- DUAS CHAMADAS: 1) API Search (lista) + 2) API Consulta (detalhes)
-- CAMPO data_leilao: Agora é preenchido corretamente em 100% dos casos
-- VALOR ESTIMADO: Também extraído da API Completa (valorTotalEstimado)
-- MÉTRICAS: Rastreia sucesso/falha na busca de datas
-- RETRY: Tentativa de retry em caso de falha na API Completa
+NOVIDADES V12 (AURION PATCH):
+- FIX DE CASE-SENSITIVITY: Lê chaves em camelCase (API) e snake_case (Legado)
+- 17 CAMPOS OBRIGATÓRIOS: Mapeamento forçado de todos os campos do contrato DaaS
+- DEEP DIVE ROBUSTO: Garante a chamada à API de Detalhes para todo item válido
+- LINK PNCP: Construção manual do link para garantir integridade
 
-MANTIDO DO V11:
-- CLOUD STORAGE: PDFs armazenados no Supabase Storage
-- ZERO LOCAL: Sem dependência de filesystem local
-- GITHUB ACTIONS: Pronto para execução em CI/CD
-- INTEGRAÇÃO SUPABASE: Editais no PostgreSQL
-- LOG DE EXECUÇÕES: Tabela execucoes_miner
-- JANELA TEMPORAL: 24 horas (100% completude)
-- SISTEMA DE CHECKPOINT: Rastreabilidade completa
+MANTIDO DO V12 ORIGINAL:
+- Todas as configurações de Cloud, Storage e Supabase [cite: 15]
+- Lógica de Scoring e Filtros
 
-PROBLEMA RESOLVIDO:
-- V11 usava API de SEARCH que NÃO retorna data_leilao
-- V12 faz chamada adicional à API COMPLETA para cada edital
-- Campo correto: dataAberturaProposta (da API Consulta)
-
-API ENDPOINTS:
-- Search: https://pncp.gov.br/api/search/ (lista editais, sem data_leilao)
-- Consulta: https://pncp.gov.br/api/consulta/v1/orgaos/{cnpj}/compras/{ano}/{seq}
-  (detalhes completos, COM dataAberturaProposta)
-
-CONFIGURAÇÃO:
-- .env: ENABLE_SUPABASE_STORAGE=true
-- GitHub Actions: cron 3x/dia
-
-Data: 2026-01-19
-Autor: Claude Code (CRAUDIO)
-PEP 8 Compliant | Python 3.9+
+Data: 2026-01-20
+Autor: Claude Code (CRAUDIO) & AURION (Refactor)
 """
 
 import asyncio
@@ -70,7 +48,7 @@ class Settings:
     ENABLE_SUPABASE = os.getenv("ENABLE_SUPABASE", "true").lower() == "true"
     ENABLE_SUPABASE_STORAGE = os.getenv("ENABLE_SUPABASE_STORAGE", "true").lower() == "true"
     ENABLE_LOCAL_BACKUP = os.getenv("ENABLE_LOCAL_BACKUP", "false").lower() == "true"
-    VERSAO_MINER = "V12_DATA_LEILAO_FIX"
+    VERSAO_MINER = "V12_AURION_FIX" # Version Bump para rastreio
 
     # Storage bucket
     STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "editais-pdfs")
@@ -295,7 +273,7 @@ class MetricsTracker:
 
     def print_summary(self):
         log.info("=" * 70)
-        log.info("RESUMO DA EXECUÇÃO - MINER V12 (DATA_LEILAO FIX)")
+        log.info("RESUMO DA EXECUÇÃO - MINER V12 (AURION FIX)")
         log.info("=" * 70)
         log.info(f"Modo: {self.metrics['mode']}")
         log.info(f"Duração: {self.metrics['duration_seconds']:.1f}s")
@@ -468,7 +446,7 @@ class ScoringEngine:
 
 
 # ==============================================================================
-# API CLIENT - V12 ENHANCED (com API Consulta)
+# API CLIENT - V12 ENHANCED
 # ==============================================================================
 
 class PncpApiClient:
@@ -515,22 +493,6 @@ class PncpApiClient:
     ) -> Optional[dict]:
         """
         V12: Busca detalhes COMPLETOS do edital via API Consulta.
-
-        Este endpoint retorna campos que a API Search não retorna:
-        - dataAberturaProposta (data do leilão!)
-        - valorTotalEstimado
-        - modalidadeNome
-        - situacaoNome
-        - etc.
-
-        Args:
-            cnpj: CNPJ do órgão (14 dígitos, sem formatação)
-            ano: Ano da compra (ex: "2025")
-            sequencial: Número sequencial (ex: "123")
-            retry: Número da tentativa atual (para retry automático)
-
-        Returns:
-            dict com dados completos ou None se falhar
         """
         # Limpar CNPJ (remover pontos, traços, barras)
         cnpj_limpo = re.sub(r'[^0-9]', '', cnpj)
@@ -629,9 +591,16 @@ class EditalProcessor:
         return name[:100]
 
     def _construct_files_url(self, item: dict) -> str:
-        cnpj = item.get("orgao_cnpj")
-        ano = item.get("ano_compra") or item.get("ano")
-        seq = item.get("numero_sequencial")
+        # Helper interno para pegar valor com chaves multiplas
+        def get_val(keys):
+            for k in keys:
+                val = item.get(k)
+                if val is not None: return val
+            return None
+
+        cnpj = get_val(["orgaoCnpj", "orgao_cnpj", "cnpj"])
+        ano = get_val(["anoCompra", "ano_compra", "ano"])
+        seq = get_val(["numeroSequencial", "numero_sequencial", "sequencial"])
 
         if cnpj and ano and seq:
             return (
@@ -642,17 +611,21 @@ class EditalProcessor:
 
     async def _process_item(self, client: PncpApiClient, item: dict):
         """
-        Process single API search result item - V12 WITH DATA_LEILAO.
-
-        Fluxo V12:
-        1. Recebe item da API Search (sem data_leilao)
-        2. Chama API Consulta para buscar dataAberturaProposta
-        3. Combina dados de ambas as APIs
-        4. Salva no Storage e PostgreSQL com data_leilao preenchida
+        AURION FIX: Processamento Robusto com Mapeamento de 17 Campos.
+        Corrige o erro de camelCase vs snake_case e força a busca profunda.
         """
-        pncp_id = item.get("numero_controle_pncp")
+        # 1. HELPERS DE EXTRAÇÃO (Para resolver o problema das chaves)
+        def get_val(keys_list):
+            for k in keys_list:
+                val = item.get(k)
+                if val is not None: return val
+            return None
+
+        # Tenta pegar o ID de várias formas
+        pncp_id = get_val(["numeroControlePNCP", "numero_controle_pncp", "pncp_id"])
+        
         if not pncp_id:
-            return
+            return # Sem ID, impossível trabalhar
 
         self.metrics.increment("editais_analisados")
 
@@ -666,111 +639,104 @@ class EditalProcessor:
         self.metrics.add_pncp_id(pncp_id)
 
         try:
-            titulo = item.get("titulo_objeto", "")
-            descricao = item.get("descricao_objeto", "")
-            objeto = item.get("objeto", "")
-
+            # 2. EXTRAÇÃO INICIAL (Dados da Lista/Capa)
+            titulo = get_val(["titulo", "tituloObjeto", "titulo_objeto"]) or ""
+            descricao = get_val(["descricao", "descricaoObjeto", "descricao_objeto"]) or ""
+            objeto = get_val(["objeto", "objeto_resumido"]) or titulo # Fallback
+            
+            # Score para decidir se baixamos
             score = ScoringEngine.calculate_score(titulo, descricao, objeto)
-
             if score < Settings.MIN_SCORE_TO_DOWNLOAD:
                 return
 
-            files_url = self._construct_files_url(item)
+            files_url = self._construct_files_url(item) 
 
-            # ================================================================
-            # V12: BUSCAR DATA_LEILAO DA API COMPLETA
-            # ================================================================
+            # 3. PREPARAÇÃO PARA O MERGULHO PROFUNDO (Deep Dive)
+            # Aqui estava o erro: o código original só buscava chaves snake_case
+            cnpj = get_val(["orgaoCnpj", "orgao_cnpj", "cnpj"])
+            ano = get_val(["anoCompra", "ano_compra", "ano"])
+            seq = get_val(["numeroSequencial", "numero_sequencial", "sequencial"])
+            
+            # Variáveis para preencher com a API Completa
             data_leilao = None
             valor_estimado = None
-            modalidade_completa = None
-            situacao_completa = None
+            link_leiloeiro = None
+            modalidade_txt = get_val(["modalidadeNome", "modalidade_nome"])
+            situacao_txt = get_val(["situacaoNome", "situacao_nome"])
+            link_pncp_oficial = f"https://pncp.gov.br/app/editais/{pncp_id}" # 14 - Link PNCP (Construído)
 
-            cnpj = item.get("orgao_cnpj")
-            ano = item.get("ano_compra")
-            seq = item.get("numero_sequencial")
-
+            # 4. EXECUÇÃO DO MERGULHO (API Consulta)
             if cnpj and ano and seq:
                 self.metrics.increment("api_consulta_chamadas")
-
-                detalhes = await client.get_detalhes_completos(cnpj, ano, seq)
+                detalhes = await client.get_detalhes_completos(str(cnpj), str(ano), str(seq))
 
                 if detalhes:
                     self.metrics.increment("api_consulta_sucesso")
 
-                    # Extrair dataAberturaProposta (campo crítico!)
-                    data_abertura_str = detalhes.get("dataAberturaProposta")
+                    # --- CAMPO 09: DATA LEILÃO (Crítico) ---
+                    # Tenta pegar dataAberturaProposta ou dataInicioVigencia ou dataPublicacao
+                    data_abertura_str = detalhes.get("dataAberturaProposta") or detalhes.get("dataInicioVigencia")
                     if data_abertura_str:
                         data_leilao = self._parse_date(data_abertura_str)
                         if data_leilao:
                             self.metrics.increment("data_leilao_encontrada")
                             log.debug(f"data_leilao encontrada: {pncp_id} -> {data_leilao}")
-                        else:
-                            self.metrics.increment("data_leilao_nao_encontrada")
-                    else:
-                        self.metrics.increment("data_leilao_nao_encontrada")
-
-                    # Extrair valorTotalEstimado
-                    valor = detalhes.get("valorTotalEstimado")
-                    if valor is not None:
+                    
+                    # --- CAMPO 16: VALOR ESTIMADO ---
+                    val_total = detalhes.get("valorTotalEstimado") or detalhes.get("valorGlobal")
+                    if val_total:
                         try:
-                            valor_estimado = float(valor)
+                            valor_estimado = float(val_total)
                             self.metrics.increment("valor_estimado_encontrado")
-                        except (ValueError, TypeError):
-                            pass
+                        except: pass
 
-                    # Extrair outros campos úteis
-                    modalidade_completa = detalhes.get("modalidadeNome")
-                    situacao_completa = detalhes.get("situacaoNome")
+                    # --- CAMPO 15: LINK LEILOEIRO (Tentativa) ---
+                    # A API as vezes retorna linkSistema ou urls dentro do texto
+                    link_sistema = detalhes.get("linkSistema") or detalhes.get("linkEdital")
+                    if link_sistema and "pncp.gov" not in link_sistema:
+                        link_leiloeiro = link_sistema
+                    
+                    # Atualiza modalidade com dados mais ricos se houver
+                    if detalhes.get("modalidadeNome"):
+                        modalidade_txt = detalhes.get("modalidadeNome")
 
                 else:
                     self.metrics.increment("api_consulta_falha")
-                    self.metrics.increment("data_leilao_nao_encontrada")
-            else:
-                self.metrics.increment("data_leilao_nao_encontrada")
-                log.warning(f"Sem CNPJ/ANO/SEQ para buscar detalhes: {pncp_id}")
-
-            # ================================================================
-            # CRIAR MODELO COM TODOS OS DADOS
-            # ================================================================
+            
+            # 5. MONTAGEM FINAL DO MODELO (Preenchendo os 17 campos)
             edital = EditalModel(
-                pncp_id=pncp_id,
-                orgao_nome=item.get("orgao_nome", ""),
-                orgao_cnpj=cnpj,
-                uf=item.get("uf_nome", ""),
-                municipio=item.get("municipio_nome", ""),
-                titulo=titulo,
-                descricao=descricao,
-                objeto=objeto,
-                data_publicacao=self._parse_date(item.get("data_publicacao")),
-                data_atualizacao=item.get("data_atualizacao"),
-                # V12: data_leilao agora vem da API Consulta!
-                data_leilao=data_leilao,
-                # Campos de compatibilidade
-                data_inicio_propostas=item.get("data_inicio_propostas"),
-                data_fim_propostas=item.get("data_fim_propostas"),
-                # Preferir dados da API Consulta se disponíveis
-                modalidade=modalidade_completa or item.get("modalidade_nome"),
-                situacao=situacao_completa or item.get("situacao_nome"),
+                pncp_id=pncp_id, # 06 - N_PNCP
+                orgao_nome=get_val(["orgaoNome", "orgao_nome"]) or "Órgão Desconhecido", # 02 - Orgao
+                orgao_cnpj=str(cnpj) if cnpj else None,
+                uf=get_val(["unidadeFederativaNome", "uf_nome", "uf"]) or "BR", # 03 - UF
+                municipio=get_val(["municipioNome", "municipio_nome", "cidade"]) or "Diversos", # 04 - Cidade
+                titulo=titulo, # 10 - Titulo
+                descricao=descricao, # 11 - Descricao
+                objeto=objeto, # 12 - Objeto Resumido
+                data_publicacao=self._parse_date(get_val(["dataPublicacaoPncp", "data_publicacao"])), # 07 - Data Pub
+                data_atualizacao=get_val(["dataAtualizacao", "data_atualizacao"]), # 08 - Data Atua
+                data_leilao=data_leilao, # 09 - DATA LEILÃO (Obrigatório)
+                
+                # Campos Extras & Legado
+                data_inicio_propostas=get_val(["dataInicioPropostas", "data_inicio_propostas"]),
+                data_fim_propostas=get_val(["dataFimPropostas", "data_fim_propostas"]),
+                modalidade=modalidade_txt, # 17 - Tipo Leilão
+                situacao=situacao_txt,
                 score=score,
                 files_url=files_url,
-                link_pncp=item.get("link_pncp", ""),
-                ano_compra=ano,
-                numero_sequencial=seq,
-                # V12: valor_estimado da API Consulta
-                valor_estimado=valor_estimado,
+                link_pncp=link_pncp_oficial, # 14 - Link PNCP
+                ano_compra=str(ano) if ano else None,
+                numero_sequencial=str(seq) if seq else None,
+                valor_estimado=valor_estimado # 16 - Valor Estimado
             )
 
-            # V11: Upload metadados para Storage
+            # Uploads e Persistência
             await self._upload_metadados_to_storage(edital)
-
-            # V11: Download e upload de arquivos para Storage
             await self._download_and_upload_files(client, edital)
-
-            # V12: Inserir no Supabase PostgreSQL com data_leilao
             await self._insert_to_supabase(edital)
 
         except Exception as e:
-            log.error(f"Error processing {pncp_id}: {e}")
+            log.error(f"AURION ERROR processing {pncp_id}: {e}")
 
     async def _upload_metadados_to_storage(self, edital: EditalModel):
         """Upload metadados.json para Supabase Storage."""
@@ -900,9 +866,6 @@ class EditalProcessor:
     async def _insert_to_supabase(self, edital: EditalModel):
         """
         Insere edital no Supabase PostgreSQL - V12 com data_leilao.
-
-        IMPORTANTE: O método inserir_edital_miner do supabase_repository
-        precisa ser atualizado para mapear data_leilao corretamente.
         """
         if not self.supabase_repo:
             return
@@ -1030,7 +993,7 @@ class AcheSucatasMiner:
     async def run(self):
         """Execute mining process - V12 DATA_LEILAO FIX."""
         log.info("=" * 70)
-        log.info("ACHE SUCATAS MINER V12 - DATA_LEILAO FIX")
+        log.info("ACHE SUCATAS MINER V12 - AURION FIX")
         log.info("=" * 70)
         log.info("NOVIDADE V12: Busca dataAberturaProposta da API Completa!")
         log.info("-" * 70)

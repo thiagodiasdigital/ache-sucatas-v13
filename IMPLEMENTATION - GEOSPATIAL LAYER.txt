@@ -1,0 +1,35 @@
+
+
+# TASK: IMPLEMENTATION - GEOSPATIAL LAYER (AuctionMap)
+
+**CONTEXTO:**
+Estamos construindo o componente central de visualização do "Ache Sucatas". O Grid já existe; agora precisamos do Mapa Tático.
+
+**STACK:**
+- Lib: `maplibre-gl` (Lightweight, WebGL-based).
+- Container: `src/components/dashboard/AuctionMap.tsx`
+
+**REQUISITOS FUNCIONAIS (CRÍTICOS):**
+
+1.  **UF SAFETY LOCK (Prioridade 0):**
+    - Verifique os `searchParams` da URL.
+    - SE `!uf` (nenhum estado selecionado): Renderize APENAS um container cinza (Zinc-100/900) com a mensagem centralizada: "Selecione um Estado (UF) para visualizar o mapa tático".
+    - NUNCA tente carregar dados do Brasil inteiro. Isso é uma violação de performance.
+
+2.  **DATA FETCHING:**
+    - Se `uf` existir (ex: `?uf=SP`), dispare o `supabase.rpc` (ou query) filtrando estritamente por essa UF.
+
+3.  **VISUALIZAÇÃO & CLUSTERING:**
+    - Implemente *Clusterização* nativa do MapLibre para agrupar pontos próximos.
+    - **Cores dos Clusters:** Use tons de Cinza (Slate/Zinc).
+    - **Cores dos Markers (Pontos Individuais):**
+        - Se `tipo == 'sucata'`: Use `bg-emerald-500` (#10B981).
+        - Se `tipo == 'documentado'`: Use `bg-blue-500` (#3B82F6).
+        - **PROIBIDO:** Usar alfinetes vermelhos padrão.
+
+4.  **INTERATIVIDADE:**
+    - Hover no Marker: Tooltip simples com `nome_leilao` e `cidade`.
+    - Click no Marker: Deve abrir o Drawer de detalhes (ou console.log por enquanto).
+
+**AÇÃO:**
+Crie o arquivo `AuctionMap.tsx` e integre-o na página principal do Dashboard (`page.tsx`), posicionando-o (ou substituindo um placeholder) ao lado ou acima do Grid, conforme o layout definido.

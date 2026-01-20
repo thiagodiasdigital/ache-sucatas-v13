@@ -1,0 +1,180 @@
+# ACHE SUCATAS DaaS — FORENSIC INVESTIGATION PROMPT (Execution-Guaranteed)
+# Model: Claude Code Opus 4.5
+# Output Language: Portuguese (Brazil) ONLY
+# Mission Type: Forensic audit (evidence-based), NO guesswork.
+
+## 0) NON-NEGOTIABLE RULES (Hard Constraints)
+1) OUTPUT MUST BE IN PT-BR ONLY. Do not output English except for code/commands/paths/SQL.
+2) ZERO “achismo”: You may not claim a cause unless you provide evidence (file path + line numbers OR SQL query + returned counts OR commit SHA + diff proof).
+3) NO PEOPLE-PLEASING filler: Do NOT write phrases like “você tem razão”, “detectei um problema” unless you immediately attach objective proof.
+4) READ-ONLY FORENSICS FIRST:
+   - Do not edit code, do not refactor, do not “fix” anything during the investigation phase.
+   - If you believe a fix is needed, you must propose it only in the “Remediações” section, after the forensic report is complete.
+5) You MUST investigate the ENTIRE local repository root: all files, folders, and subfolders (including hidden folders like .git, .github, .claude, etc. when accessible).
+6) You MUST investigate GitHub history: commits, PRs (if accessible), branches, and diffs relevant to missing fields and lost/overwritten scripts.
+7) You MUST investigate Supabase: schema, tables/views, migrations, functions/RPC, triggers, RLS policies (if they impact reads), and data presence.
+8) If any evidence is inaccessible due to missing permissions/tools, you must explicitly state:
+   - what you attempted,
+   - the exact error or limitation,
+   - what specific access/artifact is required to close the gap.
+   (But do NOT guess.)
+
+## 1) CONTEXT (Canon)
+Product: Ache Sucatas — DaaS de Leilões Públicos Veiculares
+Key fact: We previously reached a moment where 100% of required dashboard fields were populated.
+Current issue: Regression. Essential fields are disappearing from the dashboard (e.g., data_leilao, link_pncp).
+Assumption to test (not accept): “scripts were lost/overwritten” OR “pipeline regression”.
+Most data (~98%) exists in the edital sources (PNCP + annex PDFs), therefore missing fields indicate pipeline breakage, mapping drift, data loss on write, query/view regression, or frontend/API mismatch.
+
+## 2) REQUIRED DASHBOARD FIELDS (Contract)
+Treat the following as REQUIRED fields for the dashboard records. These are canonical and must be traced end-to-end:
+
+01 id_interno
+02 orgao
+03 uf
+04 cidade
+05 n_edital
+06 n_pncp
+07 data_publicacao
+08 data_atualizacao
+09 data_leilao
+10 titulo
+11 descricao
+12 objeto_resumido
+13 tags
+14 link_pncp
+15 link_leiloeiro
+16 valor_estimado
+17 tipo_leilao
+
+Your job is to explain, with proof, WHY any of these are missing in the dashboard today, even if they exist in sources.
+
+## 3) DELIVERABLE: FORENSIC REPORT (PT-BR) — MUST BE ROBUST AND CONCLUSIVE
+You must produce a report with the exact structure below. No missing sections.
+
+### (A) Sumário Executivo (objetivo e factual)
+- What is missing (which fields, how often, since when) with measurable evidence.
+
+### (B) Definição do “Contrato de Dados do Dashboard”
+- Restate the canonical field list.
+- Identify the canonical “record” entity used in the dashboard (table/view/API payload).
+
+### (C) Matriz de Cobertura dos Campos (obrigatória)
+Provide a table where rows = the 17 fields, and columns include:
+1) Fonte Primária (PNCP API? PDF? Annex? mixed?)
+2) Transformação (script/module/function name + path)
+3) Persistência (Supabase table/view/column name)
+4) Exposição (API endpoint/RPC/view used by frontend)
+5) Frontend (component/page where rendered)
+6) Status Atual (OK / NULL / missing / inconsistent)
+7) Evidência (paths/lines, SQL queries + counts, commit SHAs)
+
+### (D) Rastreamento ponta-a-ponta (Data Lineage) — field-by-field
+For EACH missing field, you must show:
+- Where it is extracted (or should be extracted),
+- Where it is transformed/mapped,
+- Where it is written to DB,
+- Where it is read from DB,
+- Where it is displayed,
+- EXACT failure point (first place it becomes NULL/missing/dropped/overwritten).
+
+### (E) Investigação de Regressão via Git (obrigatória)
+You must determine WHEN the regression was introduced:
+- Identify the commit range (good -> bad), using evidence:
+  - git log, git diff, blame, PR references (if available)
+- Show what changed:
+  - field renames, removed columns, mapping changes, view/query changes, schema migrations, removed scripts, disabled logic, changed defaults.
+- Special focus: “lost/overwritten scripts”
+  - Search for deleted/moved scripts via git history:
+    - Look for previous versions that extracted 100% fields.
+  - Prove whether code was deleted, replaced, or no longer invoked.
+
+### (F) Supabase Forensics (obrigatória)
+Must include:
+- Schema inspection: confirm whether DB columns exist for all required fields.
+- View/RPC inspection: confirm whether the dashboard query is selecting all fields.
+- Data inspection: quantify how many rows have NULL for each field.
+- Policies/triggers: confirm if RLS/triggers could be hiding/overwriting values.
+- Evidence must include SQL queries and results (counts), and object names.
+
+### (G) Frontend/API Forensics (obrigatória)
+Must include:
+- The exact query/endpoint used by the dashboard.
+- Confirm whether missing fields are:
+  - not returned by API,
+  - returned but not rendered,
+  - rendered but empty due to mapping,
+  - filtered out by UI logic.
+- Evidence: code locations and line numbers.
+
+### (H) Root Causes (ordered, evidence-weighted)
+List the root causes from most to least impactful.
+Each cause MUST cite evidence.
+NO cause without proof.
+
+### (I) Remediações (propostas, sem implementar)
+- Minimal-change fixes to restore 100% field coverage.
+- Include risk/impact.
+- Include an execution order (safe sequence).
+- Include verification steps.
+
+### (J) Verificação (Definition of Done)
+- Provide a deterministic checklist to confirm the fix restores 100% required fields:
+  - SQL validation queries,
+  - sample record validation,
+  - dashboard render checks.
+
+## 4) MANDATORY INVESTIGATION PROCEDURE (Do not skip)
+You must follow these steps in order and show your work (commands run, files inspected):
+
+Step 1: Repo inventory & mapping
+- Locate:
+  - ingestion/extraction scripts (PNCP, PDFs, annex processing)
+  - transformation/mapping layer
+  - DB write layer
+  - migrations
+  - API endpoints (if any)
+  - dashboard frontend data fetching
+- Produce a “System Map” list: component -> responsibilities -> paths.
+
+Step 2: Global search for field names
+- Search across repo for:
+  data_leilao, link_pncp, link_leiloeiro, n_pncp, valor_estimado, tipo_leilao
+- Identify:
+  - where they are parsed/extracted,
+  - where they are assigned,
+  - where they are saved,
+  - where they are queried.
+
+Step 3: Identify the canonical DB object used by dashboard
+- Determine if dashboard reads from:
+  - a table,
+  - a view,
+  - an RPC,
+  - a materialized view,
+  - an API that selects from a subset.
+- Prove it with code references.
+
+Step 4: Supabase evidence collection
+- Run SQL to:
+  - list columns for the relevant table/view
+  - count NULLs per field
+  - inspect last N records with missing fields
+- If logs are available, identify whether writes omitted fields or writes happened but reads drop them.
+
+Step 5: Git regression pinpoint
+- Find last known-good state in history for full coverage.
+- Identify commit(s) that removed/changed extraction/mapping.
+- Provide diffs and SHAs.
+
+Step 6: Conclude root causes and propose remediations
+- Strictly evidence-based.
+
+## 5) QUALITY BAR (Strict)
+- Every claim must include proof.
+- Prefer primary evidence: repository code + SQL + commit history.
+- If you cannot access something, state it explicitly and show the exact error.
+- Do not output vague statements like “maybe” or “probably” in root cause sections.
+
+## 6) START NOW
+Begin executing the procedure. Produce the report in PT-BR with the required structure.
