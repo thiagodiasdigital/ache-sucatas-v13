@@ -3,16 +3,19 @@ Ache Sucatas DaaS - Minerador V14
 =================================
 Busca editais no PNCP com enriquecimento via API de Detalhes.
 
-Versao: 14
-Data: 2026-01-20
+Versao: 14.1 (patch V19)
+Data: 2026-01-21
 Changelog:
+    - V14.1: Integração com validação de URL V19 (gate de link_leiloeiro)
+    - V14.1: Novos campos: link_leiloeiro_raw, link_leiloeiro_valido, etc.
+    - V14.1: Bloqueio de falsos positivos (TLD colado em palavra)
     - V14: Adiciona chamada a API de Detalhes para cada edital
     - V14: Extrai itens e anexos completos via endpoints dedicados
     - V14: Rate limiting configuravel
     - V14: Retry policy com backoff exponencial
     - V14: Download de todos os tipos de anexos (PDF, XLSX, CSV, DOC, etc)
 
-Baseado em: V13 (DATA_QUALITY)
+Baseado em: V13 (DATA_QUALITY) + Auditor V19 (URL GATE)
 Autor: Claude Code
 """
 
@@ -37,6 +40,118 @@ load_dotenv()
 
 
 # ============================================================
+# VALIDAÇÃO DE URL V19 (integrado do patch)
+# ============================================================
+
+WHITELIST_DOMINIOS_LEILOEIRO = {
+    "lfranca.com.br", "bidgo.com.br", "sodresantoro.com.br", "superbid.net",
+    "superbid.com.br", "vipleiloes.com.br", "frfranca.com.br", "lancenoleilao.com.br",
+    "leilomaster.com.br", "lut.com.br", "zfrancaleiloes.com.br", "amaralleiloes.com.br",
+    "bfranca.com.br", "cronos.com.br", "confederacaoleiloes.com.br", "megaleiloes.com.br",
+    "leilaoseg.com.br", "cfrancaleiloes.com.br", "estreladaleiloes.com.br", "sold.com.br",
+    "mitroleiloes.com.br", "alifrancaleiloes.com.br", "hastavip.com.br",
+    "klfrancaleiloes.com.br", "centraldosleiloes.com.br", "dfranca.com.br",
+    "rfrancaleiloes.com.br", "sfranca.com.br", "clickleiloes.com.br", "petroleiloes.com.br",
+    "pfranca.com.br", "clfranca.com.br", "tfleiloes.com.br", "kfranca.com.br",
+    "lanceja.com.br", "portalleiloes.com.br", "wfrancaleiloes.com.br",
+    "rafaelfrancaleiloes.com.br", "alfrancaleiloes.com.br", "jfrancaleiloes.com.br",
+    "mfranca.com.br", "msfranca.com.br", "stfrancaleiloes.com.br", "ofrancaleiloes.com.br",
+    "hmfrancaleiloes.com.br", "abataleiloes.com.br", "webleilao.com.br",
+    "gfrancaleiloes.com.br", "lleiloes.com.br", "lanceleiloes.com.br",
+    "lopesleiloes.net.br", "lopesleiloes.com.br",
+}
+
+REGEX_TLD_COLADO_MINER = re.compile(
+    r'[A-Za-z0-9]\.(?:com|net|org)[A-Za-z]',
+    re.IGNORECASE
+)
+
+
+def _extrair_dominio_miner(url: str) -> Optional[str]:
+    """Extrai domínio de uma URL."""
+    try:
+        from urllib.parse import urlparse
+        url_normalizada = url if url.startswith("http") else "https://" + url
+        parsed = urlparse(url_normalizada)
+        return parsed.netloc.lower().replace("www.", "")
+    except Exception:
+        return None
+
+
+def _esta_na_whitelist_miner(url: str) -> bool:
+    """Verifica se o domínio da URL está na whitelist."""
+    dominio = _extrair_dominio_miner(url)
+    if not dominio:
+        return False
+    for dominio_valido in WHITELIST_DOMINIOS_LEILOEIRO:
+        if dominio == dominio_valido or dominio.endswith("." + dominio_valido):
+            return True
+    return False
+
+
+def validar_url_link_leiloeiro_v19(url: str) -> tuple:
+    """
+    Valida se uma URL pode ser usada como link_leiloeiro (V19).
+    Returns: (valido, confianca, motivo_rejeicao)
+    """
+    if not url:
+        return False, 0, "url_vazia"
+
+    url_limpa = url.strip()
+    url_lower = url_limpa.lower()
+
+    if url_lower.startswith(("http://", "https://")):
+        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa) else (True, 80, None)
+
+    if url_lower.startswith("www."):
+        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa) else (True, 60, None)
+
+    if _esta_na_whitelist_miner(url_limpa):
+        return True, 100, None
+
+    if REGEX_TLD_COLADO_MINER.search(url_limpa):
+        return False, 0, "tld_colado_em_palavra"
+
+    return False, 0, "sem_prefixo_ou_whitelist"
+
+
+def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[str]) -> dict:
+    """
+    Processa links da API PNCP aplicando validação V19.
+    """
+    resultado = {
+        "link_leiloeiro": None,
+        "link_leiloeiro_raw": None,
+        "link_leiloeiro_valido": None,
+        "link_leiloeiro_origem_tipo": None,
+        "link_leiloeiro_origem_ref": None,
+        "link_leiloeiro_confianca": None,
+    }
+
+    link_candidato = link_sistema or link_edital
+    campo_origem = "linkSistema" if link_sistema else "linkEdital"
+
+    if not link_candidato:
+        return resultado
+
+    if "pncp.gov" in link_candidato.lower():
+        return resultado
+
+    valido, confianca, motivo = validar_url_link_leiloeiro_v19(link_candidato)
+
+    resultado["link_leiloeiro_raw"] = link_candidato
+    resultado["link_leiloeiro_valido"] = valido
+    resultado["link_leiloeiro_origem_tipo"] = "pncp_api"
+    resultado["link_leiloeiro_origem_ref"] = f"pncp_api:{campo_origem}"
+    resultado["link_leiloeiro_confianca"] = confianca
+
+    if valido:
+        resultado["link_leiloeiro"] = link_candidato
+
+    return resultado
+
+
+# ============================================================
 # CONFIGURACAO
 # ============================================================
 
@@ -51,7 +166,7 @@ class MinerConfig:
     # PNCP API
     pncp_base_url: str = "https://pncp.gov.br/api"
     pncp_search_url: str = "https://pncp.gov.br/api/search/"
-    pncp_consulta_url: str = "https://pncp.gov.br/api/consulta/v1/orgaos"
+    pncp_consulta_url: str = "https://pncp.gov.br/pncp-api/v1/orgaos"
 
     # Rate limiting
     rate_limit_seconds: float = 1.0
@@ -854,10 +969,17 @@ class MinerV14:
             if unidade.get("uf"):
                 edital["uf"] = unidade["uf"]
 
-            # Link do leiloeiro (se disponivel)
-            link_sistema = detalhes.get("linkSistema") or detalhes.get("linkEdital")
-            if link_sistema and "pncp.gov" not in link_sistema:
-                edital["link_leiloeiro"] = link_sistema
+            # Link do leiloeiro COM VALIDAÇÃO V19
+            resultado_link = processar_link_pncp_v19(
+                link_sistema=detalhes.get("linkSistema"),
+                link_edital=detalhes.get("linkEdital"),
+            )
+            edital["link_leiloeiro"] = resultado_link["link_leiloeiro"]
+            edital["link_leiloeiro_raw"] = resultado_link["link_leiloeiro_raw"]
+            edital["link_leiloeiro_valido"] = resultado_link["link_leiloeiro_valido"]
+            edital["link_leiloeiro_origem_tipo"] = resultado_link["link_leiloeiro_origem_tipo"]
+            edital["link_leiloeiro_origem_ref"] = resultado_link["link_leiloeiro_origem_ref"]
+            edital["link_leiloeiro_confianca"] = resultado_link["link_leiloeiro_confianca"]
 
             # Numero do edital (obrigatorio na tabela)
             numero_compra = detalhes.get("numeroCompra", "")

@@ -33,3 +33,14 @@ cd frontend && npm run dev
 # Build de produção
 cd frontend && npm run build
 ```
+
+## Domínios Validados para link_leiloeiro
+
+Os seguintes domínios foram validados manualmente pelo usuário em 2026-01-21 e NÃO devem ser considerados falsos positivos no saneamento de links:
+
+- `bllcompras.com` - Portal de compras públicas
+- `campinas.sp.gov.br` - Portal governo de Campinas
+- `atende.net` - Plataforma de atendimento (pomerode, janiopolis, consorciojacui, santarosadosul, terraroxa)
+- `sobradinho-rs.com.br` - Site do município
+
+Esses domínios estão configurados na whitelist em `sanitize_invalid_links.py`.
