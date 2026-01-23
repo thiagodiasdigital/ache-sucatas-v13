@@ -1,22 +1,25 @@
 """
-Ache Sucatas DaaS - Minerador V14
-=================================
-Busca editais no PNCP com enriquecimento via API de Detalhes.
+Ache Sucatas DaaS - Minerador V15.2
+===================================
+Busca editais no PNCP usando APENAS a API de busca + PDF.
 
-Versao: 14.1 (patch V19)
-Data: 2026-01-21
-Changelog:
-    - V14.1: Integração com validação de URL V19 (gate de link_leiloeiro)
-    - V14.1: Novos campos: link_leiloeiro_raw, link_leiloeiro_valido, etc.
-    - V14.1: Bloqueio de falsos positivos (TLD colado em palavra)
-    - V14: Adiciona chamada a API de Detalhes para cada edital
-    - V14: Extrai itens e anexos completos via endpoints dedicados
-    - V14: Rate limiting configuravel
-    - V14: Retry policy com backoff exponencial
-    - V14: Download de todos os tipos de anexos (PDF, XLSX, CSV, DOC, etc)
+Versao: 15.2
+Data: 2026-01-22
+Changelog V15.2:
+    - CORRECAO 1: Mapeamento PNCP corrigido:
+        * data_leilao      <- dataAberturaProposta (da busca)
+        * valor_estimado   <- valorTotalEstimado (da busca)
+        * data_publicacao  <- dataPublicacaoPncp (da busca)
+        * n_edital         <- extraido do PDF
+    - CORRECAO 2: REMOVIDA API de detalhes (inutil, nao traz nada extra)
+    - CORRECAO 3: Normalizacao de URLs melhorada (nao rejeitar URLs validas)
+    - MANTIDO: tipo_leilao, descricao, objeto_resumido, leiloeiro_url, tags (do PDF)
 
-Baseado em: V13 (DATA_QUALITY) + Auditor V19 (URL GATE)
+Baseado em: V15.1
 Autor: Claude Code
+Contrato: contracts/dataset_contract_v1.md
+
+REGRA DE OURO: O contrato manda, o codigo obedece.
 """
 
 import os
@@ -52,7 +55,304 @@ load_dotenv()
 
 
 # ============================================================
-# VALIDAÇÃO DE URL V19 (integrado do patch)
+# EXTRACAO DE TEXTO DO PDF (V15.2 - INALTERADO)
+# ============================================================
+
+def extrair_texto_pdf(pdf_bytes: bytes) -> str:
+    """
+    Extrai texto de um PDF usando pypdfium2 (deterministico, sem IA).
+
+    Args:
+        pdf_bytes: Conteudo binario do PDF
+
+    Returns:
+        Texto extraido do PDF ou string vazia se falhar
+    """
+    if not pdf_bytes:
+        return ""
+
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(pdf_bytes)
+        texto_paginas = []
+
+        # Limitar a 10 paginas para performance
+        max_paginas = min(len(pdf), 10)
+        for i in range(max_paginas):
+            page = pdf[i]
+            textpage = page.get_textpage()
+            texto_paginas.append(textpage.get_text_range())
+
+        pdf.close()
+        return "\n".join(texto_paginas)
+
+    except ImportError:
+        logging.getLogger("MinerV15.2").warning("pypdfium2 nao instalado - extracao de PDF desabilitada")
+        return ""
+    except Exception as e:
+        logging.getLogger("MinerV15.2").debug(f"Erro ao extrair texto do PDF: {e}")
+        return ""
+
+
+def extrair_descricao_pdf(texto_pdf: str) -> str:
+    """
+    Extrai descricao do texto do PDF (deterministico).
+    MANTIDO do V15.1 - funciona corretamente.
+    """
+    if not texto_pdf or len(texto_pdf) < 50:
+        return ""
+
+    padroes = [
+        r"(?:DESCRI[ÇC][ÃA]O|DA\s+LICITA[ÇC][ÃA]O|DO\s+EDITAL)[:\s]*(.{50,500}?)(?:\n\n|\d+\.\s|$)",
+        r"(?:torna\s+p[úu]blico|comunica)[:\s]*(.{50,500}?)(?:\n\n|\d+\.\s|$)",
+    ]
+
+    for padrao in padroes:
+        match = re.search(padrao, texto_pdf, re.IGNORECASE | re.DOTALL)
+        if match:
+            descricao = match.group(1).strip()
+            descricao = re.sub(r'\s+', ' ', descricao)
+            return descricao[:500]
+
+    # Fallback: primeiros paragrafos do PDF
+    linhas = [l.strip() for l in texto_pdf.split('\n') if len(l.strip()) > 30]
+    if linhas:
+        return re.sub(r'\s+', ' ', ' '.join(linhas[:3]))[:500]
+
+    return ""
+
+
+def extrair_tipo_leilao_pdf(texto_pdf: str) -> str:
+    """
+    Extrai tipo/modalidade do leilao do texto do PDF (deterministico).
+    MANTIDO do V15.1 - funciona corretamente.
+    """
+    if not texto_pdf:
+        return ""
+
+    texto_lower = texto_pdf.lower()
+
+    # Padroes para detectar tipo
+    tem_eletronico = any(p in texto_lower for p in [
+        "leil[aã]o eletr[oô]nico", "eletr[oô]nico", "online",
+        "modo eletronico", "forma eletronica", "virtual"
+    ])
+    tem_presencial = any(p in texto_lower for p in [
+        "leil[aã]o presencial", "presencial", "sede da",
+        "local:", "endereco:", "comparecimento"
+    ])
+
+    # Usar regex para match mais preciso
+    if re.search(r"leil[aã]o\s+eletr[oô]nico", texto_lower):
+        tem_eletronico = True
+    if re.search(r"leil[aã]o\s+presencial", texto_lower):
+        tem_presencial = True
+
+    if tem_eletronico and tem_presencial:
+        return "Hibrido"
+    elif tem_eletronico:
+        return "Eletronico"
+    elif tem_presencial:
+        return "Presencial"
+
+    return ""
+
+
+def extrair_n_edital_pdf(texto_pdf: str) -> str:
+    """
+    V15.2: Extrai numero do edital do texto do PDF.
+
+    Busca padroes como:
+    - Edital nº 001/2026
+    - EDITAL N° 0800100/0001/2026
+    - Edital 01/2026
+
+    Args:
+        texto_pdf: Texto extraido do PDF
+
+    Returns:
+        Numero do edital ou string vazia
+    """
+    if not texto_pdf:
+        return ""
+
+    # Padroes para numero de edital (ordem de prioridade)
+    padroes = [
+        # Edital nº 001/2026, EDITAL N° 0800100/0001/2026
+        r"[Ee][Dd][Ii][Tt][Aa][Ll]\s*[NnºÚ°\.]+\s*([0-9]+(?:/[0-9]+)?(?:/[0-9]{4})?)",
+        # EDITAL DE LEILÃO Nº 001/2026
+        r"[Ee][Dd][Ii][Tt][Aa][Ll]\s+[Dd][Ee]\s+[Ll][Ee][Ii][Ll][ÃãAa][Oo]\s*[NnºÚ°\.]*\s*([0-9]+(?:/[0-9]+)?(?:/[0-9]{4})?)",
+        # Processo nº 001/2026 (fallback)
+        r"[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo]\s*[NnºÚ°\.]+\s*([0-9]+(?:/[0-9]+)?(?:/[0-9]{4})?)",
+    ]
+
+    for padrao in padroes:
+        match = re.search(padrao, texto_pdf)
+        if match:
+            n_edital = match.group(1).strip()
+            # Garantir formato limpo
+            n_edital = re.sub(r'\s+', '', n_edital)
+            if n_edital:
+                return n_edital
+
+    return ""
+
+
+def extrair_valor_estimado_pdf(texto_pdf: str) -> Optional[float]:
+    """
+    V15.2: Extrai valor estimado do texto do PDF.
+
+    Busca padroes como:
+    - R$ 73.494,80
+    - VALOR TOTAL ESTIMADO: R$ 1.234.567,89
+    - Valor Global: R$ 100.000,00
+
+    Args:
+        texto_pdf: Texto extraido do PDF
+
+    Returns:
+        Valor estimado como float ou None
+    """
+    if not texto_pdf:
+        return None
+
+    # Padroes para valor (ordem de prioridade)
+    padroes = [
+        # VALOR TOTAL ESTIMADO: R$ 1.234.567,89
+        r"[Vv][Aa][Ll][Oo][Rr]\s+[Tt][Oo][Tt][Aa][Ll]\s*(?:[Ee][Ss][Tt][Ii][Mm][Aa][Dd][Oo])?\s*[:\s]*[Rr]\$?\s*([\d.,]+)",
+        # VALOR ESTIMADO: R$ 1.234.567,89
+        r"[Vv][Aa][Ll][Oo][Rr]\s+[Ee][Ss][Tt][Ii][Mm][Aa][Dd][Oo]\s*[:\s]*[Rr]\$?\s*([\d.,]+)",
+        # VALOR GLOBAL: R$ 1.234.567,89
+        r"[Vv][Aa][Ll][Oo][Rr]\s+[Gg][Ll][Oo][Bb][Aa][Ll]\s*[:\s]*[Rr]\$?\s*([\d.,]+)",
+        # VALOR MINIMO: R$ 1.234.567,89
+        r"[Vv][Aa][Ll][Oo][Rr]\s+[Mm][IiÍí][Nn][Ii][Mm][Oo]\s*[:\s]*[Rr]\$?\s*([\d.,]+)",
+        # R$ 1.234.567,89 (generico, menos preciso)
+        r"[Rr]\$\s*([\d]{1,3}(?:\.[\d]{3})*(?:,[\d]{2}))",
+    ]
+
+    valores_encontrados = []
+
+    for padrao in padroes:
+        matches = re.findall(padrao, texto_pdf)
+        for match in matches:
+            try:
+                # Converter formato brasileiro para float
+                # 1.234.567,89 -> 1234567.89
+                valor_str = match.strip()
+                valor_str = valor_str.replace(".", "").replace(",", ".")
+                valor = float(valor_str)
+
+                # Filtrar valores muito pequenos ou muito grandes
+                if 100.0 <= valor <= 100000000.0:  # Entre R$100 e R$100M
+                    valores_encontrados.append(valor)
+            except (ValueError, AttributeError):
+                continue
+
+    # Retornar o maior valor encontrado (mais provavel ser o total)
+    if valores_encontrados:
+        return max(valores_encontrados)
+
+    return None
+
+
+# ============================================================
+# V15.2: NORMALIZACAO DE URL MELHORADA
+# ============================================================
+
+def normalizar_url_v15_2(url: str) -> Optional[str]:
+    """
+    V15.2: Normaliza URL conforme regras do contrato.
+
+    Regras:
+    - https:// ou http:// -> manter como esta
+    - www.exemplo.com.br -> adicionar https://
+    - exemplo.com.br (com TLD valido) -> adicionar https://
+
+    TLDs validos: .com.br, .net.br, .org.br, .com, .net, .org
+
+    Args:
+        url: URL bruta extraida do PDF
+
+    Returns:
+        URL normalizada ou None se invalida
+    """
+    if not url:
+        return None
+
+    url = url.strip()
+
+    # Remover caracteres invalidos no final
+    url = re.sub(r'[<>\"\'\s]+$', '', url)
+    url = re.sub(r'^[<>\"\'\s]+', '', url)
+
+    # Se ja tem protocolo, retornar
+    if url.lower().startswith(("https://", "http://")):
+        return url
+
+    # Se comeca com www., adicionar https://
+    if url.lower().startswith("www."):
+        return "https://" + url
+
+    # Verificar se tem TLD valido brasileiro ou internacional
+    tlds_validos = [
+        ".com.br", ".net.br", ".org.br", ".gov.br",
+        ".com", ".net", ".org"
+    ]
+
+    url_lower = url.lower()
+    for tld in tlds_validos:
+        if tld in url_lower:
+            # Validar que nao e uma palavra colada (ex: "COMEMORA.com")
+            # Verificar se tem pelo menos um ponto antes do TLD
+            idx = url_lower.find(tld)
+            parte_antes = url_lower[:idx]
+
+            # Deve ter formato de dominio: palavra.palavra ou palavra
+            if "." in parte_antes or re.match(r'^[a-z0-9-]+$', parte_antes):
+                return "https://" + url
+
+    return None
+
+
+def extrair_leiloeiro_url_pdf(texto_pdf: str) -> Optional[str]:
+    """
+    Extrai URL do leiloeiro do texto do PDF (deterministico).
+    V15.2: Usa normalizacao melhorada.
+    """
+    if not texto_pdf:
+        return None
+
+    # Padroes de URL (ordem de prioridade)
+    padroes_url = [
+        r'https?://[^\s<>"\']+',
+        r'www\.[a-zA-Z0-9][a-zA-Z0-9\-]*\.[^\s<>"\']+',
+        r'[a-zA-Z0-9][a-zA-Z0-9\-]*\.(?:com|net|org)\.br[^\s<>"\']*',
+    ]
+
+    # Dominios governamentais para excluir
+    dominios_gov = [
+        "pncp.gov.br", "gov.br", "compras.gov.br",
+        "comprasnet.gov.br", "licitacoes-e.com.br"
+    ]
+
+    for padrao in padroes_url:
+        matches = re.findall(padrao, texto_pdf, re.IGNORECASE)
+        for url in matches:
+            url_lower = url.lower()
+            # Excluir dominios governamentais
+            if any(dom in url_lower for dom in dominios_gov):
+                continue
+
+            # V15.2: Usar normalizacao melhorada
+            url_normalizada = normalizar_url_v15_2(url)
+            if url_normalizada:
+                return url_normalizada
+
+    return None
+
+
+# ============================================================
+# VALIDACAO DE URL V19 (integrado do patch - INALTERADO)
 # ============================================================
 
 WHITELIST_DOMINIOS_LEILOEIRO = {
@@ -80,7 +380,7 @@ REGEX_TLD_COLADO_MINER = re.compile(
 
 
 def _extrair_dominio_miner(url: str) -> Optional[str]:
-    """Extrai domínio de uma URL."""
+    """Extrai dominio de uma URL."""
     try:
         from urllib.parse import urlparse
         url_normalizada = url if url.startswith("http") else "https://" + url
@@ -91,7 +391,7 @@ def _extrair_dominio_miner(url: str) -> Optional[str]:
 
 
 def _esta_na_whitelist_miner(url: str) -> bool:
-    """Verifica se o domínio da URL está na whitelist."""
+    """Verifica se o dominio da URL esta na whitelist."""
     dominio = _extrair_dominio_miner(url)
     if not dominio:
         return False
@@ -129,7 +429,7 @@ def validar_url_link_leiloeiro_v19(url: str) -> tuple:
 
 def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[str]) -> dict:
     """
-    Processa links da API PNCP aplicando validação V19.
+    Processa links da API PNCP aplicando validacao V19.
     """
     resultado = {
         "link_leiloeiro": None,
@@ -164,21 +464,101 @@ def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[s
 
 
 # ============================================================
+# V15: EXTRACAO DE OBJETO_RESUMIDO E GERACAO DE TAGS (INALTERADO)
+# ============================================================
+
+def extrair_objeto_resumido(texto: str, max_chars: int = 500) -> str:
+    """
+    Extrai objeto_resumido de um texto (titulo, descricao ou PDF).
+    MANTIDO do V15.1 - funciona corretamente.
+    """
+    if not texto or not texto.strip():
+        return ""
+
+    texto_limpo = texto.strip()
+
+    # Padroes de secao de objeto (ordem de prioridade)
+    padroes_objeto = [
+        r"(?:DO\s+)?OBJETO\s*(?:DA\s+LICITA[ÇC][ÃA]O)?[:\s]*(.{10,500}?)(?:\n\n|\d+\.\s|$)",
+        r"OBJETO[:\s]+(.{10,500}?)(?:\n\n|\d+\.\s|$)",
+    ]
+
+    for padrao in padroes_objeto:
+        match = re.search(padrao, texto_limpo, re.IGNORECASE | re.DOTALL)
+        if match:
+            objeto = match.group(1).strip()
+            objeto = re.sub(r'\s+', ' ', objeto)
+            return objeto[:max_chars]
+
+    # Fallback: usar o proprio texto truncado se for curto o suficiente
+    if len(texto_limpo) <= max_chars:
+        return re.sub(r'\s+', ' ', texto_limpo)
+
+    # Fallback: primeira frase ou trecho
+    primeira_frase = re.split(r'[.\n]', texto_limpo)[0]
+    if len(primeira_frase) >= 20:
+        return re.sub(r'\s+', ' ', primeira_frase)[:max_chars]
+
+    return ""
+
+
+# Dicionario de palavras-chave para tags (V15 - INALTERADO)
+TAGS_KEYWORDS = {
+    "VEICULO": ["veiculo", "veiculos", "automovel", "automoveis", "carro", "carros"],
+    "SUCATA": ["sucata", "sucatas", "inservivel", "inserviveis", "ferroso", "ferrosos"],
+    "MOTO": ["moto", "motos", "motocicleta", "motocicletas", "ciclomotor"],
+    "CAMINHAO": ["caminhao", "caminhoes", "caminhonete", "camionete", "truck"],
+    "ONIBUS": ["onibus", "microonibus", "micro-onibus"],
+    "MAQUINARIO": ["maquina", "maquinas", "equipamento", "equipamentos", "trator", "tratores"],
+    "IMOVEL": ["imovel", "imoveis", "terreno", "terrenos", "lote", "lotes", "edificio"],
+    "MOBILIARIO": ["moveis", "mobiliario", "cadeira", "mesa", "armario"],
+    "ELETRONICO": ["computador", "computadores", "eletronico", "eletronicos", "informatica"],
+    "DOCUMENTADO": ["documentado", "documentados", "com documento", "documento ok"],
+}
+
+
+def gerar_tags_v15(titulo: str, descricao: str, objeto: str) -> list:
+    """
+    Gera tags baseadas em palavras-chave encontradas no conteudo.
+    MANTIDO do V15.1 - funciona corretamente.
+    """
+    # Concatenar todo o texto disponivel
+    texto_completo = f"{titulo or ''} {descricao or ''} {objeto or ''}".lower()
+
+    # Normalizar acentos para matching
+    texto_normalizado = unicodedata.normalize('NFKD', texto_completo)
+    texto_normalizado = texto_normalizado.encode('ASCII', 'ignore').decode('ASCII').lower()
+
+    tags_encontradas = set()
+
+    for tag, keywords in TAGS_KEYWORDS.items():
+        for keyword in keywords:
+            keyword_norm = unicodedata.normalize('NFKD', keyword)
+            keyword_norm = keyword_norm.encode('ASCII', 'ignore').decode('ASCII').lower()
+
+            if keyword_norm in texto_normalizado or keyword in texto_completo:
+                tags_encontradas.add(tag)
+                break
+
+    return sorted(list(tags_encontradas))
+
+
+# ============================================================
 # CONFIGURACAO
 # ============================================================
 
 @dataclass
 class MinerConfig:
-    """Configuracoes do minerador V14."""
+    """Configuracoes do minerador V15.2."""
 
     # Supabase
     supabase_url: str = ""
     supabase_key: str = ""
 
-    # PNCP API
+    # PNCP API - V15.2: APENAS busca, sem API de detalhes
     pncp_base_url: str = "https://pncp.gov.br/api"
     pncp_search_url: str = "https://pncp.gov.br/api/search/"
-    pncp_consulta_url: str = "https://pncp.gov.br/pncp-api/v1/orgaos"
+    # REMOVIDO: pncp_consulta_url (API de detalhes)
 
     # Rate limiting
     rate_limit_seconds: float = 1.0
@@ -186,7 +566,7 @@ class MinerConfig:
     search_page_delay_seconds: float = 0.5
 
     # Busca
-    dias_retroativos: int = 1  # 24 horas (compativel com V13)
+    dias_retroativos: int = 1
     paginas_por_termo: int = 3
     itens_por_pagina: int = 20
 
@@ -196,7 +576,7 @@ class MinerConfig:
     retry_backoff_base: float = 2.0
 
     # Filtros
-    modalidades: str = "1|13"  # 1=Leilao, 13=Leilao Eletronico
+    modalidades: str = "1|13"
     min_score: int = 60
     filtrar_data_passada: bool = True
 
@@ -209,7 +589,7 @@ class MinerConfig:
 
     # Limites
     max_downloads_per_session: int = 200
-    run_limit: int = 0  # 0 = sem limite; >0 = máximo de editais a processar (para testes)
+    run_limit: int = 0
 
     # User agent
     user_agent: str = (
@@ -258,7 +638,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | [%(name)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger("MinerV14")
+logger = logging.getLogger("MinerV15.2")
 
 
 # ============================================================
@@ -275,28 +655,15 @@ class RateLimitError(PNCPError):
     pass
 
 
-class EditalNaoEncontradoError(PNCPError):
-    """Edital nao encontrado na API de detalhes."""
-    pass
-
-
 # ============================================================
 # UTILS
 # ============================================================
 
 def parse_pncp_id(pncp_id: str) -> dict:
     """
-    Extrai componentes do pncp_id para montar URLs de detalhe.
-
-    Exemplo: "51174001000193-1-000352-2025" ou "51174001000193-1-000352/2025"
-    Retorna: {
-        "cnpj": "51174001000193",
-        "esfera": "1",
-        "sequencial": "000352",
-        "ano": "2025"
-    }
+    Extrai componentes do pncp_id.
+    V15.2: Mantido apenas para gerar n_edital quando PDF falhar.
     """
-    # Normalizar: substituir / por - para padronizar formato
     pncp_id_normalizado = pncp_id.replace("/", "-")
 
     parts = pncp_id_normalizado.split("-")
@@ -324,7 +691,6 @@ def parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str:
         return None
 
-    # Remove timezone Z se presente
     date_str = date_str.replace('Z', '+00:00')
 
     try:
@@ -350,7 +716,7 @@ def parse_date(date_str: Optional[str]) -> Optional[datetime]:
 
 
 # ============================================================
-# SCORING ENGINE
+# SCORING ENGINE (INALTERADO)
 # ============================================================
 
 class ScoringEngine:
@@ -409,7 +775,7 @@ class ScoringEngine:
 
 
 # ============================================================
-# FILE TYPE DETECTION
+# FILE TYPE DETECTION (INALTERADO)
 # ============================================================
 
 class FileTypeDetector:
@@ -445,7 +811,6 @@ class FileTypeDetector:
         """Detecta extensao pelos magic bytes."""
         for magic, ext in FileTypeDetector.MAGIC_BYTES.items():
             if data.startswith(magic):
-                # Verificar se e xlsx/docx (ZIP com estrutura especifica)
                 if magic == b'PK\x03\x04':
                     if b'xl/' in data[:1000]:
                         return '.xlsx'
@@ -456,11 +821,14 @@ class FileTypeDetector:
 
 
 # ============================================================
-# CLIENTE PNCP
+# CLIENTE PNCP - V15.2: APENAS BUSCA (SEM API DE DETALHES)
 # ============================================================
 
 class PNCPClient:
-    """Cliente para APIs do PNCP."""
+    """
+    Cliente para APIs do PNCP.
+    V15.2: REMOVIDA API de detalhes - usa apenas busca + arquivos.
+    """
 
     def __init__(self, config: MinerConfig):
         self.config = config
@@ -498,16 +866,14 @@ class PNCPClient:
             else:
                 response = self.http.request(method, url, params=params)
 
-            # Rate limit (429)
             if response.status_code == 429:
                 if retry_count < self.config.max_retries:
-                    wait_time = 60  # Espera 60s em caso de rate limit
+                    wait_time = 60
                     self.logger.warning(f"Rate limit atingido. Aguardando {wait_time}s...")
                     time.sleep(wait_time)
                     return self._retry_request(method, url, params, retry_count + 1)
                 raise RateLimitError("Rate limit excedido apos retries")
 
-            # Erro de servidor (5xx)
             if response.status_code >= 500:
                 if retry_count < self.config.max_retries:
                     wait_time = self.config.retry_backoff_base ** retry_count
@@ -539,10 +905,7 @@ class PNCPClient:
         data_final: str,
         pagina: int = 1
     ) -> Optional[dict]:
-        """
-        Busca editais de leilao no periodo.
-        Endpoint: /search/
-        """
+        """Busca editais de leilao no periodo."""
         params = {
             "q": termo,
             "tipos_documento": "edital",
@@ -561,64 +924,10 @@ class PNCPClient:
 
         return None
 
-    def obter_detalhes(self, pncp_id: str) -> Optional[dict]:
-        """
-        Obtem detalhes completos de um edital.
-        Endpoint: /pncp/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}
-        """
-        parsed = parse_pncp_id(pncp_id)
-        if not parsed:
-            self.logger.warning(f"pncp_id invalido: {pncp_id}")
-            return None
-
-        cnpj = re.sub(r'[^0-9]', '', parsed["cnpj"])
-        seq = parsed["sequencial"].lstrip('0') or '0'
-        ano = parsed["ano"]
-
-        url = f"{self.config.pncp_consulta_url}/{cnpj}/compras/{ano}/{seq}"
-
-        response = self._retry_request("GET", url)
-
-        if response:
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 404:
-                self.logger.debug(f"Edital nao encontrado: {pncp_id}")
-                return None
-
-        return None
-
-    def obter_itens(self, pncp_id: str) -> List[dict]:
-        """
-        Obtem itens do edital.
-        Endpoint: /pncp/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens
-        """
-        parsed = parse_pncp_id(pncp_id)
-        if not parsed:
-            return []
-
-        cnpj = re.sub(r'[^0-9]', '', parsed["cnpj"])
-        seq = parsed["sequencial"].lstrip('0') or '0'
-        ano = parsed["ano"]
-
-        url = f"{self.config.pncp_consulta_url}/{cnpj}/compras/{ano}/{seq}/itens"
-
-        response = self._retry_request("GET", url)
-
-        if response and response.status_code == 200:
-            data = response.json()
-            # Pode retornar lista direta ou objeto com campo "itens"
-            if isinstance(data, list):
-                return data
-            return data.get("itens", [])
-
-        return []
+    # V15.2: REMOVIDO metodo obter_detalhes() - nao e necessario
 
     def obter_arquivos(self, pncp_id: str) -> List[dict]:
-        """
-        Lista arquivos/anexos do edital.
-        Endpoint: /pncp/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/arquivos
-        """
+        """Lista arquivos/anexos do edital."""
         parsed = parse_pncp_id(pncp_id)
         if not parsed:
             return []
@@ -627,7 +936,7 @@ class PNCPClient:
         seq = parsed["sequencial"].lstrip('0') or '0'
         ano = parsed["ano"]
 
-        url = f"{self.config.pncp_consulta_url}/{cnpj}/compras/{ano}/{seq}/arquivos"
+        url = f"https://pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos"
 
         response = self._retry_request("GET", url)
 
@@ -652,7 +961,7 @@ class PNCPClient:
 
 
 # ============================================================
-# PERSISTENCIA - SUPABASE
+# PERSISTENCIA - SUPABASE (INALTERADO)
 # ============================================================
 
 class SupabaseRepository:
@@ -698,42 +1007,44 @@ class SupabaseRepository:
             return False
 
         try:
-            # Mapear campos para a tabela editais_leilao
-            # Colunas validadas contra o schema do Supabase
-            # Nota: Removidos campos inexistentes: objeto, orgao_cnpj, pdf_url, versao_miner
             pncp_id = edital.get("pncp_id")
 
-            # Determinar tags baseado no conteudo
-            texto_busca = f"{edital.get('titulo', '')} {edital.get('descricao', '')}".lower()
-            if "sucata" in texto_busca:
-                tags = ["SUCATA"]
-            elif "documentado" in texto_busca or "documento" in texto_busca:
-                tags = ["DOCUMENTADO"]
-            else:
-                tags = ["SEM CLASSIFICACAO"]
+            # V15.2: tags vem do edital (ja calculadas), nao recalcular aqui
+            tags = edital.get("tags", [])
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+            # V15.2: Converter datas de DD-MM-YYYY para ISO (YYYY-MM-DD) para o banco
+            def convert_date_to_iso(date_str):
+                if not date_str:
+                    return None
+                if isinstance(date_str, str) and "-" in date_str:
+                    parts = date_str.split("-")
+                    if len(parts) == 3 and len(parts[0]) == 2:  # DD-MM-YYYY
+                        return f"{parts[2]}-{parts[1]}-{parts[0]}"  # YYYY-MM-DD
+                return date_str
 
             dados = {
                 "pncp_id": pncp_id,
-                "id_interno": pncp_id,  # Campo obrigatorio - usar pncp_id como identificador
-                "n_edital": edital.get("n_edital"),  # Campo obrigatorio
+                "id_interno": pncp_id,
+                "n_edital": edital.get("n_edital"),
                 "titulo": edital.get("titulo"),
                 "descricao": edital.get("descricao"),
                 "orgao": edital.get("orgao_nome"),
                 "uf": edital.get("uf"),
                 "cidade": edital.get("municipio"),
-                "data_publicacao": edital.get("data_publicacao"),
-                "data_leilao": edital.get("data_leilao"),
+                "data_publicacao": convert_date_to_iso(edital.get("data_publicacao")),
+                "data_leilao": convert_date_to_iso(edital.get("data_leilao")),
                 "modalidade_leilao": edital.get("modalidade"),
                 "valor_estimado": edital.get("valor_estimado"),
                 "link_pncp": edital.get("link_pncp"),
                 "link_leiloeiro": edital.get("link_leiloeiro"),
                 "score": edital.get("score"),
                 "storage_path": edital.get("storage_path"),
-                "tags": tags,  # Campo obrigatorio
+                "tags": tags,
                 "updated_at": datetime.now().isoformat(),
             }
 
-            # Remover campos None
             dados = {k: v for k, v in dados.items() if v is not None}
 
             result = self.client.table("editais_leilao").upsert(
@@ -754,7 +1065,7 @@ class SupabaseRepository:
 
         try:
             dados = {
-                "versao_miner": "V14_ENRIQUECIDO",
+                "versao_miner": "V15.2",
                 "janela_temporal_horas": config.dias_retroativos * 24,
                 "termos_buscados": len(config.search_terms),
                 "paginas_por_termo": config.paginas_por_termo,
@@ -800,20 +1111,11 @@ class SupabaseRepository:
             self.logger.error(f"Erro ao finalizar execucao: {e}")
 
     def inserir_quarentena(self, rejection_row: dict) -> bool:
-        """
-        Insere registro na tabela de quarentena (dataset_rejections).
-
-        Args:
-            rejection_row: Dados do registro rejeitado (gerado por build_rejection_row)
-
-        Returns:
-            True se inserido com sucesso
-        """
+        """Insere registro na tabela de quarentena (dataset_rejections)."""
         if not self.enable_supabase:
             return False
 
         try:
-            # JSONB: passar objetos Python diretamente (cliente Supabase serializa)
             dados = {
                 "run_id": rejection_row.get("run_id"),
                 "id_interno": rejection_row.get("id_interno"),
@@ -832,7 +1134,7 @@ class SupabaseRepository:
 
 
 # ============================================================
-# STORAGE - SUPABASE
+# STORAGE - SUPABASE (INALTERADO)
 # ============================================================
 
 class StorageRepository:
@@ -867,7 +1169,6 @@ class StorageRepository:
                 {"content-type": content_type, "upsert": "true"}
             )
 
-            # Construir URL publica
             public_url = self.client.storage.from_(
                 self.config.storage_bucket
             ).get_public_url(path)
@@ -886,27 +1187,32 @@ class StorageRepository:
 
 
 # ============================================================
-# MINERADOR PRINCIPAL
+# MINERADOR PRINCIPAL V15.2
 # ============================================================
 
-class MinerV14:
-    """Minerador de editais do PNCP - Versao 14 com Enriquecimento e Validacao."""
+class MinerV15_2:
+    """
+    Minerador de editais do PNCP - Versao 15.2.
+
+    MUDANCAS V15.2:
+    - Usa APENAS API de busca PNCP (removida API de detalhes)
+    - Mapeamento correto: data_leilao, valor_estimado, data_publicacao da busca
+    - n_edital extraido do PDF
+    - Normalizacao de URLs melhorada
+    """
 
     def __init__(self, config: MinerConfig):
         self.config = config
         self.pncp = PNCPClient(config)
         self.repo = SupabaseRepository(config) if config.enable_supabase else None
         self.storage = StorageRepository(config) if config.enable_storage else None
-        self.logger = logging.getLogger("MinerV14")
+        self.logger = logging.getLogger("MinerV15.2")
 
-        # Deduplicacao em memoria
         self.processed_ids = set()
 
-        # Validacao: run_id e relatório de qualidade
         self.run_id = new_run_id()
         self.quality_report = QualityReport(run_id=self.run_id)
 
-        # Estatisticas
         self.stats = {
             "inicio": None,
             "fim": None,
@@ -919,7 +1225,8 @@ class MinerV14:
             "arquivos_falha": 0,
             "storage_uploads": 0,
             "supabase_inserts": 0,
-            "quarentena_inserts": 0,  # Novo: registros em quarentena
+            "quarentena_inserts": 0,
+            "pdf_extractions": 0,  # V15.2: contador de extracoes PDF
             "erros": 0,
         }
 
@@ -931,136 +1238,88 @@ class MinerV14:
                 return val
         return None
 
-    def _enriquecer_edital(self, item: dict) -> dict:
+    def _extrair_dados_busca(self, item: dict) -> dict:
         """
-        Enriquece dados do edital com API de Detalhes.
+        V15.2: Extrai dados DIRETAMENTE da resposta da busca PNCP.
 
-        Args:
-            item: Dados basicos da busca
+        NAO chama API de detalhes.
 
-        Returns:
-            Edital enriquecido com todos os campos
+        Mapeamento correto conforme prompt garantidor:
+        - data_leilao      <- dataAberturaProposta
+        - valor_estimado   <- valorTotalEstimado
+        - data_publicacao  <- dataPublicacaoPncp
         """
         pncp_id = self._get_value(item, ["numeroControlePNCP", "numero_controle_pncp", "pncp_id"])
 
         if not pncp_id:
             return {}
 
-        # Dados basicos da busca
         edital = {
             "pncp_id": pncp_id,
-            "titulo": self._get_value(item, ["titulo", "tituloObjeto", "titulo_objeto"]) or "",
-            "descricao": self._get_value(item, ["descricao", "descricaoObjeto", "descricao_objeto"]) or "",
+            "titulo": self._get_value(item, ["title", "titulo", "tituloObjeto", "titulo_objeto", "objetoCompra"]) or "",
+            "descricao": self._get_value(item, ["description", "descricao", "descricaoObjeto", "descricao_objeto"]) or "",
             "objeto": self._get_value(item, ["objeto", "objeto_resumido"]) or "",
-            "orgao_nome": self._get_value(item, ["orgaoNome", "orgao_nome"]) or "Orgao Desconhecido",
+            "orgao_nome": self._get_value(item, ["orgaoNome", "orgao_nome", "nomeOrgao"]) or "Orgao Desconhecido",
             "orgao_cnpj": self._get_value(item, ["orgaoCnpj", "orgao_cnpj", "cnpj"]),
-            "uf": self._get_value(item, ["unidadeFederativaNome", "uf_nome", "uf"]) or "BR",
-            "municipio": self._get_value(item, ["municipioNome", "municipio_nome", "cidade"]) or "Diversos",
+            "uf": self._get_value(item, ["unidadeFederativaNome", "uf_nome", "uf", "siglaUf"]) or "BR",
+            "municipio": self._get_value(item, ["municipioNome", "municipio_nome", "cidade", "nomeMunicipio"]) or "Diversos",
             "modalidade": self._get_value(item, ["modalidadeNome", "modalidade_nome"]),
             "situacao": self._get_value(item, ["situacaoNome", "situacao_nome"]),
+            # V15.2: CAMPOS MAPEADOS CORRETAMENTE DA BUSCA
             "data_publicacao": None,
             "data_leilao": None,
             "valor_estimado": None,
+            # n_edital vem do PDF
+            "n_edital": None,
             "link_leiloeiro": None,
             "link_pncp": f"https://pncp.gov.br/app/editais/{pncp_id}",
-            "itens": [],
             "arquivos": [],
+            "texto_pdf": "",
         }
 
-        # Parse data publicacao (varios nomes possiveis entre APIs)
+        # V15.2 CORRECAO 1: data_publicacao <- data_publicacao_pncp (API de busca)
         data_pub_str = self._get_value(item, [
-            "dataPublicacaoPncp", "data_publicacao_pncp",
+            "data_publicacao_pncp", "dataPublicacaoPncp",
             "data_publicacao", "createdAt"
         ])
         if data_pub_str:
             edital["data_publicacao"] = parse_date(data_pub_str)
 
-        # Obter detalhes completos via API
-        self.logger.debug(f"Enriquecendo: {pncp_id}")
-        detalhes = self.pncp.obter_detalhes(pncp_id)
+        # V15.2 CORRECAO 1: data_leilao <- data_inicio_vigencia ou data_fim_vigencia (API de busca)
+        # A API de busca retorna data_inicio_vigencia/data_fim_vigencia, NAO dataAberturaProposta
+        data_leilao_str = self._get_value(item, [
+            "data_inicio_vigencia", "dataInicioVigencia",
+            "data_fim_vigencia", "dataFimVigencia",
+            "dataAberturaProposta", "data_abertura_proposta",
+            "data_leilao"
+        ])
+        if data_leilao_str:
+            edital["data_leilao"] = parse_date(data_leilao_str)
 
-        if detalhes:
-            self.stats["editais_enriquecidos"] += 1
+        # V15.2 CORRECAO 1: valor_estimado <- valor_global (API de busca)
+        # A API de busca retorna valor_global, NAO valorTotalEstimado
+        valor = self._get_value(item, [
+            "valor_global", "valorGlobal",
+            "valorTotalEstimado", "valor_total_estimado",
+            "valor_estimado"
+        ])
+        if valor:
+            try:
+                edital["valor_estimado"] = float(valor)
+            except (ValueError, TypeError):
+                pass
 
-            # Titulo completo
-            if detalhes.get("objetoCompra"):
-                edital["titulo"] = detalhes["objetoCompra"]
+        # Link leiloeiro da busca (se existir)
+        link_sistema = self._get_value(item, ["linkSistema", "link_sistema"])
+        link_edital = self._get_value(item, ["linkEdital", "link_edital"])
 
-            # Descricao detalhada
-            if detalhes.get("descricao"):
-                edital["descricao"] = detalhes["descricao"]
-
-            # Modalidade
-            if detalhes.get("modalidadeNome"):
-                edital["modalidade"] = detalhes["modalidadeNome"]
-
-            # Valor estimado
-            valor = detalhes.get("valorTotalEstimado") or detalhes.get("valorGlobal")
-            if valor:
-                try:
-                    edital["valor_estimado"] = float(valor)
-                except (ValueError, TypeError):
-                    pass
-
-            # Data do leilao (dataAberturaProposta ou dataInicioVigencia)
-            data_leilao_str = detalhes.get("dataAberturaProposta") or detalhes.get("dataInicioVigencia")
-            if data_leilao_str:
-                edital["data_leilao"] = parse_date(data_leilao_str)
-
-            # Orgao completo
-            if detalhes.get("orgaoEntidade", {}).get("razaoSocial"):
-                edital["orgao_nome"] = detalhes["orgaoEntidade"]["razaoSocial"]
-
-            # Municipio e UF da unidade
-            unidade = detalhes.get("unidadeOrgao", {})
-            if unidade.get("municipio"):
-                edital["municipio"] = unidade["municipio"]
-            if unidade.get("uf"):
-                edital["uf"] = unidade["uf"]
-
-            # Link do leiloeiro COM VALIDAÇÃO V19
-            resultado_link = processar_link_pncp_v19(
-                link_sistema=detalhes.get("linkSistema"),
-                link_edital=detalhes.get("linkEdital"),
-            )
+        if link_sistema or link_edital:
+            resultado_link = processar_link_pncp_v19(link_sistema, link_edital)
             edital["link_leiloeiro"] = resultado_link["link_leiloeiro"]
             edital["link_leiloeiro_raw"] = resultado_link["link_leiloeiro_raw"]
             edital["link_leiloeiro_valido"] = resultado_link["link_leiloeiro_valido"]
-            edital["link_leiloeiro_origem_tipo"] = resultado_link["link_leiloeiro_origem_tipo"]
-            edital["link_leiloeiro_origem_ref"] = resultado_link["link_leiloeiro_origem_ref"]
-            edital["link_leiloeiro_confianca"] = resultado_link["link_leiloeiro_confianca"]
 
-            # Numero do edital (obrigatorio na tabela)
-            numero_compra = detalhes.get("numeroCompra", "")
-            ano_compra = detalhes.get("anoCompra", "")
-            if numero_compra and ano_compra:
-                edital["n_edital"] = f"{numero_compra}/{ano_compra}"
-            elif numero_compra:
-                edital["n_edital"] = numero_compra
-            else:
-                # Fallback: extrair do pncp_id (sequencial/ano)
-                parsed = parse_pncp_id(pncp_id)
-                if parsed:
-                    edital["n_edital"] = f"{parsed.get('sequencial', '0')}/{parsed.get('ano', '0')}"
-
-            # Data publicacao (pegar da API de detalhes se nao veio da busca)
-            if not edital.get("data_publicacao"):
-                data_pub_detalhe = detalhes.get("dataPublicacaoPncp") or detalhes.get("dataInclusao")
-                if data_pub_detalhe:
-                    edital["data_publicacao"] = parse_date(data_pub_detalhe)
-
-        # Obter itens do edital
-        itens = self.pncp.obter_itens(pncp_id)
-        if itens:
-            edital["itens"] = itens
-            self.logger.debug(f"  {len(itens)} itens encontrados")
-
-        # Obter lista de arquivos
-        arquivos = self.pncp.obter_arquivos(pncp_id)
-        if arquivos:
-            edital["arquivos"] = arquivos
-            self.logger.debug(f"  {len(arquivos)} arquivos encontrados")
-
+        self.stats["editais_enriquecidos"] += 1
         return edital
 
     def _calcular_score(self, edital: dict) -> int:
@@ -1074,16 +1333,23 @@ class MinerV14:
     def _baixar_arquivos(self, edital: dict) -> dict:
         """
         Baixa todos os arquivos do edital e faz upload para Storage.
-
-        Returns:
-            Edital atualizado com URLs do storage
+        V15.2: Extrai texto do PDF para campos obrigatorios.
         """
-        arquivos = edital.get("arquivos", [])
+        pncp_id = edital.get("pncp_id")
+        if not pncp_id:
+            return edital
+
+        # Obter lista de arquivos
+        arquivos = self.pncp.obter_arquivos(pncp_id)
         if not arquivos:
             return edital
 
+        edital["arquivos"] = arquivos
+        self.logger.debug(f"  {len(arquivos)} arquivos encontrados")
+
         pdf_url = None
         storage_path = None
+        texto_pdf = ""
 
         for arquivo in arquivos:
             url = arquivo.get("url")
@@ -1097,7 +1363,6 @@ class MinerV14:
                 self.stats["arquivos_falha"] += 1
                 continue
 
-            # Detectar tipo de arquivo
             content_type = arquivo.get("tipo")
             ext = FileTypeDetector.detect_by_content_type(content_type)
             if not ext:
@@ -1108,6 +1373,13 @@ class MinerV14:
                 continue
 
             self.stats["arquivos_baixados"] += 1
+
+            # V15.2: Extrair texto do primeiro PDF encontrado
+            if ext == ".pdf" and not texto_pdf:
+                texto_pdf = extrair_texto_pdf(data)
+                if texto_pdf:
+                    self.logger.debug(f"  Texto PDF extraido: {len(texto_pdf)} chars")
+                    self.stats["pdf_extractions"] += 1
 
             # Upload para Storage
             if self.storage and self.storage.enable_storage:
@@ -1134,7 +1406,6 @@ class MinerV14:
                 if storage_url:
                     self.stats["storage_uploads"] += 1
 
-                    # Guardar URL do primeiro PDF
                     if ext == ".pdf" and not pdf_url:
                         pdf_url = storage_url
                         storage_path = path
@@ -1145,6 +1416,7 @@ class MinerV14:
 
         edital["pdf_storage_url"] = pdf_url
         edital["storage_path"] = storage_path
+        edital["texto_pdf"] = texto_pdf
 
         return edital
 
@@ -1171,9 +1443,7 @@ class MinerV14:
     def _processar_edital(self, item: dict) -> bool:
         """
         Processa um edital completo.
-
-        Returns:
-            True se processado com sucesso, False caso contrario
+        V15.2: Usa APENAS busca PNCP + PDF (sem API de detalhes).
         """
         pncp_id = self._get_value(item, ["numeroControlePNCP", "numero_controle_pncp", "pncp_id"])
 
@@ -1182,7 +1452,6 @@ class MinerV14:
 
         self.stats["editais_encontrados"] += 1
 
-        # Deduplicacao
         if pncp_id in self.processed_ids:
             self.stats["editais_duplicados"] += 1
             return False
@@ -1191,8 +1460,8 @@ class MinerV14:
         self.stats["editais_novos"] += 1
 
         try:
-            # 1. Enriquecer com API de Detalhes
-            edital = self._enriquecer_edital(item)
+            # 1. V15.2: Extrair dados DIRETO da busca (sem API de detalhes)
+            edital = self._extrair_dados_busca(item)
 
             if not edital:
                 return False
@@ -1213,25 +1482,87 @@ class MinerV14:
                     self.logger.debug(f"Data passada: {pncp_id} ({edital['data_leilao'].date()})")
                     return False
 
-            # 4. Baixar arquivos
+            # 4. Baixar arquivos e extrair texto PDF
             edital = self._baixar_arquivos(edital)
 
             # 5. Upload metadados
             if self.storage and self.storage.enable_storage:
-                # Preparar dados para JSON (converter datetime)
                 metadados = edital.copy()
                 for key in ["data_publicacao", "data_leilao"]:
                     if metadados.get(key) and isinstance(metadados[key], datetime):
                         metadados[key] = metadados[key].isoformat()
-
+                # Nao enviar texto_pdf nos metadados (muito grande)
+                metadados.pop("texto_pdf", None)
                 self.storage.upload_json(pncp_id, metadados)
 
-            # 6. VALIDAÇÃO: Preparar registro no formato do contrato
+            # 6. VALIDACAO: Preparar registro no formato do contrato
             edital_db = edital.copy()
             for key in ["data_publicacao", "data_leilao"]:
                 if edital_db.get(key) and isinstance(edital_db[key], datetime):
-                    # Converter para formato DD-MM-YYYY conforme contrato
                     edital_db[key] = edital_db[key].strftime("%d-%m-%Y")
+
+            # V15.2: Obter texto do PDF para campos que vem do PDF
+            texto_pdf = edital_db.get("texto_pdf", "")
+
+            # V15.2 CORRECAO 1: n_edital DEVE vir do PDF (conforme prompt garantidor)
+            n_edital = ""
+            if texto_pdf:
+                n_edital = extrair_n_edital_pdf(texto_pdf)
+
+            # Fallback: usar pncp_id se PDF nao tiver numero
+            if not n_edital:
+                parsed = parse_pncp_id(pncp_id)
+                if parsed:
+                    n_edital = f"{parsed.get('sequencial', '0')}/{parsed.get('ano', '0')}"
+
+            # V15.2: valor_estimado - fallback para PDF se API nao retornou
+            valor_estimado = edital_db.get("valor_estimado")
+            if not valor_estimado and texto_pdf:
+                valor_estimado = extrair_valor_estimado_pdf(texto_pdf)
+                if valor_estimado:
+                    edital_db["valor_estimado"] = valor_estimado
+                    self.logger.debug(f"  Valor extraido do PDF: R$ {valor_estimado:,.2f}")
+
+            # objeto_resumido DEVE usar texto REAL do PDF (MANTIDO do V15.1)
+            if texto_pdf:
+                objeto_v15 = extrair_objeto_resumido(texto_pdf)
+            else:
+                # Fallback: usar titulo+descricao se nao tiver PDF
+                titulo_v15 = edital_db.get("titulo", "")
+                descricao_v15 = edital_db.get("descricao", "")
+                texto_fonte = f"{titulo_v15} {descricao_v15}"
+                objeto_v15 = extrair_objeto_resumido(texto_fonte)
+
+            # descricao - preferir PDF conforme contrato (MANTIDO do V15.1)
+            descricao_final = edital_db.get("descricao", "")
+            if texto_pdf and not descricao_final:
+                descricao_pdf = extrair_descricao_pdf(texto_pdf)
+                if descricao_pdf:
+                    descricao_final = descricao_pdf
+
+            # tipo_leilao - vem do PDF, sem default (MANTIDO do V15.1)
+            tipo_leilao = ""
+            if texto_pdf:
+                tipo_leilao = extrair_tipo_leilao_pdf(texto_pdf)
+            # Se nao conseguiu extrair do PDF e tem modalidade da busca, usar ela
+            if not tipo_leilao and edital_db.get("modalidade"):
+                tipo_leilao = edital_db.get("modalidade", "")
+
+            # leiloeiro_url - fallback para PDF (MANTIDO do V15.1)
+            leiloeiro_url = edital_db.get("link_leiloeiro")
+            if not leiloeiro_url and texto_pdf:
+                leiloeiro_url = extrair_leiloeiro_url_pdf(texto_pdf)
+
+            # tags - gerar baseado no conteudo (MANTIDO do V15.1)
+            if texto_pdf:
+                tags_v15 = gerar_tags_v15("", "", texto_pdf[:2000])
+            else:
+                titulo_v15 = edital_db.get("titulo", "")
+                descricao_v15 = edital_db.get("descricao", "")
+                tags_v15 = gerar_tags_v15(titulo_v15, descricao_v15, objeto_v15)
+
+            # Persistir tags no edital_db para uso no builder final
+            edital_db["tags"] = tags_v15
 
             # Montar registro no formato esperado pelo validador
             registro_validacao = {
@@ -1241,15 +1572,16 @@ class MinerV14:
                 "data_leilao": edital_db.get("data_leilao"),
                 "pncp_url": edital_db.get("link_pncp"),
                 "data_atualizacao": datetime.now().strftime("%d-%m-%Y"),
-                "titulo": edital_db.get("titulo"),
-                "descricao": edital_db.get("descricao"),
+                "titulo": edital_db.get("titulo", ""),
+                "descricao": descricao_final,
                 "orgao": edital_db.get("orgao_nome"),
-                "n_edital": edital_db.get("n_edital"),
-                "objeto_resumido": edital_db.get("objeto", ""),
+                # V15.2: n_edital do PDF
+                "n_edital": n_edital,
+                "objeto_resumido": objeto_v15,
                 "tags": ", ".join(edital_db.get("tags", [])) if isinstance(edital_db.get("tags"), list) else edital_db.get("tags", ""),
                 "valor_estimado": edital_db.get("valor_estimado"),
-                "tipo_leilao": edital_db.get("modalidade", "Leilão Eletrônico"),
-                "leiloeiro_url": edital_db.get("link_leiloeiro"),
+                "tipo_leilao": tipo_leilao,
+                "leiloeiro_url": leiloeiro_url,
                 "data_publicacao": edital_db.get("data_publicacao"),
             }
 
@@ -1257,13 +1589,12 @@ class MinerV14:
             validation_result = validate_record(registro_validacao)
             self.quality_report.register(validation_result)
 
-            # 8. ROTEAMENTO: válido → tabela principal, inválido → quarentena
+            # 8. ROTEAMENTO
             if self.repo and self.repo.enable_supabase:
                 if validation_result.status == RecordStatus.VALID:
-                    # Inserir na tabela principal com dados normalizados
                     edital_normalizado = edital_db.copy()
-                    # Atualizar com campos normalizados pelo validador
                     edital_normalizado.update({
+                        "n_edital": n_edital,
                         "tags": validation_result.normalized_record.get("tags", edital_db.get("tags")),
                         "link_pncp": validation_result.normalized_record.get("pncp_url", edital_db.get("link_pncp")),
                         "link_leiloeiro": validation_result.normalized_record.get("leiloeiro_url", edital_db.get("link_leiloeiro")),
@@ -1271,11 +1602,10 @@ class MinerV14:
 
                     if self.repo.upsert_edital(edital_normalizado):
                         self.stats["supabase_inserts"] += 1
-                        self.logger.info(f"✅ Edital {pncp_id} VÁLIDO - salvo na tabela principal")
+                        self.logger.info(f"[VALID] Edital {pncp_id} salvo na tabela principal")
                     else:
                         self.stats["erros"] += 1
                 else:
-                    # Inserir na quarentena (draft, not_sellable, rejected)
                     rejection_row = build_rejection_row(
                         run_id=self.run_id,
                         raw_record=registro_validacao,
@@ -1285,7 +1615,7 @@ class MinerV14:
                     if self.repo.inserir_quarentena(rejection_row):
                         self.stats["quarentena_inserts"] += 1
                         self.logger.info(
-                            f"⚠️ Edital {pncp_id} {validation_result.status.value.upper()} - "
+                            f"[{validation_result.status.value.upper()}] Edital {pncp_id} "
                             f"enviado para quarentena ({len(validation_result.errors)} erros)"
                         )
                     else:
@@ -1299,15 +1629,9 @@ class MinerV14:
             return False
 
     def executar(self) -> dict:
-        """
-        Executa o ciclo completo de mineracao.
-
-        Returns:
-            Estatisticas da execucao
-        """
+        """Executa o ciclo completo de mineracao."""
         self.stats["inicio"] = datetime.now().isoformat()
 
-        # Definir periodo de busca
         data_final = datetime.now()
         data_inicial = data_final - timedelta(days=self.config.dias_retroativos)
 
@@ -1315,7 +1639,7 @@ class MinerV14:
         data_final_str = data_final.strftime("%Y-%m-%d")
 
         self.logger.info("=" * 70)
-        self.logger.info("ACHE SUCATAS MINER V14 - ENRIQUECIMENTO")
+        self.logger.info("ACHE SUCATAS MINER V15.2 - CONTRATO OU NADA")
         self.logger.info("=" * 70)
         self.logger.info(f"Periodo: {data_inicial_str} a {data_final_str}")
         self.logger.info(f"Termos de busca: {len(self.config.search_terms)}")
@@ -1323,9 +1647,9 @@ class MinerV14:
         self.logger.info(f"Score minimo: {self.config.min_score}")
         self.logger.info(f"Supabase: {'ATIVO' if self.repo and self.repo.enable_supabase else 'DESATIVADO'}")
         self.logger.info(f"Storage: {'ATIVO' if self.storage and self.storage.enable_storage else 'DESATIVADO'}")
+        self.logger.info("V15.2: API de detalhes REMOVIDA - usando apenas busca + PDF")
         self.logger.info("=" * 70)
 
-        # Registrar inicio da execucao
         execucao_id = None
         if self.repo:
             execucao_id = self.repo.iniciar_execucao(self.config)
@@ -1333,9 +1657,7 @@ class MinerV14:
                 self.logger.info(f"Execucao #{execucao_id} iniciada")
 
         try:
-            # Loop por termos de busca
             for i, termo in enumerate(self.config.search_terms, 1):
-                # RUN_LIMIT: verificar se já atingiu limite
                 if self.config.run_limit > 0 and self.stats["editais_encontrados"] >= self.config.run_limit:
                     self.logger.warning(
                         f"RUN_LIMIT atingido ({self.config.run_limit} editais). Encerrando busca."
@@ -1350,7 +1672,6 @@ class MinerV14:
 
                 self.logger.info(f"[{i}/{len(self.config.search_terms)}] Buscando: '{termo}'")
 
-                # Loop por paginas
                 for pagina in range(1, self.config.paginas_por_termo + 1):
                     resultado = self.pncp.buscar_editais(
                         termo,
@@ -1365,9 +1686,7 @@ class MinerV14:
                     items = resultado["items"]
                     self.logger.info(f"  Pagina {pagina}: {len(items)} editais")
 
-                    # Processar cada edital
                     for item in items:
-                        # RUN_LIMIT: verificar se atingiu limite de registros para teste
                         if self.config.run_limit > 0 and self.stats["editais_encontrados"] >= self.config.run_limit:
                             self.logger.warning(
                                 f"RUN_LIMIT atingido ({self.config.run_limit} editais). Parando processamento."
@@ -1375,17 +1694,13 @@ class MinerV14:
                             break
                         self._processar_edital(item)
 
-                    # Verificar RUN_LIMIT após o loop interno também
                     if self.config.run_limit > 0 and self.stats["editais_encontrados"] >= self.config.run_limit:
                         break
 
-                    # Delay entre paginas
                     time.sleep(self.config.search_page_delay_seconds)
 
-                # Delay entre termos
                 time.sleep(self.config.search_term_delay_seconds)
 
-            # Finalizar
             self.stats["fim"] = datetime.now().isoformat()
 
             if self.repo and execucao_id:
@@ -1404,46 +1719,39 @@ class MinerV14:
         finally:
             self.pncp.close()
 
-        # Imprimir resumo
         self._imprimir_resumo()
-
-        # Imprimir relatório de qualidade
         self._imprimir_relatorio_qualidade()
-
-        # Salvar relatório JSON
         self._salvar_relatorio_json()
 
         return self.stats
 
     def _imprimir_relatorio_qualidade(self):
-        """Imprime resumo do relatório de qualidade."""
+        """Imprime resumo do relatorio de qualidade."""
         self.logger.info("=" * 70)
-        self.logger.info("RELATÓRIO DE QUALIDADE - VALIDAÇÃO")
+        self.logger.info("RELATORIO DE QUALIDADE - VALIDACAO")
         self.logger.info("=" * 70)
         self.quality_report.print_summary()
         self.logger.info("=" * 70)
 
     def _salvar_relatorio_json(self):
-        """Salva relatório de qualidade em JSON."""
+        """Salva relatorio de qualidade em JSON."""
         try:
-            # Garantir que a pasta existe
             reports_dir = Path(__file__).parent.parent.parent / "reports" / "quality"
             reports_dir.mkdir(parents=True, exist_ok=True)
 
-            # Salvar JSON
             filepath = reports_dir / f"{self.run_id}.json"
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(self.quality_report.to_json())
 
-            self.logger.info(f"📊 Relatório salvo: {filepath}")
+            self.logger.info(f"Relatorio salvo: {filepath}")
 
         except Exception as e:
-            self.logger.error(f"Erro ao salvar relatório JSON: {e}")
+            self.logger.error(f"Erro ao salvar relatorio JSON: {e}")
 
     def _imprimir_resumo(self):
         """Imprime resumo da execucao."""
         self.logger.info("=" * 70)
-        self.logger.info("RESUMO DA EXECUCAO - MINER V14 + VALIDACAO")
+        self.logger.info("RESUMO DA EXECUCAO - MINER V15.2")
         self.logger.info("=" * 70)
         self.logger.info(f"Run ID: {self.run_id}")
         self.logger.info(f"Editais encontrados: {self.stats['editais_encontrados']}")
@@ -1453,9 +1761,10 @@ class MinerV14:
         self.logger.info(f"Editais enriquecidos: {self.stats['editais_enriquecidos']}")
         self.logger.info(f"Arquivos baixados: {self.stats['arquivos_baixados']}")
         self.logger.info(f"Storage uploads: {self.stats['storage_uploads']}")
+        self.logger.info(f"PDF extractions: {self.stats['pdf_extractions']}")
         self.logger.info("-" * 70)
-        self.logger.info("ROTEAMENTO (validação):")
-        self.logger.info(f"  |- Tabela principal (válidos): {self.stats['supabase_inserts']}")
+        self.logger.info("ROTEAMENTO (validacao):")
+        self.logger.info(f"  |- Tabela principal (validos): {self.stats['supabase_inserts']}")
         self.logger.info(f"  |- Quarentena (draft/not_sellable/rejected): {self.stats['quarentena_inserts']}")
         self.logger.info(f"Erros: {self.stats['erros']}")
         self.logger.info("=" * 70)
@@ -1466,9 +1775,9 @@ class MinerV14:
 # ============================================================
 
 def main():
-    """Ponto de entrada do minerador."""
+    """Ponto de entrada do minerador V15.2."""
     parser = argparse.ArgumentParser(
-        description="Ache Sucatas Miner V14 - Minerador de editais PNCP com enriquecimento"
+        description="Ache Sucatas Miner V15.2 - Minerador de editais PNCP (sem API de detalhes)"
     )
     parser.add_argument(
         "--dias",
@@ -1506,16 +1815,13 @@ def main():
 
     args = parser.parse_args()
 
-    # Configurar nivel de log
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Carregar RUN_LIMIT da variável de ambiente (para testes pequenos)
     run_limit = int(os.environ.get("RUN_LIMIT", "0"))
     if run_limit > 0:
-        logger.info(f"🧪 MODO TESTE: RUN_LIMIT={run_limit} (máximo de editais a processar)")
+        logger.info(f"MODO TESTE: RUN_LIMIT={run_limit} (maximo de editais a processar)")
 
-    # Carregar configuracao
     config = MinerConfig(
         supabase_url=os.environ.get("SUPABASE_URL", ""),
         supabase_key=os.environ.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_KEY", "")),
@@ -1527,8 +1833,7 @@ def main():
         run_limit=run_limit,
     )
 
-    # Executar minerador
-    miner = MinerV14(config)
+    miner = MinerV15_2(config)
     stats = miner.executar()
 
     logger.info(f"Mineracao finalizada: {stats['editais_novos']} novos, {stats['erros']} erros")

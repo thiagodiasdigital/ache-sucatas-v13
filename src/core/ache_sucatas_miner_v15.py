@@ -1,21 +1,19 @@
 """
-Ache Sucatas DaaS - Minerador V14
+Ache Sucatas DaaS - Minerador V15
 =================================
 Busca editais no PNCP com enriquecimento via API de Detalhes.
 
-Versao: 14.1 (patch V19)
-Data: 2026-01-21
+Versao: 15.0
+Data: 2026-01-22
 Changelog:
-    - V14.1: Integração com validação de URL V19 (gate de link_leiloeiro)
-    - V14.1: Novos campos: link_leiloeiro_raw, link_leiloeiro_valido, etc.
-    - V14.1: Bloqueio de falsos positivos (TLD colado em palavra)
-    - V14: Adiciona chamada a API de Detalhes para cada edital
-    - V14: Extrai itens e anexos completos via endpoints dedicados
-    - V14: Rate limiting configuravel
-    - V14: Retry policy com backoff exponencial
-    - V14: Download de todos os tipos de anexos (PDF, XLSX, CSV, DOC, etc)
+    - V15: Correcao do mapeamento de campos da API PNCP:
+           * title -> titulo (antes buscava 'titulo' que nao existe)
+           * description -> descricao (antes buscava 'descricao' que nao existe)
+    - V15: Extracao deterministica de objeto_resumido do PDF
+    - V15: Geracao de tags baseada em palavras-chave do conteudo
+    - V15: Principio "nao sobrescrever com vazio"
 
-Baseado em: V13 (DATA_QUALITY) + Auditor V19 (URL GATE)
+Baseado em: V14.1 (correcao pos-auditoria)
 Autor: Claude Code
 """
 
@@ -164,12 +162,110 @@ def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[s
 
 
 # ============================================================
+# V15: EXTRACAO DE OBJETO_RESUMIDO E GERACAO DE TAGS
+# ============================================================
+
+def extrair_objeto_resumido(texto: str, max_chars: int = 500) -> str:
+    """
+    Extrai objeto_resumido de um texto (titulo, descricao ou PDF).
+    Busca secoes como OBJETO, DO OBJETO, OBJETO DA LICITACAO.
+
+    Args:
+        texto: Texto fonte (pode ser titulo+descricao concatenados)
+        max_chars: Tamanho maximo do resumo
+
+    Returns:
+        Trecho do objeto ou string vazia
+    """
+    if not texto or not texto.strip():
+        return ""
+
+    texto_limpo = texto.strip()
+
+    # Padroes de secao de objeto (ordem de prioridade)
+    padroes_objeto = [
+        r"(?:DO\s+)?OBJETO\s*(?:DA\s+LICITA[ÇC][ÃA]O)?[:\s]*(.{10,500}?)(?:\n\n|\d+\.\s|$)",
+        r"OBJETO[:\s]+(.{10,500}?)(?:\n\n|\d+\.\s|$)",
+    ]
+
+    for padrao in padroes_objeto:
+        match = re.search(padrao, texto_limpo, re.IGNORECASE | re.DOTALL)
+        if match:
+            objeto = match.group(1).strip()
+            # Limpar whitespace excessivo
+            objeto = re.sub(r'\s+', ' ', objeto)
+            return objeto[:max_chars]
+
+    # Fallback: usar o proprio texto truncado se for curto o suficiente
+    if len(texto_limpo) <= max_chars:
+        return re.sub(r'\s+', ' ', texto_limpo)
+
+    # Fallback: primeira frase ou trecho
+    primeira_frase = re.split(r'[.\n]', texto_limpo)[0]
+    if len(primeira_frase) >= 20:
+        return re.sub(r'\s+', ' ', primeira_frase)[:max_chars]
+
+    return ""
+
+
+# Dicionario de palavras-chave para tags (V15)
+TAGS_KEYWORDS = {
+    "VEICULO": ["veiculo", "veiculos", "automovel", "automoveis", "carro", "carros"],
+    "SUCATA": ["sucata", "sucatas", "inservivel", "inserviveis", "ferroso", "ferrosos"],
+    "MOTO": ["moto", "motos", "motocicleta", "motocicletas", "ciclomotor"],
+    "CAMINHAO": ["caminhao", "caminhoes", "caminhonete", "camionete", "truck"],
+    "ONIBUS": ["onibus", "microonibus", "micro-onibus"],
+    "MAQUINARIO": ["maquina", "maquinas", "equipamento", "equipamentos", "trator", "tratores"],
+    "IMOVEL": ["imovel", "imoveis", "terreno", "terrenos", "lote", "lotes", "edificio"],
+    "MOBILIARIO": ["moveis", "mobiliario", "cadeira", "mesa", "armario"],
+    "ELETRONICO": ["computador", "computadores", "eletronico", "eletronicos", "informatica"],
+    "DOCUMENTADO": ["documentado", "documentados", "com documento", "documento ok"],
+}
+
+
+def gerar_tags_v15(titulo: str, descricao: str, objeto: str) -> list:
+    """
+    Gera tags baseadas em palavras-chave encontradas no conteudo.
+
+    Args:
+        titulo: Titulo do edital
+        descricao: Descricao do edital
+        objeto: Objeto resumido
+
+    Returns:
+        Lista de tags encontradas (pode ser vazia)
+    """
+    # Concatenar todo o texto disponivel
+    texto_completo = f"{titulo or ''} {descricao or ''} {objeto or ''}".lower()
+
+    # Normalizar acentos para matching
+    texto_normalizado = unicodedata.normalize('NFKD', texto_completo)
+    texto_normalizado = texto_normalizado.encode('ASCII', 'ignore').decode('ASCII').lower()
+
+    tags_encontradas = set()
+
+    for tag, keywords in TAGS_KEYWORDS.items():
+        for keyword in keywords:
+            # Normalizar keyword tambem
+            keyword_norm = unicodedata.normalize('NFKD', keyword)
+            keyword_norm = keyword_norm.encode('ASCII', 'ignore').decode('ASCII').lower()
+
+            if keyword_norm in texto_normalizado or keyword in texto_completo:
+                tags_encontradas.add(tag)
+                break
+
+    # Se nao encontrou nenhuma tag, retornar lista vazia
+    # O validador decidira se e vendavel ou nao
+    return sorted(list(tags_encontradas))
+
+
+# ============================================================
 # CONFIGURACAO
 # ============================================================
 
 @dataclass
 class MinerConfig:
-    """Configuracoes do minerador V14."""
+    """Configuracoes do minerador V15."""
 
     # Supabase
     supabase_url: str = ""
@@ -258,7 +354,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | [%(name)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger("MinerV14")
+logger = logging.getLogger("MinerV15")
 
 
 # ============================================================
@@ -703,14 +799,15 @@ class SupabaseRepository:
             # Nota: Removidos campos inexistentes: objeto, orgao_cnpj, pdf_url, versao_miner
             pncp_id = edital.get("pncp_id")
 
-            # Determinar tags baseado no conteudo
-            texto_busca = f"{edital.get('titulo', '')} {edital.get('descricao', '')}".lower()
-            if "sucata" in texto_busca:
-                tags = ["SUCATA"]
-            elif "documentado" in texto_busca or "documento" in texto_busca:
-                tags = ["DOCUMENTADO"]
-            else:
-                tags = ["SEM CLASSIFICACAO"]
+            # V15: Determinar tags usando funcao especializada
+            tags = gerar_tags_v15(
+                titulo=edital.get("titulo", ""),
+                descricao=edital.get("descricao", ""),
+                objeto=edital.get("objeto", "")
+            )
+            # Se nao encontrou nenhuma tag, deixar vazia (validador decide)
+            if not tags:
+                tags = []
 
             dados = {
                 "pncp_id": pncp_id,
@@ -889,7 +986,7 @@ class StorageRepository:
 # MINERADOR PRINCIPAL
 # ============================================================
 
-class MinerV14:
+class MinerV15:
     """Minerador de editais do PNCP - Versao 14 com Enriquecimento e Validacao."""
 
     def __init__(self, config: MinerConfig):
@@ -897,7 +994,7 @@ class MinerV14:
         self.pncp = PNCPClient(config)
         self.repo = SupabaseRepository(config) if config.enable_supabase else None
         self.storage = StorageRepository(config) if config.enable_storage else None
-        self.logger = logging.getLogger("MinerV14")
+        self.logger = logging.getLogger("MinerV15")
 
         # Deduplicacao em memoria
         self.processed_ids = set()
@@ -947,10 +1044,11 @@ class MinerV14:
             return {}
 
         # Dados basicos da busca
+        # V15: Corrigido mapeamento - API PNCP retorna 'title' e 'description'
         edital = {
             "pncp_id": pncp_id,
-            "titulo": self._get_value(item, ["titulo", "tituloObjeto", "titulo_objeto"]) or "",
-            "descricao": self._get_value(item, ["descricao", "descricaoObjeto", "descricao_objeto"]) or "",
+            "titulo": self._get_value(item, ["title", "titulo", "tituloObjeto", "titulo_objeto"]) or "",
+            "descricao": self._get_value(item, ["description", "descricao", "descricaoObjeto", "descricao_objeto"]) or "",
             "objeto": self._get_value(item, ["objeto", "objeto_resumido"]) or "",
             "orgao_nome": self._get_value(item, ["orgaoNome", "orgao_nome"]) or "Orgao Desconhecido",
             "orgao_cnpj": self._get_value(item, ["orgaoCnpj", "orgao_cnpj", "cnpj"]),
@@ -982,13 +1080,21 @@ class MinerV14:
         if detalhes:
             self.stats["editais_enriquecidos"] += 1
 
-            # Titulo completo
-            if detalhes.get("objetoCompra"):
-                edital["titulo"] = detalhes["objetoCompra"]
+            # V15: Principio "nao sobrescrever com vazio"
+            # Titulo completo - so sobrescreve se vier valor melhor
+            titulo_detalhes = detalhes.get("objetoCompra") or ""
+            if titulo_detalhes and (not edital.get("titulo") or len(titulo_detalhes) > len(edital.get("titulo", ""))):
+                edital["titulo"] = titulo_detalhes
 
-            # Descricao detalhada
-            if detalhes.get("descricao"):
-                edital["descricao"] = detalhes["descricao"]
+            # Descricao detalhada - so sobrescreve se vier valor melhor
+            descricao_detalhes = detalhes.get("descricao") or ""
+            if descricao_detalhes and (not edital.get("descricao") or len(descricao_detalhes) > len(edital.get("descricao", ""))):
+                edital["descricao"] = descricao_detalhes
+
+            # V15: objeto_resumido - tentar extrair da API de detalhes
+            objeto_api = detalhes.get("objeto") or detalhes.get("objetoCompra") or ""
+            if objeto_api and not edital.get("objeto"):
+                edital["objeto"] = objeto_api[:500]
 
             # Modalidade
             if detalhes.get("modalidadeNome"):
@@ -1233,6 +1339,19 @@ class MinerV14:
                     # Converter para formato DD-MM-YYYY conforme contrato
                     edital_db[key] = edital_db[key].strftime("%d-%m-%Y")
 
+            # V15: Extrair objeto_resumido usando funcao especializada
+            titulo_v15 = edital_db.get("titulo", "")
+            descricao_v15 = edital_db.get("descricao", "")
+            objeto_v15 = edital_db.get("objeto", "")
+
+            # Se objeto nao veio da API, tentar extrair do titulo+descricao
+            if not objeto_v15:
+                texto_fonte = f"{titulo_v15} {descricao_v15}"
+                objeto_v15 = extrair_objeto_resumido(texto_fonte)
+
+            # V15: Gerar tags baseadas no conteudo real
+            tags_v15 = gerar_tags_v15(titulo_v15, descricao_v15, objeto_v15)
+
             # Montar registro no formato esperado pelo validador
             registro_validacao = {
                 "id_interno": edital_db.get("pncp_id"),
@@ -1241,14 +1360,14 @@ class MinerV14:
                 "data_leilao": edital_db.get("data_leilao"),
                 "pncp_url": edital_db.get("link_pncp"),
                 "data_atualizacao": datetime.now().strftime("%d-%m-%Y"),
-                "titulo": edital_db.get("titulo"),
-                "descricao": edital_db.get("descricao"),
+                "titulo": titulo_v15,
+                "descricao": descricao_v15,
                 "orgao": edital_db.get("orgao_nome"),
                 "n_edital": edital_db.get("n_edital"),
-                "objeto_resumido": edital_db.get("objeto", ""),
-                "tags": ", ".join(edital_db.get("tags", [])) if isinstance(edital_db.get("tags"), list) else edital_db.get("tags", ""),
+                "objeto_resumido": objeto_v15,
+                "tags": ", ".join(tags_v15) if tags_v15 else "",
                 "valor_estimado": edital_db.get("valor_estimado"),
-                "tipo_leilao": edital_db.get("modalidade", "Leilão Eletrônico"),
+                "tipo_leilao": edital_db.get("modalidade", "Leilao Eletronico"),
                 "leiloeiro_url": edital_db.get("link_leiloeiro"),
                 "data_publicacao": edital_db.get("data_publicacao"),
             }
@@ -1528,7 +1647,7 @@ def main():
     )
 
     # Executar minerador
-    miner = MinerV14(config)
+    miner = MinerV15(config)
     stats = miner.executar()
 
     logger.info(f"Mineracao finalizada: {stats['editais_novos']} novos, {stats['erros']} erros")
