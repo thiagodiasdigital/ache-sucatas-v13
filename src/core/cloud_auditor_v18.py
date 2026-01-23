@@ -977,26 +977,15 @@ class SupabaseRepository:
             return False
 
     def excluir_edital(self, pncp_id: str) -> bool:
+        """DELETE DESABILITADO PERMANENTEMENTE.
+
+        Regra absoluta do projeto: leilões passados nunca são deletados.
+        Auditor não tem permissão arquitetural para remover registros.
         """
-        Exclui edital do banco.
+        self.logger.warning("DELETE BLOQUEADO (regra do projeto). pncp_id=%s", pncp_id)
+        return False
 
-        Args:
-            pncp_id: ID do edital no PNCP
 
-        Returns:
-            True se sucesso
-        """
-        if not self.enable_supabase:
-            return False
-
-        try:
-            self.client.table("editais_leilao").delete().eq(
-                "pncp_id", pncp_id
-            ).execute()
-            return True
-        except Exception as e:
-            self.logger.error(f"Erro excluindo edital {pncp_id}: {e}")
-            return False
 
 
 # ============================================================

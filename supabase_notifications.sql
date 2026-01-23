@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS pub.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    auction_id INTEGER REFERENCES pub.v_auction_discovery(id),
+    auction_id BIGINT REFERENCES pub.v_auction_discovery(id),
     filter_id UUID NULL,
     filter_label TEXT NULL,
     is_read BOOLEAN DEFAULT FALSE,
@@ -35,11 +35,15 @@ CREATE POLICY "Users can update own notifications" ON pub.notifications
 -- =====================================================
 -- 3. Função: get_unread_notifications
 -- Retorna notificações não lidas do usuário logado
+-- NOTA: Tipos corrigidos em 2026-01-23 para match com v_auction_discovery:
+--   - auction_id: BIGINT (não INTEGER) porque id da view é int8
+--   - data_leilao: TIMESTAMP (não DATE) porque coluna é timestamp
+--   - uf::TEXT cast necessário porque coluna é bpchar
 -- =====================================================
 CREATE OR REPLACE FUNCTION pub.get_unread_notifications(p_limit INTEGER DEFAULT 20)
 RETURNS TABLE (
     id UUID,
-    auction_id INTEGER,
+    auction_id BIGINT,
     filter_id UUID,
     filter_label TEXT,
     created_at TIMESTAMPTZ,
@@ -49,7 +53,7 @@ RETURNS TABLE (
     cidade TEXT,
     valor_estimado NUMERIC,
     tags TEXT[],
-    data_leilao DATE
+    data_leilao TIMESTAMP
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -58,13 +62,13 @@ BEGIN
     RETURN QUERY
     SELECT
         n.id,
-        n.auction_id,
+        n.auction_id::BIGINT,
         n.filter_id,
         n.filter_label,
         n.created_at,
         a.titulo,
         a.orgao,
-        a.uf,
+        a.uf::TEXT,
         a.cidade,
         a.valor_estimado,
         a.tags,
