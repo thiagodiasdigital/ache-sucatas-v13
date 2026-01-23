@@ -25,19 +25,11 @@ function getCategoryIcon(tags: string[] | null) {
 }
 
 /**
- * Determina a cor de fundo da área de categoria baseado na tag principal
+ * Determina a cor de fundo da área de categoria
+ * Padronizado com azul claro (mesma família do header #0C83D6)
  */
-function getCategoryBgColor(tags: string[] | null): string {
-  if (!tags || tags.length === 0) return "bg-slate-100"
-
-  const tagsLower = tags.map(t => t.toLowerCase()).join(' ')
-
-  if (tagsLower.includes('sucata')) return "bg-amber-50"
-  if (tagsLower.includes('veiculo') || tagsLower.includes('veículo')) return "bg-blue-50"
-  if (tagsLower.includes('eletronico') || tagsLower.includes('eletrônico')) return "bg-purple-50"
-  if (tagsLower.includes('imovel') || tagsLower.includes('imóvel')) return "bg-emerald-50"
-
-  return "bg-slate-50"
+function getCategoryBgColor(_tags: string[] | null): string {
+  return "bg-sky-100"
 }
 
 /**
