@@ -65,6 +65,7 @@ export interface Database {
           latitude: number | null
           longitude: number | null
           municipio_oficial: string | null
+          status_temporal: 'futuro' | 'passado' | null
         }
       }
     }
@@ -172,4 +173,5 @@ export interface PaginatedAuctionsResponse {
   page: number
   pageSize: number
   totalPages: number
+  temporalidade?: string
 }

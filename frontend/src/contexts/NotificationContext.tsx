@@ -10,6 +10,10 @@ import { supabase } from "../lib/supabase"
 import { useAuth } from "./AuthContext"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
+// Flag to track if notification functions are available in the database
+// Reset: functions were created in Supabase on 2026-01-23
+let notificationFunctionsAvailable = true
+
 export interface Notification {
   id: string
   auction_id: number
@@ -56,6 +60,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return
     }
 
+    // Skip if we already know functions are unavailable
+    if (!notificationFunctionsAvailable) {
+      return
+    }
+
     setIsLoading(true)
     try {
       const { data, error } = await supabase.rpc(
@@ -64,14 +73,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       )
 
       if (error) {
-        console.error("Error fetching notifications:", error)
+        // Disable notifications silently on any database error
+        // Common errors: function not found, type mismatch, permission denied
+        notificationFunctionsAvailable = false
+        console.info("Notifications disabled:", error.message || "database error")
         return
       }
 
       setNotifications((data as Notification[]) || [])
       setUnreadCount((data as Notification[])?.length || 0)
     } catch (err) {
-      console.error("Error fetching notifications:", err)
+      console.error("Error fetching notifications:", err instanceof Error ? err.message : err)
     } finally {
       setIsLoading(false)
     }
@@ -80,7 +92,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   // Mark single notification as read
   const markAsRead = useCallback(
     async (notificationId: string) => {
-      if (!user) return
+      if (!user || !notificationFunctionsAvailable) return
 
       try {
         await supabase.rpc("mark_notification_read" as never, {
@@ -91,7 +103,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
         setUnreadCount((prev) => Math.max(0, prev - 1))
       } catch (err) {
-        console.error("Error marking notification as read:", err)
+        console.error("Error marking notification as read:", err instanceof Error ? err.message : err)
       }
     },
     [user]
@@ -99,7 +111,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
-    if (!user) return
+    if (!user || !notificationFunctionsAvailable) return
 
     try {
       await supabase.rpc("mark_all_notifications_read" as never)
@@ -108,7 +120,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setNotifications([])
       setUnreadCount(0)
     } catch (err) {
-      console.error("Error marking all notifications as read:", err)
+      console.error("Error marking all notifications as read:", err instanceof Error ? err.message : err)
     }
   }, [user])
 
@@ -119,7 +131,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Subscribe to Realtime changes
   useEffect(() => {
-    if (!user) return
+    if (!user || !notificationFunctionsAvailable) return
 
     let channel: RealtimeChannel | null = null
 

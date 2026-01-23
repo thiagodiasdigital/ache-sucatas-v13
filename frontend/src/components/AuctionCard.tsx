@@ -58,9 +58,11 @@ export function AuctionCard({ auction }: AuctionCardProps) {
     valor_estimado,
     tags,
     link_leiloeiro,
-    nome_leiloeiro,
     modalidade_leilao,
+    status_temporal,
   } = auction
+
+  const isEncerrado = status_temporal === 'passado'
 
   // Gerar link PNCP correto a partir do pncp_id
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
@@ -68,8 +70,20 @@ export function AuctionCard({ auction }: AuctionCardProps) {
   const showValue = valor_estimado !== null && valor_estimado > 0
 
   return (
-    <Card className="flex flex-col h-full hover:shadow-lg transition-shadow">
+    <Card className={cn(
+      "flex flex-col h-full hover:shadow-lg transition-shadow relative",
+      isEncerrado && "opacity-70"
+    )}>
       <CardHeader className="pb-2">
+        {/* Badge ENCERRADO para leilões passados */}
+        {isEncerrado && (
+          <div className="absolute top-2 right-2">
+            <Badge variant="secondary" className="bg-gray-500 text-white">
+              ENCERRADO
+            </Badge>
+          </div>
+        )}
+
         {/* Linha 1: Tags + Tipo de Leilão */}
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           {tags?.map((tag, index) => (
@@ -142,14 +156,6 @@ export function AuctionCard({ auction }: AuctionCardProps) {
           </div>
         )}
 
-        {/* Leiloeiro */}
-        {nome_leiloeiro && (
-          <div className="flex items-center gap-2 text-muted-foreground text-xs">
-            <Gavel className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{nome_leiloeiro}</span>
-          </div>
-        )}
-
         {/* Valor Estimado - Destaque se existir */}
         {showValue && (
           <div className="pt-2 border-t">
@@ -199,8 +205,8 @@ export function AuctionCard({ auction }: AuctionCardProps) {
           </a>
         )}
 
-        {/* Botão Dar Lance (Leiloeiro) */}
-        {link_leiloeiro && (
+        {/* Botão Dar Lance (Leiloeiro) - só aparece se tem link válido E não está encerrado */}
+        {link_leiloeiro && link_leiloeiro !== 'N/D' && link_leiloeiro !== '' && !isEncerrado && (
           <a
             href={link_leiloeiro}
             target="_blank"
@@ -210,6 +216,12 @@ export function AuctionCard({ auction }: AuctionCardProps) {
             <Gavel className="h-3.5 w-3.5" />
             Dar Lance
           </a>
+        )}
+        {/* Indicador de leilão encerrado no lugar do botão */}
+        {isEncerrado && (
+          <span className="flex-1 text-center text-sm text-muted-foreground py-2">
+            Leilão encerrado
+          </span>
         )}
       </CardFooter>
     </Card>

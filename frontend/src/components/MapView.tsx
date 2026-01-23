@@ -134,13 +134,21 @@ function getClusterColor(leaves: PointFeature[]): string {
   return "#6B7280"
 }
 
+// Calculate optimal view from markers
+// Returns DEFAULT_VIEW if calculation results in invalid values
 function calculateViewFromMarkers(markers: MarkerData[]): ViewState {
   if (markers.length === 0) return DEFAULT_VIEW
 
   if (markers.length === 1) {
+    const lng = markers[0].longitude
+    const lat = markers[0].latitude
+    // Validate single marker coordinates
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+      return DEFAULT_VIEW
+    }
     return {
-      longitude: markers[0].longitude,
-      latitude: markers[0].latitude,
+      longitude: lng,
+      latitude: lat,
       zoom: 10,
     }
   }
@@ -162,6 +170,11 @@ function calculateViewFromMarkers(markers: MarkerData[]): ViewState {
   const latDiff = maxLat - minLat
   const maxDiff = Math.max(lngDiff, latDiff)
   const zoom = Math.max(4, Math.min(12, 8 - Math.log2(maxDiff + 0.1)))
+
+  // Final validation - return DEFAULT_VIEW if any value is invalid
+  if (!Number.isFinite(centerLng) || !Number.isFinite(centerLat) || !Number.isFinite(zoom)) {
+    return DEFAULT_VIEW
+  }
 
   return {
     longitude: centerLng,
@@ -395,14 +408,15 @@ export function MapView() {
   const currentValorMin = searchParams.get("valor_min")
 
   // Filter auctions with valid coordinates
+  // Uses Number.isFinite() to reject null, undefined, NaN, and Infinity
   const markers: MarkerData[] = useMemo(() => {
     const auctions = paginatedData?.data
     if (!auctions) return []
     return auctions
       .filter(
         (auction) =>
-          auction.latitude !== null &&
-          auction.longitude !== null &&
+          Number.isFinite(auction.latitude) &&
+          Number.isFinite(auction.longitude) &&
           auction.latitude !== 0 &&
           auction.longitude !== 0
       )
