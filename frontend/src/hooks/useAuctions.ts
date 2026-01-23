@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "react-router-dom"
 import { supabase } from "../lib/supabase"
-import type { Auction, AuctionFilters, PaginatedAuctionsResponse } from "../types/database"
+import type { AuctionFilters, PaginatedAuctionsResponse } from "../types/database"
 
 const ITEMS_PER_PAGE = 20 // Atualizado para 20 conforme requisito
 
@@ -15,6 +15,12 @@ export function useAuctions() {
 
   // Extrair página atual
   const currentPage = Number(searchParams.get("page")) || 1
+
+  // Extrair ordenação da URL (padrão: mais próximos primeiro)
+  const ordenacao = searchParams.get("ordenacao") || "proximos"
+
+  // Extrair temporalidade da URL (padrão: futuros)
+  const temporalidade = searchParams.get("temporalidade") || "futuros"
 
   // Extrair filtros da URL
   const filters: AuctionFilters = {
@@ -34,9 +40,9 @@ export function useAuctions() {
   }
 
   return useQuery<PaginatedAuctionsResponse, Error>({
-    queryKey: ["auctions", filters, currentPage],
+    queryKey: ["auctions", filters, currentPage, ordenacao, temporalidade],
     queryFn: async () => {
-      // Chamar RPC com paginação
+      // Chamar RPC com paginação e ordenação
       const { data, error } = await supabase.rpc(
         "fetch_auctions_paginated" as never,
         {
@@ -50,6 +56,8 @@ export function useAuctions() {
           p_data_leilao_ate: filters.data_leilao_ate || null,
           p_page: currentPage,
           p_page_size: ITEMS_PER_PAGE,
+          p_ordenacao: ordenacao,
+          p_temporalidade: temporalidade,
         } as never
       )
 
@@ -57,15 +65,16 @@ export function useAuctions() {
         throw new Error(error.message)
       }
 
-      // A RPC retorna JSON com { data, total, page, pageSize, totalPages }
-      const result = data as PaginatedAuctionsResponse
+      // A RPC retorna JSON com estrutura: { data, total, page, pageSize, totalPages }
+      const result = data as any
+      const auctionsData = result?.data || []
 
       return {
-        data: result.data || [],
-        total: result.total || 0,
-        page: result.page || currentPage,
-        pageSize: result.pageSize || ITEMS_PER_PAGE,
-        totalPages: result.totalPages || 1,
+        data: auctionsData,
+        total: result?.total || 0,
+        page: result?.page || currentPage,
+        pageSize: result?.pageSize || ITEMS_PER_PAGE,
+        totalPages: result?.totalPages || 1,
       }
     },
     staleTime: 1000 * 60 * 5, // 5 minutos
