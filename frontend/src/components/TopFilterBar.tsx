@@ -5,7 +5,7 @@ import { Select } from "./ui/select"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Label } from "./ui/label"
-import { Search, X, CalendarDays } from "lucide-react"
+import { Search, X, CalendarDays, ArrowUpDown } from "lucide-react"
 
 /**
  * Barra de filtros superior.
@@ -18,6 +18,8 @@ export function TopFilterBar() {
   const currentUF = searchParams.get("uf") || ""
   const currentCidade = searchParams.get("cidade") || ""
   const currentValorMin = searchParams.get("valor_min") || ""
+  const currentOrdenacao = searchParams.get("ordenacao") || "proximos"
+  const currentTemporalidade = searchParams.get("temporalidade") || "futuros"
 
   // Filtros de data da URL
   const urlDataPublicacaoDe = searchParams.get("data_publicacao_de") || ""
@@ -114,6 +116,25 @@ export function TopFilterBar() {
   return (
     <div className="sticky top-0 z-10 bg-background border-b">
       <div className="container py-4">
+        {/* ========== FILTRO FIXO: TEMPORALIDADE (Menu Suspenso) ========== */}
+        <div className="flex items-center gap-3 pb-4 border-b mb-4">
+          <Label htmlFor="temporalidade" className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+            Exibir:
+          </Label>
+          <Select
+            id="temporalidade"
+            value={currentTemporalidade}
+            onChange={(e) => updateFilter("temporalidade", e.target.value)}
+            options={[
+              { value: "futuros", label: "Próximos Leilões" },
+              { value: "passados", label: "Leilões Encerrados" },
+              { value: "todos", label: "Todos os Leilões" },
+            ]}
+            className="min-w-[200px]"
+          />
+        </div>
+        {/* ========== FIM FILTRO FIXO ========== */}
+
         <div className="flex flex-wrap items-end gap-4">
           {/* Filtro UF */}
           <div className="flex flex-col gap-1.5 min-w-[150px]">
@@ -206,6 +227,28 @@ export function TopFilterBar() {
                 className="w-[140px]"
               />
             </div>
+          </div>
+
+          {/* Separador visual */}
+          <div className="hidden lg:block h-8 w-px bg-border" />
+
+          {/* Filtro Ordenação */}
+          <div className="flex flex-col gap-1.5 min-w-[180px]">
+            <Label className="flex items-center gap-1">
+              <ArrowUpDown className="h-3 w-3" />
+              Ordenar por
+            </Label>
+            <Select
+              id="ordenacao"
+              value={currentOrdenacao}
+              onChange={(e) => updateFilter("ordenacao", e.target.value)}
+              options={[
+                { value: "proximos", label: "Mais próximos primeiro" },
+                { value: "distantes", label: "Mais distantes primeiro" },
+                { value: "recentes", label: "Publicação recente" },
+                { value: "antigos", label: "Publicação antiga" },
+              ]}
+            />
           </div>
 
           {/* Botões de Ação */}

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom"
 import { useAuth } from "../../contexts/AuthContext"
 import { useAvailableUFs, useCitiesByUF } from "../../hooks/useAuctions"
 import { NotificationBell } from "../NotificationBell"
-import { Search, User, LogOut, ChevronDown, X, Calendar, History, Clock, CalendarDays, ArrowUpDown } from "lucide-react"
+import { Search, User, LogOut, ChevronDown, X, ArrowUpDown } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 // Estados brasileiros para fallback
@@ -230,17 +230,16 @@ export function Header() {
         {/* Logo + Nome (estilo Mercado Livre) */}
         <Link to="/dashboard" className="flex items-center gap-2 flex-shrink-0">
           <img
-            src="/logo_ache_sucatas_transparent.png"
+            src="/logotipo-ache-sucatas-leilao-sucatas.jpg"
             alt="Ache Sucatas"
             className="w-auto cursor-pointer"
             style={{
-              height: '44px',
-              filter: 'brightness(0) invert(1)'
+              height: '40px'
             }}
           />
           <div
             className="hidden sm:flex flex-col justify-center text-white"
-            style={{ fontFamily: "'Bebas Neue', sans-serif", lineHeight: '1' }}
+            style={{ fontFamily: "'Bebas Neue', sans-serif", lineHeight: '1', height: '40px' }}
           >
             <span style={{ fontSize: '20px', letterSpacing: '0.18em' }}>
               ACHE
@@ -328,12 +327,12 @@ export function Header() {
 
       {/* ========== LINHA 2 - FILTER BAR ========== */}
       <div
-        className="flex items-center gap-3 px-5 border-b border-gray-200 overflow-x-auto"
-        style={{ backgroundColor: "#E8F4FC", minHeight: "50px" }}
+        className="flex items-center justify-center gap-2 px-3 border-b border-gray-200"
+        style={{ backgroundColor: "#E8F4FC", minHeight: "44px" }}
       >
         {/* Valor Mínimo */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="valor_min" className="text-xs text-gray-600 whitespace-nowrap">
+        <div className="flex items-center gap-1">
+          <label htmlFor="valor_min" className="text-[11px] text-gray-600 whitespace-nowrap">
             Valor Mín.
           </label>
           <input
@@ -343,14 +342,14 @@ export function Header() {
             value={localValorMin}
             onChange={(e) => setLocalValorMin(e.target.value)}
             onBlur={() => updateFilter("valor_min", localValorMin)}
-            className="filter-input w-28"
+            className="filter-input w-20 text-xs"
             min={0}
           />
         </div>
 
         {/* Valor Máximo */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="valor_max" className="text-xs text-gray-600 whitespace-nowrap">
+        <div className="flex items-center gap-1">
+          <label htmlFor="valor_max" className="text-[11px] text-gray-600 whitespace-nowrap">
             Valor Máx.
           </label>
           <input
@@ -360,18 +359,17 @@ export function Header() {
             value={localValorMax}
             onChange={(e) => setLocalValorMax(e.target.value)}
             onBlur={() => updateFilter("valor_max", localValorMax)}
-            className="filter-input w-28"
+            className="filter-input w-24 text-xs"
             min={0}
           />
         </div>
 
         {/* Separador */}
-        <div className="h-6 w-px bg-gray-300 hidden lg:block" />
+        <div className="h-5 w-px bg-gray-300" />
 
         {/* Data Publicação */}
-        <div className="flex items-center gap-1 hidden xl:flex flex-shrink-0">
-          <CalendarDays className="h-3 w-3 text-gray-500" />
-          <span className="text-xs text-gray-600">Pub:</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-gray-600">Publicação:</span>
           <input
             type="date"
             value={localDataPublicacaoDe}
@@ -381,9 +379,9 @@ export function Header() {
                 updateFilter("data_publicacao_de", e.target.value)
               }
             }}
-            className="filter-input w-28 text-xs"
+            className="filter-input w-[115px] text-[11px]"
           />
-          <span className="text-xs text-gray-500">-</span>
+          <span className="text-[11px] text-gray-400">-</span>
           <input
             type="date"
             value={localDataPublicacaoAte}
@@ -393,14 +391,16 @@ export function Header() {
                 updateFilter("data_publicacao_ate", e.target.value)
               }
             }}
-            className="filter-input w-28 text-xs"
+            className="filter-input w-[115px] text-[11px]"
           />
         </div>
 
+        {/* Separador */}
+        <div className="h-5 w-px bg-gray-300" />
+
         {/* Data Leilão */}
-        <div className="flex items-center gap-1 hidden xl:flex flex-shrink-0">
-          <CalendarDays className="h-3 w-3 text-gray-500" />
-          <span className="text-xs text-gray-600">Leilão:</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-gray-600">Leilão:</span>
           <input
             type="date"
             value={localDataLeilaoDe}
@@ -410,9 +410,9 @@ export function Header() {
                 updateFilter("data_leilao_de", e.target.value)
               }
             }}
-            className="filter-input w-28 text-xs"
+            className="filter-input w-[115px] text-[11px]"
           />
-          <span className="text-xs text-gray-500">-</span>
+          <span className="text-[11px] text-gray-400">-</span>
           <input
             type="date"
             value={localDataLeilaoAte}
@@ -422,71 +422,42 @@ export function Header() {
                 updateFilter("data_leilao_ate", e.target.value)
               }
             }}
-            className="filter-input w-28 text-xs"
+            className="filter-input w-[115px] text-[11px]"
           />
         </div>
 
         {/* Separador */}
-        <div className="h-6 w-px bg-gray-300" />
+        <div className="h-5 w-px bg-gray-300" />
 
-        {/* Filtro Exibir (Temporalidade) */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-600 hidden sm:inline">Exibir:</span>
-          <div className="filter-btn-group">
-            <button
-              type="button"
-              onClick={() => updateFilter("temporalidade", "futuros")}
-              className={cn(
-                "filter-btn flex items-center gap-1",
-                currentTemporalidade === "futuros" ? "filter-btn-active" : "filter-btn-inactive"
-              )}
-              title="Próximos Leilões"
-            >
-              <Calendar className="h-3 w-3" />
-              <span className="hidden sm:inline text-xs">Próximos</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => updateFilter("temporalidade", "passados")}
-              className={cn(
-                "filter-btn flex items-center gap-1",
-                currentTemporalidade === "passados" ? "filter-btn-active" : "filter-btn-inactive"
-              )}
-              title="Leilões Encerrados"
-            >
-              <History className="h-3 w-3" />
-              <span className="hidden sm:inline text-xs">Encerrados</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => updateFilter("temporalidade", "todos")}
-              className={cn(
-                "filter-btn flex items-center gap-1",
-                currentTemporalidade === "todos" ? "filter-btn-active" : "filter-btn-inactive"
-              )}
-              title="Todos os Leilões"
-            >
-              <Clock className="h-3 w-3" />
-              <span className="hidden sm:inline text-xs">Todos</span>
-            </button>
-          </div>
+        {/* Filtro Exibir (Temporalidade) - Menu Suspenso */}
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-gray-600">Exibir:</span>
+          <select
+            value={currentTemporalidade}
+            onChange={(e) => updateFilter("temporalidade", e.target.value)}
+            className="filter-select text-[11px]"
+          >
+            <option value="futuros">Próximos</option>
+            <option value="passados">Encerrados</option>
+            <option value="todos">Todos</option>
+          </select>
         </div>
 
         {/* Separador */}
-        <div className="h-6 w-px bg-gray-300" />
+        <div className="h-5 w-px bg-gray-300" />
 
         {/* Ordenar Por */}
-        <div className="flex items-center gap-2">
-          <ArrowUpDown className="h-4 w-4 text-gray-500" />
+        <div className="flex items-center gap-1">
+          <ArrowUpDown className="h-3 w-3 text-gray-500" />
           <select
             value={currentOrdenacao}
             onChange={(e) => updateFilter("ordenacao", e.target.value)}
-            className="filter-select text-xs"
+            className="filter-select text-[11px]"
           >
-            <option value="recentes">Publicações Recentes</option>
-            <option value="antigos">Publicações Antigas</option>
-            <option value="proximos">Data Leilão Próxima</option>
-            <option value="distantes">Data Leilão Distante</option>
+            <option value="recentes">Recentes</option>
+            <option value="antigos">Antigos</option>
+            <option value="proximos">Próximos</option>
+            <option value="distantes">Distantes</option>
           </select>
         </div>
 

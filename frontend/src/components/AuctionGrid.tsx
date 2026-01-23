@@ -1,5 +1,5 @@
 import { useAuctionMap } from "../contexts/AuctionMapContext"
-import { AuctionCard } from "./AuctionCard"
+import { AuctionCardGrid } from "./AuctionCardGrid"
 import { AuctionCardSkeleton } from "./AuctionCardSkeleton"
 import { Pagination } from "./Pagination"
 import { AlertCircle, MapIcon } from "lucide-react"
@@ -89,7 +89,7 @@ export function AuctionGrid() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {auctions.map((auction) => (
-          <AuctionCard key={auction.id} auction={auction} />
+          <AuctionCardGrid key={auction.id} auction={auction} />
         ))}
       </div>
 
