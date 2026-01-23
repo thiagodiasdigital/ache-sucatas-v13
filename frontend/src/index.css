@@ -4,26 +4,43 @@
 
 @layer base {
   :root {
+    /* Cores Principais Ache Sucatas */
+    --ache-primary: #0C83D6;
+    --ache-primary-dark: #0A6BB8;
+    --ache-primary-darker: #085A9E;
+    --ache-primary-light: #E8F4FC;
+
+    /* Cores de Feedback */
+    --color-error: #FF0000;
+    --color-success: #00A650;
+    --color-warning: #FF9900;
+
+    /* Alturas do Header */
+    --header-top-height: 60px;
+    --header-secondary-height: 50px;
+    --header-total-height: 110px;
+
+    /* shadcn/ui variables */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 205 89% 44%; /* #0C83D6 em HSL */
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 0% 25%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --ring: 205 89% 44%;
+    --radius: 0.25rem;
   }
 
   .dark {
@@ -33,7 +50,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
+    --primary: 205 89% 54%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -41,11 +58,11 @@
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 0% 45%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 205 89% 54%;
   }
 }
 
@@ -57,5 +74,53 @@
     @apply bg-background text-foreground;
     margin: 0;
     min-height: 100vh;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  }
+}
+
+/* Header Styles */
+@layer components {
+  .header-search-input {
+    @apply h-10 flex-1 border-0 px-4 text-sm bg-white focus:outline-none focus:ring-0;
+    min-width: 200px;
+  }
+
+  .header-select {
+    @apply h-10 border-0 border-l border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-0;
+    min-width: 140px;
+  }
+
+  .header-search-btn {
+    @apply h-10 w-12 flex items-center justify-center text-white transition-colors;
+    background-color: var(--ache-primary-dark);
+  }
+
+  .header-search-btn:hover {
+    background-color: var(--ache-primary-darker);
+  }
+
+  .filter-input {
+    @apply h-9 rounded border border-gray-300 bg-white px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+
+  .filter-select {
+    @apply h-9 rounded border border-gray-300 bg-white px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+
+  .filter-btn-group {
+    @apply inline-flex rounded border border-gray-300 overflow-hidden;
+  }
+
+  .filter-btn {
+    @apply px-3 py-2 text-sm font-medium transition-colors border-r border-gray-300 last:border-r-0;
+  }
+
+  .filter-btn-active {
+    background-color: var(--ache-primary);
+    @apply text-white;
+  }
+
+  .filter-btn-inactive {
+    @apply bg-white text-gray-700 hover:bg-gray-50;
   }
 }

@@ -1,5 +1,4 @@
 import { useSearchParams } from "react-router-dom"
-import { TopFilterBar } from "../components/TopFilterBar"
 import { AuctionGrid } from "../components/AuctionGrid"
 import { ModeSwitcher, type ViewMode } from "../components/ModeSwitcher"
 import { AuctionMap } from "../components/dashboard"
@@ -7,7 +6,8 @@ import { CalendarView } from "../components/CalendarView"
 
 /**
  * Página principal do Dashboard.
- * Exibe filtros e grid de leilões.
+ * Os filtros estão no Header (Layout).
+ * Exibe ModeSwitcher e visualizações (Grid, Mapa, Calendário).
  */
 export function DashboardPage() {
   const [searchParams] = useSearchParams()
@@ -17,9 +17,6 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col">
-      {/* Filtros */}
-      <TopFilterBar />
-
       {/* Mode Switcher */}
       <div className="container py-4">
         <ModeSwitcher />

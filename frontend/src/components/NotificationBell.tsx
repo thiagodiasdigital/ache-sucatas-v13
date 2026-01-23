@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, CheckCheck } from "lucide-react"
 import { useNotifications } from "../hooks/useNotifications"
-import { Button } from "./ui/button"
 import { ScrollArea } from "./ui/scroll-area"
 import { cn, formatDateTime } from "../lib/utils"
 
@@ -67,26 +66,25 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell Button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="relative"
+      <button
+        type="button"
+        className="relative p-1 hover:bg-white/10 rounded transition-colors"
         onClick={() => setIsOpen(!isOpen)}
         aria-label={`Notificações${unreadCount > 0 ? ` (${unreadCount} não lidas)` : ""}`}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-5 w-5 text-white" />
         {/* Badge with count and ping animation */}
         {unreadCount > 0 && (
           <>
             {/* Ping animation layer */}
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-sucata animate-ping opacity-75" />
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 animate-ping opacity-75" />
             {/* Static badge with count */}
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-sucata text-[10px] font-bold text-white">
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           </>
         )}
-      </Button>
+      </button>
 
       {/* Dropdown */}
       {isOpen && (
@@ -95,15 +93,14 @@ export function NotificationBell() {
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h3 className="font-semibold">Notificações</h3>
             {unreadCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-1 text-xs text-muted-foreground hover:text-foreground"
+              <button
+                type="button"
+                className="flex items-center h-auto p-1 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
                 onClick={() => markAllAsRead()}
               >
                 <CheckCheck className="h-4 w-4 mr-1" />
                 Marcar todas
-              </Button>
+              </button>
             )}
           </div>
 
@@ -157,17 +154,16 @@ export function NotificationBell() {
           {/* Footer */}
           {notifications.length > 0 && (
             <div className="border-t px-4 py-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-sm"
+              <button
+                type="button"
+                className="w-full text-sm py-2 text-center text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded transition-colors"
                 onClick={() => {
                   setIsOpen(false)
                   navigate("/dashboard")
                 }}
               >
                 Ver todos os leilões
-              </Button>
+              </button>
             </div>
           )}
         </div>

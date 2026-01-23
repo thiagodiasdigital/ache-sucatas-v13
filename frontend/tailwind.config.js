@@ -51,6 +51,13 @@ export default {
         // Cores específicas do Ache Sucatas
         sucata: "#10B981", // Verde para tag SUCATA
         documentado: "#3B82F6", // Azul para tag DOCUMENTADO
+        // Cores da marca Ache Sucatas
+        ache: {
+          DEFAULT: "#0C83D6",
+          dark: "#0A6BB8",
+          darker: "#085A9E",
+          light: "#E8F4FC",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
