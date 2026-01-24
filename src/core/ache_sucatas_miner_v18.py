@@ -3,8 +3,18 @@ Ache Sucatas DaaS - Minerador V18
 =================================
 NOVA FUNCIONALIDADE: Enriquecimento com IA (OpenAI GPT-4o-mini).
 
-Versao: 18.0
+Versao: 18.2
 Data: 2026-01-24
+
+Changelog V18.2:
+    - NOVO: TaxonomiaLoader para carregar taxonomia automotiva do Supabase
+    - NOVO: Funcao gerar_tags_v18 que usa taxonomia do banco de dados
+    - NOVO: Tabela 'taxonomia_automotiva' no Supabase com ~300 termos
+    - REMOVIDO: Tags IMOVEL, MOBILIARIO, ELETRONICO (fora do escopo Ache Sucatas)
+    - NOTA: Ache Sucatas e focado APENAS em veiculos automotivos
+
+Changelog V18.1:
+    - WhitelistLoader para dominios de leiloeiros
 
 Changelog V18.0:
     - NOVO: Classe OpenAIEnricher para analise inteligente de editais
@@ -17,9 +27,14 @@ Autor: Claude (Implementacao IA)
 Contrato: contracts/dataset_contract_v1.md
 
 ===============================================================
-REGRA: A IA enriquece os dados extraidos, mas NAO substitui a
-       validacao. Se um campo obrigatorio nao existir, o registro
-       vai para quarentena.
+REGRAS:
+1. A IA enriquece os dados extraidos, mas NAO substitui a
+   validacao. Se um campo obrigatorio nao existir, o registro
+   vai para quarentena.
+
+2. APENAS tags automotivas sao geradas (VEICULO, SUCATA, MOTO,
+   CAMINHAO, ONIBUS, CARRETA, MAQUINARIO, DOCUMENTADO, APREENDIDO).
+   Tags de IMOVEL, MOBILIARIO, ELETRONICO foram REMOVIDAS.
 ===============================================================
 """
 
@@ -61,6 +76,120 @@ from validators.dataset_validator import (
 )
 
 load_dotenv()
+
+
+# ============================================================
+# WHITELIST LOADER - CARREGA DOMINIOS DO SUPABASE
+# ============================================================
+
+class WhitelistLoader:
+    """
+    Carrega whitelist de dominios do Supabase com fallback hardcoded.
+
+    Beneficios:
+    - Adicionar/remover dominios sem deploy
+    - Fallback seguro se Supabase falhar
+    - Performance: carrega 1x no inicio (cache em memoria)
+    """
+
+    # Fallback: 164 dominios (atualizado em jan/2026 com lista canonica)
+    FALLBACK_WHITELIST = {
+        "abataleiloes.com.br", "agilileiloes.com.br", "alanleiloeiro.lel.br", "alexandrecostaleiloes.com.br",
+        "alexandroleiloeiro.com.br", "alfaleiloes.com", "alfrancaleiloes.com.br", "alifrancaleiloes.com.br",
+        "alinemarquesleiloeira.lel.br", "amaralleiloes.com.br", "analucialeiloeira.com.br", "andersonleiloeiro.lel.br",
+        "andrealeiloeira.lel.br", "arremataronline.com.br", "benozzati.com.br", "bfranca.com.br",
+        "biasileiloes.com.br", "bidgo.com.br", "bll.org.br", "bnc.org.br",
+        "brameleiloes.com.br", "bspleiloes.com.br", "calilleiloes.com.br", "camilaleiloes.com.br",
+        "cargneluttileiloes.com.br", "ceciliadelzeirleiloes.com.br", "centraldosleiloes.com.br", "cfrancaleiloes.com.br",
+        "clfranca.com.br", "clickleiloes.com.br", "confederacaoleiloes.com.br", "cronos.com.br",
+        "danielgarcialeiloes.com.br", "depaulaonline.com.br", "dfranca.com.br", "diegoleiloes.com",
+        "diegoleiloes.com.br", "donizetteleiloes.leilao.br", "eckertleiloes.com.br", "edgarcarvalholeiloeiro.com.br",
+        "estreladaleiloes.com.br", "fabianoayuppleiloeiro.com.br", "fabioguimaraesleiloes.com.br", "fabioleiloes.com.br",
+        "facanhaleiloes.com.br", "fernandoleiloeiro.com.br", "ferronatoleiloes.com.br", "fidalgoleiloes.com.br",
+        "fredericoleiloes.com.br", "frfranca.com.br", "gabrielleiloeiro.com.br", "gfrancaleiloes.com.br",
+        "giordanoleiloes.com.br", "goldenlance.com.br", "gpleilao.com.br", "gustavoleiloeiro.lel.br",
+        "hastasp.com.br", "hastavip.com.br", "hmfrancaleiloes.com.br", "hoppeleiloes.com.br",
+        "inovaleilao.com.br", "ipirangaleiloes.com.br", "izabellaferreiraleiloes.com.br", "jfrancaleiloes.com.br",
+        "joaoemilio.com.br", "jonasleiloeiro.com.br", "josimarleiloeiro.com.br", "junkesleiloes.com.br",
+        "jvleiloes.lel.br", "karlapepe.lel.br", "kcleiloes.com.br", "kfranca.com.br",
+        "klfrancaleiloes.com.br", "kronberg.lel.br", "kronleiloes.com.br", "lanceja.co",
+        "lanceja.com.br", "lanceleiloes.com.br", "lancenoleilao.com.br", "lancevip.com.br",
+        "leilaoseg.com.br", "leiloeiraerikamaciel.com.br", "leiloeirasilvani.com.br", "leiloeiroeduardo.com.br",
+        "leiloeirolegentil.com.br", "leiloeironacif.com", "leiloesbrasil.com.br", "leiloesbrasilcassiano.com.br",
+        "leiloesceruli.com.br", "leiloesfreire.com.br", "leiloesja.com.br", "leilomaster.com.br",
+        "leje.com.br", "lfranca.com.br", "liderleiloes.com.br", "lleiloes.com.br",
+        "lopesleiloes.com.br", "lopesleiloes.net.br", "lucasleiloeiro.com.br", "lut.com.br",
+        "machadoleiloes.com.br", "maiconleiloeiro.com.br", "marcoscostaleiloeiro.com", "marcusviniciusleiloes.com.br",
+        "marioricart.lel.br", "mauriciomarizleiloes.com.br", "mauromarcello.lel.br", "megaleiloes.com.br",
+        "megaleiloesms.com.br", "mfranca.com.br", "mgl.com.br", "mirandacarvalholeiloes.com.br",
+        "mitroleiloes.com.br", "mklance.com.br", "msfranca.com.br", "nortedeminasleiloes.com.br",
+        "octaviovianna.lel.br", "ofrancaleiloes.com.br", "onildobastos.com.br", "paulobotelholeiloeiro.com.br",
+        "pavanileiloes.com.br", "pedroalmeidaleiloeiro.rio.br", "pedrocastroleiloes.com.br", "petroleiloes.com.br",
+        "pfranca.com.br", "portalleiloes.com.br", "portellaleiloes.com.br", "rafaelfrancaleiloes.com.br",
+        "rangelleiloes.com.br", "rfrancaleiloes.com.br", "ricardocorrealeiloes.com.br", "ricardogomesleiloes.com.br",
+        "ricoleiloes.com.br", "rioleiloes.com.br", "rodrigocostaleiloeiro.com.br", "rogeriomenezes.com.br",
+        "rymerleiloes.com.br", "schulmannleiloes.com.br", "sergiorepresasleiloes.com.br", "serpaleiloes.com.br",
+        "sevidanesleiloeira.com.br", "sfranca.com.br", "silasleiloeiro.lel.br", "snleiloes.com.br",
+        "sodresantoro.com.br", "sold.com.br", "stfrancaleiloes.com.br", "sumareleiloes.com",
+        "sumareleiloes.com.br", "superbid.com.br", "superbid.net", "szortykaleiloes.com.br",
+        "tassianamenezes.com.br", "telesleiloes.com.br", "tfleiloes.com.br", "tostesleiloeiro.com.br",
+        "viannaleiloes.com.br", "vipleiloes.com", "vipleiloes.com.br", "webleilao.com.br",
+        "wfrancaleiloes.com.br", "wmsleiloes.com.br", "wsleiloes.com.br", "zfrancaleiloes.com.br",
+    }
+
+    def __init__(self, supabase_url: str, supabase_key: str):
+        """
+        Inicializa o loader com credenciais do Supabase.
+
+        Args:
+            supabase_url: URL do projeto Supabase
+            supabase_key: Chave de servico do Supabase
+        """
+        self.supabase_url = supabase_url
+        self.supabase_key = supabase_key
+        self.client = None
+        self.logger = logging.getLogger("WhitelistLoader")
+
+        if supabase_url and supabase_key:
+            try:
+                from supabase import create_client
+                self.client = create_client(supabase_url, supabase_key)
+            except ImportError:
+                self.logger.warning("Biblioteca supabase nao instalada")
+            except Exception as e:
+                self.logger.warning(f"Erro ao conectar Supabase: {e}")
+
+    def carregar(self) -> tuple[set, bool]:
+        """
+        Carrega whitelist do Supabase.
+
+        Returns:
+            tuple: (set_dominios, veio_do_db)
+            - set_dominios: Conjunto de dominios validados
+            - veio_do_db: True se carregou do Supabase, False se usou fallback
+        """
+        if not self.client:
+            self.logger.warning("Supabase nao conectado - usando whitelist fallback")
+            return self.FALLBACK_WHITELIST.copy(), False
+
+        try:
+            # Query: SELECT dominio FROM leiloeiros_urls WHERE whitelist_oficial = TRUE
+            result = self.client.table("leiloeiros_urls").select("dominio").eq(
+                "whitelist_oficial", True
+            ).execute()
+
+            if result.data and len(result.data) > 0:
+                dominios = {row["dominio"] for row in result.data if row.get("dominio")}
+                self.logger.info(f"Whitelist carregada do Supabase: {len(dominios)} dominios")
+                return dominios, True
+            else:
+                self.logger.warning("Nenhum dominio na whitelist do Supabase - usando fallback")
+                return self.FALLBACK_WHITELIST.copy(), False
+
+        except Exception as e:
+            self.logger.error(f"Erro ao carregar whitelist do Supabase: {e}")
+            self.logger.warning("Usando whitelist fallback")
+            return self.FALLBACK_WHITELIST.copy(), False
 
 
 # ============================================================
@@ -254,27 +383,11 @@ def extrair_leiloeiro_url_pdf(texto_pdf: str) -> Optional[str]:
 
 
 # ============================================================
-# VALIDACAO DE URL V19 (INALTERADO)
+# VALIDACAO DE URL V19 (MODIFICADO - USA WHITELIST DINAMICA)
 # ============================================================
 
-WHITELIST_DOMINIOS_LEILOEIRO = {
-    "lfranca.com.br", "bidgo.com.br", "sodresantoro.com.br", "superbid.net",
-    "superbid.com.br", "vipleiloes.com.br", "frfranca.com.br", "lancenoleilao.com.br",
-    "leilomaster.com.br", "lut.com.br", "zfrancaleiloes.com.br", "amaralleiloes.com.br",
-    "bfranca.com.br", "cronos.com.br", "confederacaoleiloes.com.br", "megaleiloes.com.br",
-    "leilaoseg.com.br", "cfrancaleiloes.com.br", "estreladaleiloes.com.br", "sold.com.br",
-    "mitroleiloes.com.br", "alifrancaleiloes.com.br", "hastavip.com.br",
-    "klfrancaleiloes.com.br", "centraldosleiloes.com.br", "dfranca.com.br",
-    "rfrancaleiloes.com.br", "sfranca.com.br", "clickleiloes.com.br", "petroleiloes.com.br",
-    "pfranca.com.br", "clfranca.com.br", "tfleiloes.com.br", "kfranca.com.br",
-    "lanceja.com.br", "portalleiloes.com.br", "wfrancaleiloes.com.br",
-    "rafaelfrancaleiloes.com.br", "alfrancaleiloes.com.br", "jfrancaleiloes.com.br",
-    "mfranca.com.br", "msfranca.com.br", "stfrancaleiloes.com.br", "ofrancaleiloes.com.br",
-    "hmfrancaleiloes.com.br", "abataleiloes.com.br", "webleilao.com.br",
-    "gfrancaleiloes.com.br", "lleiloes.com.br", "lanceleiloes.com.br",
-    "lopesleiloes.net.br", "lopesleiloes.com.br", "eckertleiloes.com.br",
-    "giordanoleiloes.com.br",
-}
+# NOTA: A whitelist agora e carregada do Supabase via WhitelistLoader.
+# O fallback hardcoded esta na classe WhitelistLoader.FALLBACK_WHITELIST.
 
 REGEX_TLD_COLADO_MINER = re.compile(
     r'[A-Za-z0-9]\.(?:com|net|org)[A-Za-z]',
@@ -293,32 +406,54 @@ def _extrair_dominio_miner(url: str) -> Optional[str]:
         return None
 
 
-def _esta_na_whitelist_miner(url: str) -> bool:
-    """Verifica se o dominio da URL esta na whitelist."""
+def _esta_na_whitelist_miner(url: str, whitelist: set) -> bool:
+    """
+    Verifica se o dominio da URL esta na whitelist.
+
+    Args:
+        url: URL a verificar
+        whitelist: Conjunto de dominios validos
+
+    Returns:
+        True se o dominio estiver na whitelist
+    """
     dominio = _extrair_dominio_miner(url)
     if not dominio:
         return False
-    for dominio_valido in WHITELIST_DOMINIOS_LEILOEIRO:
+    for dominio_valido in whitelist:
         if dominio == dominio_valido or dominio.endswith("." + dominio_valido):
             return True
     return False
 
 
-def validar_url_link_leiloeiro_v19(url: str) -> tuple:
-    """Valida se uma URL pode ser usada como link_leiloeiro."""
+def validar_url_link_leiloeiro_v19(url: str, whitelist: set = None) -> tuple:
+    """
+    Valida se uma URL pode ser usada como link_leiloeiro.
+
+    Args:
+        url: URL a validar
+        whitelist: Conjunto de dominios validos (opcional, usa fallback se None)
+
+    Returns:
+        tuple: (valido, confianca, motivo)
+    """
     if not url:
         return False, 0, "url_vazia"
+
+    # Se nao passou whitelist, usa o fallback da classe WhitelistLoader
+    if whitelist is None:
+        whitelist = WhitelistLoader.FALLBACK_WHITELIST
 
     url_limpa = url.strip()
     url_lower = url_limpa.lower()
 
     if url_lower.startswith(("http://", "https://")):
-        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa) else (True, 80, None)
+        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa, whitelist) else (True, 80, None)
 
     if url_lower.startswith("www."):
-        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa) else (True, 60, None)
+        return (True, 100, None) if _esta_na_whitelist_miner(url_limpa, whitelist) else (True, 60, None)
 
-    if _esta_na_whitelist_miner(url_limpa):
+    if _esta_na_whitelist_miner(url_limpa, whitelist):
         return True, 100, None
 
     if REGEX_TLD_COLADO_MINER.search(url_limpa):
@@ -327,8 +462,19 @@ def validar_url_link_leiloeiro_v19(url: str) -> tuple:
     return False, 0, "sem_prefixo_ou_whitelist"
 
 
-def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[str]) -> dict:
-    """Processa links da API PNCP aplicando validacao V19."""
+def processar_link_pncp_v19(
+    link_sistema: Optional[str],
+    link_edital: Optional[str],
+    whitelist: set = None
+) -> dict:
+    """
+    Processa links da API PNCP aplicando validacao V19.
+
+    Args:
+        link_sistema: Link do sistema de origem
+        link_edital: Link alternativo do edital
+        whitelist: Conjunto de dominios validos (opcional)
+    """
     resultado = {
         "link_leiloeiro": None,
         "link_leiloeiro_raw": None,
@@ -350,7 +496,7 @@ def processar_link_pncp_v19(link_sistema: Optional[str], link_edital: Optional[s
     # V17 FIX: Limpar URL antes de validar
     link_candidato = normalizar_url_v17(link_candidato) or link_candidato
 
-    valido, confianca, motivo = validar_url_link_leiloeiro_v19(link_candidato)
+    valido, confianca, motivo = validar_url_link_leiloeiro_v19(link_candidato, whitelist)
 
     resultado["link_leiloeiro_raw"] = link_candidato
     resultado["link_leiloeiro_valido"] = valido
@@ -397,29 +543,228 @@ def extrair_objeto_resumido(texto: str, max_chars: int = 500) -> str:
     return ""
 
 
-TAGS_KEYWORDS = {
-    "VEICULO": ["veiculo", "veiculos", "automovel", "automoveis", "carro", "carros"],
-    "SUCATA": ["sucata", "sucatas", "inservivel", "inserviveis", "ferroso", "ferrosos"],
-    "MOTO": ["moto", "motos", "motocicleta", "motocicletas", "ciclomotor"],
-    "CAMINHAO": ["caminhao", "caminhoes", "caminhonete", "camionete", "truck"],
-    "ONIBUS": ["onibus", "microonibus", "micro-onibus"],
-    "MAQUINARIO": ["maquina", "maquinas", "equipamento", "equipamentos", "trator", "tratores"],
-    "IMOVEL": ["imovel", "imoveis", "terreno", "terrenos", "lote", "lotes", "edificio"],
-    "MOBILIARIO": ["moveis", "mobiliario", "cadeira", "mesa", "armario"],
-    "ELETRONICO": ["computador", "computadores", "eletronico", "eletronicos", "informatica"],
-    "DOCUMENTADO": ["documentado", "documentados", "com documento", "documento ok"],
-}
+# ============================================================
+# TAXONOMIA AUTOMOTIVA LOADER - V18.2
+# ============================================================
+# NOTA: Carrega taxonomia do Supabase com fallback hardcoded.
+# APENAS termos automotivos - SEM imoveis/mobiliario/eletronicos.
+# ============================================================
+
+class TaxonomiaLoader:
+    """
+    Carrega taxonomia automotiva do Supabase para classificacao de editais.
+
+    V18.2: Nova funcionalidade que substitui o dicionario TAGS_KEYWORDS.
+    Beneficios:
+    - Adicionar/remover termos sem deploy
+    - Fallback seguro se Supabase falhar
+    - Apenas termos de VEICULOS (sem imoveis, mobiliario, eletronicos)
+    """
+
+    # Fallback hardcoded: APENAS termos automotivos
+    # REMOVIDO: IMOVEL, MOBILIARIO, ELETRONICO
+    FALLBACK_TAXONOMIA = {
+        # TIPO - Categorias principais de veiculos
+        "VEICULO": ["veiculo", "veiculos", "automovel", "automoveis", "carro", "carros", "automotor", "automotivo"],
+        "SUCATA": ["sucata", "sucatas", "inservivel", "inserviveis", "ferroso", "ferrosos", "sucateado"],
+        "MOTO": ["moto", "motos", "motocicleta", "motocicletas", "ciclomotor", "ciclomotores", "motociclo"],
+        "CAMINHAO": ["caminhao", "caminhoes", "caminhonete", "camionete", "truck", "trucks", "cavalo mecanico"],
+        "ONIBUS": ["onibus", "microonibus", "micro-onibus", "micro onibus"],
+        "CARRETA": ["carreta", "carretas", "semi-reboque", "semirreboque", "reboque", "reboques", "implemento rodoviario"],
+        "MAQUINARIO": [
+            "maquina", "maquinas", "trator", "tratores", "retroescavadeira", "escavadeira",
+            "pa carregadeira", "carregadeira", "motoniveladora", "patrol"
+        ],
+        "DOCUMENTADO": ["documentado", "documentados", "com documento", "documento ok"],
+        "APREENDIDO": ["apreendido", "apreendidos", "patio", "removido", "removidos", "custodia"],
+        # MARCAS - Geram tags de tipo correspondente
+        # Leves
+        "MARCA_LEVE": [
+            "volkswagen", "vw", "volks", "chevrolet", "gm", "fiat", "ford", "toyota", "honda",
+            "hyundai", "renault", "peugeot", "citroen", "nissan", "mitsubishi", "jeep", "bmw", "audi"
+        ],
+        # Pesados
+        "MARCA_PESADO": [
+            "mercedes-benz", "mercedes", "mb", "scania", "volvo", "iveco", "daf", "man", "agrale"
+        ],
+        # Motos
+        "MARCA_MOTO": ["yamaha", "suzuki", "kawasaki", "triumph", "dafra", "shineray"],
+        # Maquinas
+        "MARCA_MAQUINA": [
+            "caterpillar", "cat", "john deere", "jd", "massey ferguson", "massey", "mf",
+            "valtra", "new holland", "nh", "case", "jcb"
+        ],
+        # Carretas
+        "MARCA_CARRETA": ["randon", "facchini", "guerra", "librelato", "noma"],
+        # Onibus
+        "MARCA_ONIBUS": ["marcopolo", "caio", "busscar", "neobus"],
+        # MODELOS POPULARES - Para matching mais preciso
+        "MODELO_LEVE": [
+            "gol", "polo", "onix", "prisma", "corsa", "celta", "uno", "palio", "strada", "toro",
+            "hilux", "corolla", "civic", "fit", "hb20", "creta", "sandero", "logan", "duster",
+            "ranger", "ecosport", "ka", "fiesta", "focus", "voyage", "saveiro", "amarok"
+        ],
+        "MODELO_MOTO": [
+            "cg", "titan", "fan", "biz", "bros", "xre", "cb", "twister", "hornet", "pcx",
+            "ybr", "factor", "fazer", "lander", "crosser", "nmax", "xtz", "intruder", "yes"
+        ],
+        "MODELO_PESADO": [
+            "atego", "actros", "axor", "accelo", "constellation", "delivery", "worker",
+            "r440", "r450", "fh", "fh460", "vm", "daily", "tector", "stralis", "cargo"
+        ],
+    }
+
+    # Mapeamento de categoria -> tag gerada
+    CATEGORIA_TO_TAG = {
+        "VEICULO": "VEICULO",
+        "SUCATA": "SUCATA",
+        "MOTO": "MOTO",
+        "CAMINHAO": "CAMINHAO",
+        "ONIBUS": "ONIBUS",
+        "CARRETA": "CARRETA",
+        "MAQUINARIO": "MAQUINARIO",
+        "DOCUMENTADO": "DOCUMENTADO",
+        "APREENDIDO": "APREENDIDO",
+        "MARCA_LEVE": "VEICULO",
+        "MARCA_PESADO": "CAMINHAO",
+        "MARCA_MOTO": "MOTO",
+        "MARCA_MAQUINA": "MAQUINARIO",
+        "MARCA_CARRETA": "CARRETA",
+        "MARCA_ONIBUS": "ONIBUS",
+        "MODELO_LEVE": "VEICULO",
+        "MODELO_MOTO": "MOTO",
+        "MODELO_PESADO": "CAMINHAO",
+    }
+
+    def __init__(self, supabase_url: str, supabase_key: str):
+        """
+        Inicializa o loader com credenciais do Supabase.
+        """
+        self.supabase_url = supabase_url
+        self.supabase_key = supabase_key
+        self.client = None
+        self.logger = logging.getLogger("TaxonomiaLoader")
+
+        if supabase_url and supabase_key:
+            try:
+                from supabase import create_client
+                self.client = create_client(supabase_url, supabase_key)
+            except ImportError:
+                self.logger.warning("Biblioteca supabase nao instalada")
+            except Exception as e:
+                self.logger.warning(f"Erro ao conectar Supabase: {e}")
+
+    def carregar(self) -> tuple[dict, bool]:
+        """
+        Carrega taxonomia do Supabase.
+
+        Returns:
+            tuple: (dict_taxonomia, veio_do_db)
+            - dict_taxonomia: Dicionario {tag: [termos]} para matching
+            - veio_do_db: True se carregou do Supabase, False se usou fallback
+        """
+        if not self.client:
+            self.logger.warning("Supabase nao conectado - usando taxonomia fallback")
+            return self._converter_fallback_para_dict(), False
+
+        try:
+            # Query: SELECT categoria, termo, sinonimos, tag_gerada FROM taxonomia_automotiva WHERE ativo = TRUE
+            result = self.client.table("taxonomia_automotiva").select(
+                "categoria, termo, sinonimos, tag_gerada"
+            ).eq("ativo", True).execute()
+
+            if result.data and len(result.data) > 0:
+                taxonomia = self._processar_resultado_db(result.data)
+                self.logger.info(f"Taxonomia carregada do Supabase: {len(result.data)} termos")
+                return taxonomia, True
+            else:
+                self.logger.warning("Nenhum termo na taxonomia do Supabase - usando fallback")
+                return self._converter_fallback_para_dict(), False
+
+        except Exception as e:
+            self.logger.error(f"Erro ao carregar taxonomia do Supabase: {e}")
+            self.logger.warning("Usando taxonomia fallback")
+            return self._converter_fallback_para_dict(), False
+
+    def _processar_resultado_db(self, rows: list) -> dict:
+        """
+        Processa resultado do Supabase e converte para formato de matching.
+
+        Formato de saida: {tag_gerada: [lista_de_termos]}
+        """
+        taxonomia = {}
+
+        for row in rows:
+            tag = row.get("tag_gerada")
+            termo = row.get("termo", "").lower()
+            sinonimos = row.get("sinonimos") or []
+
+            if not tag or not termo:
+                continue
+
+            if tag not in taxonomia:
+                taxonomia[tag] = []
+
+            # Adiciona termo principal
+            if termo not in taxonomia[tag]:
+                taxonomia[tag].append(termo)
+
+            # Adiciona sinonimos
+            for sinonimo in sinonimos:
+                sinonimo_lower = sinonimo.lower().strip()
+                if sinonimo_lower and sinonimo_lower not in taxonomia[tag]:
+                    taxonomia[tag].append(sinonimo_lower)
+
+        return taxonomia
+
+    def _converter_fallback_para_dict(self) -> dict:
+        """
+        Converte o fallback hardcoded para formato de matching.
+        """
+        taxonomia = {}
+
+        for categoria, termos in self.FALLBACK_TAXONOMIA.items():
+            tag = self.CATEGORIA_TO_TAG.get(categoria, categoria)
+
+            if tag not in taxonomia:
+                taxonomia[tag] = []
+
+            for termo in termos:
+                termo_lower = termo.lower()
+                if termo_lower not in taxonomia[tag]:
+                    taxonomia[tag].append(termo_lower)
+
+        return taxonomia
 
 
-def gerar_tags_v17(titulo: str, descricao: str, objeto: str) -> list:
-    """Gera tags baseadas em palavras-chave encontradas no conteudo."""
+def gerar_tags_v18(titulo: str, descricao: str, objeto: str, taxonomia: dict = None) -> list:
+    """
+    V18.2: Gera tags baseadas na taxonomia automotiva carregada do Supabase.
+
+    IMPORTANTE: Apenas tags de VEICULOS sao geradas.
+    Tags de IMOVEL, MOBILIARIO, ELETRONICO foram REMOVIDAS.
+
+    Args:
+        titulo: Titulo do edital
+        descricao: Descricao do edital
+        objeto: Objeto/conteudo do edital
+        taxonomia: Dicionario {tag: [termos]} carregado do Supabase
+
+    Returns:
+        Lista de tags encontradas (ordenada alfabeticamente)
+    """
+    # Se nao passou taxonomia, usa fallback
+    if taxonomia is None:
+        loader = TaxonomiaLoader("", "")
+        taxonomia = loader._converter_fallback_para_dict()
+
     texto_completo = f"{titulo or ''} {descricao or ''} {objeto or ''}".lower()
     texto_normalizado = unicodedata.normalize('NFKD', texto_completo)
     texto_normalizado = texto_normalizado.encode('ASCII', 'ignore').decode('ASCII').lower()
 
     tags_encontradas = set()
 
-    for tag, keywords in TAGS_KEYWORDS.items():
+    for tag, keywords in taxonomia.items():
         for keyword in keywords:
             keyword_norm = unicodedata.normalize('NFKD', keyword)
             keyword_norm = keyword_norm.encode('ASCII', 'ignore').decode('ASCII').lower()
@@ -429,6 +774,14 @@ def gerar_tags_v17(titulo: str, descricao: str, objeto: str) -> list:
                 break
 
     return sorted(list(tags_encontradas))
+
+
+# Alias para compatibilidade com codigo existente
+def gerar_tags_v17(titulo: str, descricao: str, objeto: str) -> list:
+    """
+    Wrapper de compatibilidade que usa gerar_tags_v18 com fallback.
+    """
+    return gerar_tags_v18(titulo, descricao, objeto, taxonomia=None)
 
 
 def deve_rejeitar_por_categoria(tags: list) -> tuple[bool, str]:
@@ -1292,6 +1645,16 @@ class MinerV18:
         # V18: Inicializa o AI Enricher
         self.ai_enricher = OpenAIEnricher(config.openai_api_key, config.openai_model)
 
+        # V18.1: Carregar whitelist do Supabase (com fallback hardcoded)
+        loader = WhitelistLoader(config.supabase_url, config.supabase_key)
+        self.whitelist_dominios, from_db = loader.carregar()
+        self.whitelist_from_db = from_db  # Para logging/debug
+
+        # V18.2: Carregar taxonomia automotiva do Supabase (com fallback hardcoded)
+        taxonomia_loader = TaxonomiaLoader(config.supabase_url, config.supabase_key)
+        self.taxonomia_automotiva, taxonomia_from_db = taxonomia_loader.carregar()
+        self.taxonomia_from_db = taxonomia_from_db  # Para logging/debug
+
         self.logger = logging.getLogger("MinerV18")
 
         self.processed_ids = set()
@@ -1392,7 +1755,9 @@ class MinerV18:
             link_edital = detalhes.get("linkEdital")
 
             if link_sistema or link_edital:
-                resultado_link = processar_link_pncp_v19(link_sistema, link_edital)
+                resultado_link = processar_link_pncp_v19(
+                    link_sistema, link_edital, self.whitelist_dominios
+                )
                 if resultado_link["link_leiloeiro"]:
                     edital["link_leiloeiro"] = resultado_link["link_leiloeiro"]
         else:
@@ -1575,8 +1940,10 @@ class MinerV18:
                         # Validamos com funcao existente para garantir que nao e link malicioso
                         url_ia = dados_ai["url_leilao_oficial"]
                         if "http" in url_ia:
-                            # Valida a URL da IA
-                            valido, confianca, motivo = validar_url_link_leiloeiro_v19(url_ia)
+                            # Valida a URL da IA usando whitelist carregada do Supabase
+                            valido, confianca, motivo = validar_url_link_leiloeiro_v19(
+                                url_ia, self.whitelist_dominios
+                            )
                             if valido:
                                 edital["link_leiloeiro"] = url_ia
                                 self.logger.debug(f"  URL IA: {url_ia}")
@@ -1646,22 +2013,23 @@ class MinerV18:
             if not leiloeiro_url and texto_pdf:
                 leiloeiro_url = extrair_leiloeiro_url_pdf(texto_pdf)
 
-            # tags
+            # tags - V18.2: Usa taxonomia automotiva carregada do Supabase
+            # NOTA: Apenas tags de VEICULOS sao geradas (sem imoveis/mobiliario/eletronicos)
             if texto_pdf:
-                tags_v17 = gerar_tags_v17("", "", texto_pdf[:2000])
+                tags_v18 = gerar_tags_v18("", "", texto_pdf[:2000], self.taxonomia_automotiva)
             else:
-                titulo_v17 = edital_db.get("titulo", "")
-                descricao_v17 = edital_db.get("descricao", "")
-                tags_v17 = gerar_tags_v17(titulo_v17, descricao_v17, objeto_v17)
+                titulo_v18 = edital_db.get("titulo", "")
+                descricao_v18 = edital_db.get("descricao", "")
+                tags_v18 = gerar_tags_v18(titulo_v18, descricao_v18, objeto_v17, self.taxonomia_automotiva)
 
-            edital_db["tags"] = tags_v17
+            edital_db["tags"] = tags_v18
 
             # V19 FIX: Rejeitar editais fora do escopo (imoveis sem veiculos)
-            deve_rejeitar, motivo_rejeicao = deve_rejeitar_por_categoria(tags_v17)
+            deve_rejeitar, motivo_rejeicao = deve_rejeitar_por_categoria(tags_v18)
             if deve_rejeitar:
                 self.logger.warning(f"[REJEITADO] {pncp_id}: {motivo_rejeicao}")
                 self.stats["editais_rejeitados_categoria"] = self.stats.get("editais_rejeitados_categoria", 0) + 1
-                continue  # Pula para o proximo edital
+                return False  # V18.1 FIX: Era 'continue' mas esta fora de loop
 
             # Registro para validacao
             registro_validacao = {
@@ -1760,6 +2128,19 @@ class MinerV18:
         self.logger.info("  - data_leilao <- dataAberturaProposta")
         self.logger.info("  - valor_estimado <- valorTotalEstimado")
         self.logger.info("  - n_edital <- EXCLUSIVAMENTE do PDF")
+        self.logger.info("-" * 70)
+        self.logger.info("WHITELIST V18.1:")
+        whitelist_fonte = "Supabase" if self.whitelist_from_db else "Fallback hardcoded"
+        self.logger.info(f"  - Fonte: {whitelist_fonte}")
+        self.logger.info(f"  - Dominios carregados: {len(self.whitelist_dominios)}")
+        self.logger.info("-" * 70)
+        self.logger.info("TAXONOMIA AUTOMOTIVA V18.2:")
+        taxonomia_fonte = "Supabase" if self.taxonomia_from_db else "Fallback hardcoded"
+        self.logger.info(f"  - Fonte: {taxonomia_fonte}")
+        total_termos = sum(len(termos) for termos in self.taxonomia_automotiva.values())
+        self.logger.info(f"  - Tags disponiveis: {len(self.taxonomia_automotiva)}")
+        self.logger.info(f"  - Total de termos: {total_termos}")
+        self.logger.info("  - NOTA: IMOVEL, MOBILIARIO, ELETRONICO foram REMOVIDOS")
         self.logger.info("=" * 70)
 
         execucao_id = None
