@@ -431,6 +431,26 @@ def gerar_tags_v17(titulo: str, descricao: str, objeto: str) -> list:
     return sorted(list(tags_encontradas))
 
 
+def deve_rejeitar_por_categoria(tags: list) -> tuple[bool, str]:
+    """
+    V19 FIX: Rejeita editais que nao sao de veiculos/sucatas.
+    Ache Sucatas e focado APENAS em leiloes de veiculos.
+
+    Retorna: (deve_rejeitar, motivo)
+    """
+    if not tags:
+        return False, ""
+
+    tem_veiculo = any(t in tags for t in ["VEICULO", "SUCATA", "MOTO", "CAMINHAO", "ONIBUS"])
+    tem_imovel = "IMOVEL" in tags
+
+    # Rejeitar se tem IMOVEL mas NAO tem nenhum tipo de veiculo
+    if tem_imovel and not tem_veiculo:
+        return True, "Edital de imovel sem veiculos - fora do escopo do Ache Sucatas"
+
+    return False, ""
+
+
 # ============================================================
 # CONFIGURACAO - V18: ADICIONA OPENAI
 # ============================================================
@@ -755,6 +775,13 @@ class ScoringEngine:
         "chamamento": -12, "manifesta": -12,
         "contratação": -10, "contratacao": -10,
         "fornecimento": -10, "prestação": -10, "prestacao": -10,
+        # V19 FIX: Penalizar imoveis - Ache Sucatas e apenas para veiculos
+        "imóvel": -40, "imovel": -40, "imóveis": -40, "imoveis": -40,
+        "terreno": -35, "terrenos": -35,
+        "edificio": -35, "edifício": -35,
+        "lote urbano": -30, "lote rural": -30,
+        "área urbana": -25, "area urbana": -25,
+        "área rural": -25, "area rural": -25,
     }
 
     @staticmethod
@@ -1629,6 +1656,13 @@ class MinerV18:
 
             edital_db["tags"] = tags_v17
 
+            # V19 FIX: Rejeitar editais fora do escopo (imoveis sem veiculos)
+            deve_rejeitar, motivo_rejeicao = deve_rejeitar_por_categoria(tags_v17)
+            if deve_rejeitar:
+                self.logger.warning(f"[REJEITADO] {pncp_id}: {motivo_rejeicao}")
+                self.stats["editais_rejeitados_categoria"] = self.stats.get("editais_rejeitados_categoria", 0) + 1
+                continue  # Pula para o proximo edital
+
             # Registro para validacao
             registro_validacao = {
                 "id_interno": edital_db.get("pncp_id"),
@@ -1836,6 +1870,7 @@ class MinerV18:
         self.logger.info(f"  |- Novos: {self.stats['editais_novos']}")
         self.logger.info(f"  |- Duplicados: {self.stats['editais_duplicados']}")
         self.logger.info(f"  |- Filtrados (data passada): {self.stats['editais_filtrados_data_passada']}")
+        self.logger.info(f"  |- Rejeitados (imoveis): {self.stats.get('editais_rejeitados_categoria', 0)}")
         self.logger.info(f"Editais enriquecidos: {self.stats['editais_enriquecidos']}")
         self.logger.info(f"API detalhes: OK={self.stats['api_detalhes_ok']} / Falha={self.stats['api_detalhes_falha']}")
         self.logger.info(f"Arquivos baixados: {self.stats['arquivos_baixados']}")
