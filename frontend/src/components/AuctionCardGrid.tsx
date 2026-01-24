@@ -1,35 +1,30 @@
+import { useState } from "react"
 import type { Auction } from "../types/database"
 import { Badge } from "./ui/badge"
 import { formatCurrency, formatDate, cn } from "../lib/utils"
 import { getPncpLinkFromId } from "../utils/pncp"
-import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Package, Car, Cpu, Home, Hammer } from "lucide-react"
+import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye } from "lucide-react"
 
 interface AuctionCardGridProps {
   auction: Auction
 }
 
 /**
- * Retorna o ícone apropriado baseado nas tags do leilão
+ * Retorna a imagem apropriada baseada nas tags do leilão
  */
-function getCategoryIcon(tags: string[] | null) {
-  if (!tags || tags.length === 0) return Package
+function getCategoryImage(tags: string[] | null): string {
+  if (!tags || tags.length === 0) return "/patio_ache_sucatas.png"
 
   const tagsLower = tags.map(t => t.toLowerCase()).join(' ')
 
-  if (tagsLower.includes('veiculo') || tagsLower.includes('veículo') || tagsLower.includes('motocicleta')) return Car
-  if (tagsLower.includes('eletronico') || tagsLower.includes('eletrônico')) return Cpu
-  if (tagsLower.includes('imovel') || tagsLower.includes('imóvel')) return Home
-  if (tagsLower.includes('sucata')) return Hammer
+  // Motocicleta tem prioridade sobre veículo (é mais específico)
+  if (tagsLower.includes('motocicleta')) return "/motocicleta.png"
+  if (tagsLower.includes('veiculo') || tagsLower.includes('veículo')) return "/veiculo.png"
+  if (tagsLower.includes('eletronico') || tagsLower.includes('eletrônico')) return "/eletronico.jpg"
+  if (tagsLower.includes('imovel') || tagsLower.includes('imóvel')) return "/imovel.jpeg"
+  if (tagsLower.includes('sucata')) return "/sucata.png"
 
-  return Package
-}
-
-/**
- * Determina a cor de fundo da área de categoria
- * Padronizado com azul claro (mesma família do header #0C83D6)
- */
-function getCategoryBgColor(_tags: string[] | null): string {
-  return "bg-sky-100"
+  return "/patio_ache_sucatas.png"
 }
 
 /**
@@ -53,6 +48,7 @@ function getTagVariant(tag: string): "sucata" | "documentado" | "secondary" {
  */
 export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
   const {
+    id_interno,
     titulo,
     orgao,
     uf,
@@ -69,25 +65,28 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
     status_temporal,
   } = auction
 
+  // Estado para controlar exibição completa do objeto
+  const [showFullObjeto, setShowFullObjeto] = useState(false)
+  const OBJETO_CHAR_LIMIT = 100
+
   const isEncerrado = status_temporal === 'passado'
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
   const showValue = valor_estimado !== null && valor_estimado > 0
-
-  const CategoryIcon = getCategoryIcon(tags)
-  const categoryBg = getCategoryBgColor(tags)
+  const categoryImage = getCategoryImage(tags)
 
   return (
     <div className={cn(
       "bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col h-full",
       isEncerrado && "opacity-60"
     )}>
-      {/* Área de Destaque Visual - Substitui a foto */}
-      <div className={cn(
-        "relative p-4 flex items-center justify-center min-h-[100px]",
-        categoryBg
-      )}>
-        {/* Ícone central da categoria */}
-        <CategoryIcon className="h-12 w-12 text-gray-400" strokeWidth={1.5} />
+      {/* Área de Destaque Visual - Imagem da categoria */}
+      <div className="relative min-h-[85px] overflow-hidden">
+        {/* Imagem baseada na categoria do leilão */}
+        <img
+          src={categoryImage}
+          alt="Imagem do leilão"
+          className="w-full h-[85px] object-cover"
+        />
 
         {/* Badge ENCERRADO */}
         {isEncerrado && (
@@ -110,7 +109,7 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
       </div>
 
       {/* Badges de Categoria */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-3 pt-2 pb-1.5">
         <div className="flex flex-wrap gap-1">
           {tags?.slice(0, 4).map((tag, index) => (
             <Badge
@@ -125,26 +124,26 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="px-3 pb-3 flex-1 flex flex-col">
+      <div className="px-3 pb-2 flex-1 flex flex-col">
         {/* Título - Destaque Principal */}
-        <h3 className="font-semibold text-sm text-gray-900 line-clamp-2 leading-snug mb-2">
+        <h3 className="font-semibold text-sm text-gray-900 line-clamp-2 leading-snug mb-1.5">
           {titulo || objeto_resumido || "Leilão sem título"}
         </h3>
 
         {/* Órgão */}
-        <div className="flex items-start gap-1.5 text-xs text-gray-500 mb-2">
+        <div className="flex items-start gap-1.5 text-xs text-gray-500 mb-1.5">
           <Building2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span className="line-clamp-1">{orgao || "Órgão não informado"}</span>
         </div>
 
         {/* Localização */}
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
           <MapPin className="h-3.5 w-3.5 shrink-0" />
           <span>{cidade && uf ? `${cidade}, ${uf}` : uf || "Local não informado"}</span>
         </div>
 
         {/* Data do Leilão */}
-        <div className="flex items-center gap-1.5 text-xs mb-2">
+        <div className="flex items-center gap-1.5 text-xs mb-1.5">
           <Calendar className="h-3.5 w-3.5 shrink-0 text-blue-600" />
           <span className="text-gray-700 font-medium">
             {data_leilao ? formatDate(data_leilao) : "Data não informada"}
@@ -153,7 +152,7 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
 
         {/* Data de Publicação */}
         {data_publicacao && (
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1.5">
             <FileText className="h-3 w-3 shrink-0" />
             <span>Publicado: {formatDate(data_publicacao)}</span>
           </div>
@@ -161,9 +160,32 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
 
         {/* Descrição resumida */}
         {descricao && (
-          <p className="text-[11px] text-gray-500 line-clamp-2 mb-3">
+          <p className="text-[11px] text-gray-500 line-clamp-2 mb-1.5">
             {descricao}
           </p>
+        )}
+
+        {/* Objeto - abaixo da descrição */}
+        {objeto_resumido && (
+          <div className="mb-2">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
+              Objeto
+            </p>
+            <p className="text-[11px] text-gray-600">
+              {showFullObjeto || objeto_resumido.length <= OBJETO_CHAR_LIMIT
+                ? objeto_resumido
+                : `${objeto_resumido.substring(0, OBJETO_CHAR_LIMIT)}...`}
+            </p>
+            {objeto_resumido.length > OBJETO_CHAR_LIMIT && (
+              <button
+                onClick={() => setShowFullObjeto(!showFullObjeto)}
+                className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 mt-1 font-medium"
+              >
+                <Eye className="h-3 w-3" />
+                {showFullObjeto ? "ver menos" : "ver detalhes"}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Espaçador flexível */}
@@ -171,11 +193,11 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
 
         {/* Valor Estimado - MENOR destaque que título (estilo Meli) */}
         {showValue && (
-          <div className="mb-3">
+          <div className="mb-2">
             <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
               Valor Total dos Lotes
             </p>
-            <p className="text-base font-semibold text-green-600">
+            <p className="text-sm font-semibold text-green-600">
               {formatCurrency(valor_estimado)}
             </p>
           </div>
@@ -183,14 +205,14 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
       </div>
 
       {/* Botões de Ação - Estilo Meli */}
-      <div className="px-3 pb-3 pt-2 border-t border-gray-100 flex gap-2">
+      <div className="px-3 pb-1.5 pt-1.5 border-t border-gray-100 flex gap-2">
         {/* Botão VER PNCP */}
         {link_pncp && (
           <a
             href={link_pncp}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             VER PNCP
@@ -203,7 +225,7 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
             href={link_leiloeiro}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             VER LEILOEIRO
@@ -212,11 +234,19 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
 
         {/* Indicador de encerrado */}
         {isEncerrado && (
-          <span className="flex-1 text-center text-xs text-gray-400 py-2">
+          <span className="flex-1 text-center text-xs text-gray-400 py-1.5">
             Leilão encerrado
           </span>
         )}
       </div>
+
+      {/* Rodapé - ID Interno */}
+      {id_interno && (
+        <div className="px-3 pb-1.5 flex items-center gap-1 text-[10px] text-gray-400">
+          <Hash className="h-3 w-3" />
+          <span>Ref: {id_interno}</span>
+        </div>
+      )}
     </div>
   )
 }
