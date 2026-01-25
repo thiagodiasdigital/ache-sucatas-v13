@@ -2,6 +2,7 @@
 # CodeQL - Static Application Security Testing (SAST)
 # ==============================================================================
 # Configurado em: 2026-01-19
+# Corrigido em: 2026-01-25 - Removido step duplicado de upload SARIF
 # Motivo: COMP-003 - Code scanning nao configurado (SECURITY_AUDIT_BROWSER)
 # ==============================================================================
 
@@ -46,14 +47,9 @@ jobs:
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
+      # O step analyze@v3 ja faz upload automatico do SARIF
+      # Nao precisa de step separado de upload
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
-
-      - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: ../results/${{ matrix.language }}.sarif
-          category: codeql-${{ matrix.language }}
