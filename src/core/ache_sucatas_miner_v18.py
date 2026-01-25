@@ -92,7 +92,7 @@ class WhitelistLoader:
     - Performance: carrega 1x no inicio (cache em memoria)
     """
 
-    # Fallback: 164 dominios (atualizado em jan/2026 com lista canonica)
+    # Fallback: 167 dominios (atualizado em jan/2026 com lista canonica + portais)
     FALLBACK_WHITELIST = {
         "abataleiloes.com.br", "agilileiloes.com.br", "alanleiloeiro.lel.br", "alexandrecostaleiloes.com.br",
         "alexandroleiloeiro.com.br", "alfaleiloes.com", "alfrancaleiloes.com.br", "alifrancaleiloes.com.br",
@@ -117,7 +117,7 @@ class WhitelistLoader:
         "leilaoseg.com.br", "leiloeiraerikamaciel.com.br", "leiloeirasilvani.com.br", "leiloeiroeduardo.com.br",
         "leiloeirolegentil.com.br", "leiloeironacif.com", "leiloesbrasil.com.br", "leiloesbrasilcassiano.com.br",
         "leiloesceruli.com.br", "leiloesfreire.com.br", "leiloesja.com.br", "leilomaster.com.br",
-        "leje.com.br", "lfranca.com.br", "liderleiloes.com.br", "lleiloes.com.br",
+        "leje.com.br", "lfranca.com.br", "licitardigital.com.br", "liderleiloes.com.br", "lleiloes.com.br",
         "lopesleiloes.com.br", "lopesleiloes.net.br", "lucasleiloeiro.com.br", "lut.com.br",
         "machadoleiloes.com.br", "maiconleiloeiro.com.br", "marcoscostaleiloeiro.com", "marcusviniciusleiloes.com.br",
         "marioricart.lel.br", "mauriciomarizleiloes.com.br", "mauromarcello.lel.br", "megaleiloes.com.br",
@@ -125,8 +125,9 @@ class WhitelistLoader:
         "mitroleiloes.com.br", "mklance.com.br", "msfranca.com.br", "nortedeminasleiloes.com.br",
         "octaviovianna.lel.br", "ofrancaleiloes.com.br", "onildobastos.com.br", "paulobotelholeiloeiro.com.br",
         "pavanileiloes.com.br", "pedroalmeidaleiloeiro.rio.br", "pedrocastroleiloes.com.br", "petroleiloes.com.br",
-        "pfranca.com.br", "portalleiloes.com.br", "portellaleiloes.com.br", "rafaelfrancaleiloes.com.br",
-        "rangelleiloes.com.br", "rfrancaleiloes.com.br", "ricardocorrealeiloes.com.br", "ricardogomesleiloes.com.br",
+        "pfranca.com.br", "portalleiloes.com.br", "portaldecompraspublicas.com.br", "portellaleiloes.com.br",
+        "rafaelfrancaleiloes.com.br", "rangelleiloes.com.br", "renovarleiloes.com.br", "rfrancaleiloes.com.br",
+        "ricardocorrealeiloes.com.br", "ricardogomesleiloes.com.br",
         "ricoleiloes.com.br", "rioleiloes.com.br", "rodrigocostaleiloeiro.com.br", "rogeriomenezes.com.br",
         "rymerleiloes.com.br", "schulmannleiloes.com.br", "sergiorepresasleiloes.com.br", "serpaleiloes.com.br",
         "sevidanesleiloeira.com.br", "sfranca.com.br", "silasleiloeiro.lel.br", "snleiloes.com.br",
@@ -135,6 +136,18 @@ class WhitelistLoader:
         "tassianamenezes.com.br", "telesleiloes.com.br", "tfleiloes.com.br", "tostesleiloeiro.com.br",
         "viannaleiloes.com.br", "vipleiloes.com", "vipleiloes.com.br", "webleilao.com.br",
         "wfrancaleiloes.com.br", "wmsleiloes.com.br", "wsleiloes.com.br", "zfrancaleiloes.com.br",
+        "www25.receita.fazenda.gov.br",  # Regra canonica Receita Federal
+    }
+
+    # ================================================================
+    # REGRAS CANONICAS: URLs padrao por orgao/tipo
+    # ================================================================
+    REGRAS_CANONICAS = {
+        "receita_federal": {
+            "padrao": ["receita federal", "rfb", "secretaria da receita"],
+            "url": "http://www25.receita.fazenda.gov.br/sle-sociedade/portal",
+            "dominio": "www25.receita.fazenda.gov.br",
+        },
     }
 
     def __init__(self, supabase_url: str, supabase_key: str):
@@ -190,6 +203,28 @@ class WhitelistLoader:
             self.logger.error(f"Erro ao carregar whitelist do Supabase: {e}")
             self.logger.warning("Usando whitelist fallback")
             return self.FALLBACK_WHITELIST.copy(), False
+
+    @staticmethod
+    def aplicar_regra_canonica(titulo: str, orgao: str, descricao: str = "") -> Optional[str]:
+        """
+        Aplica regras canonicas para determinar URL padrao do leiloeiro.
+
+        Args:
+            titulo: Titulo do edital
+            orgao: Nome do orgao
+            descricao: Descricao do edital
+
+        Returns:
+            URL canonica se alguma regra bater, None caso contrario
+        """
+        texto = f"{titulo} {orgao} {descricao}".lower()
+
+        for regra_nome, regra in WhitelistLoader.REGRAS_CANONICAS.items():
+            for padrao in regra["padrao"]:
+                if padrao in texto:
+                    return regra["url"]
+
+        return None
 
 
 # ============================================================
@@ -1959,6 +1994,19 @@ class MinerV18:
             # ============================================================
             # FIM DO BLOCO IA
             # ============================================================
+
+            # 4.5 REGRAS CANONICAS: Se nao tem link, verificar regras por orgao
+            if not edital.get("link_leiloeiro"):
+                url_canonica = WhitelistLoader.aplicar_regra_canonica(
+                    edital.get("titulo", ""),
+                    edital.get("orgao", ""),
+                    edital.get("descricao", "")
+                )
+                if url_canonica:
+                    edital["link_leiloeiro"] = url_canonica
+                    edital["link_leiloeiro_origem_ref"] = "regra_canonica"
+                    edital["link_leiloeiro_confianca"] = 100
+                    self.logger.debug(f"  URL canonica aplicada: {url_canonica}")
 
             # 5. Upload metadados
             if self.storage and self.storage.enable_storage:
