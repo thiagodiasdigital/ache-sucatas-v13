@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom"
 import { useAuth } from "../../contexts/AuthContext"
 import { useAvailableUFs, useCitiesByUF } from "../../hooks/useAuctions"
 import { NotificationBell } from "../NotificationBell"
-import { Search, User, LogOut, ChevronDown, X, ArrowUpDown } from "lucide-react"
+import { Search, User, LogOut, ChevronDown, X, Activity } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 // Estados brasileiros para fallback
@@ -124,7 +124,6 @@ export function Header() {
   const currentBusca = searchParams.get("busca") || ""
   const currentValorMin = searchParams.get("valor_min") || ""
   const currentValorMax = searchParams.get("valor_max") || ""
-  const currentOrdenacao = searchParams.get("ordenacao") || "recentes"
   const currentTemporalidade = searchParams.get("temporalidade") || "futuros"
 
   // Filtros de data
@@ -256,7 +255,7 @@ export function Header() {
             {/* Input de Busca */}
             <input
               type="text"
-              placeholder="Buscar sucatas, leilões, materiais..."
+              placeholder="Buscar veículos, modelos, marcas..."
               value={localBusca}
               onChange={(e) => setLocalBusca(e.target.value)}
               className="header-search-input rounded-l"
@@ -304,6 +303,15 @@ export function Header() {
           <span className="text-sm font-medium hidden sm:block">
             Olá, {userName}
           </span>
+
+          {/* Pipeline Health (Admin) */}
+          <Link
+            to="/pipeline-health"
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+            title="Pipeline Health"
+          >
+            <Activity className="h-5 w-5" />
+          </Link>
 
           {/* Profile Icon */}
           <Link
@@ -440,24 +448,6 @@ export function Header() {
             <option value="futuros">Próximos</option>
             <option value="passados">Encerrados</option>
             <option value="todos">Todos</option>
-          </select>
-        </div>
-
-        {/* Separador */}
-        <div className="h-5 w-px bg-gray-300" />
-
-        {/* Ordenar Por */}
-        <div className="flex items-center gap-1">
-          <ArrowUpDown className="h-3 w-3 text-gray-500" />
-          <select
-            value={currentOrdenacao}
-            onChange={(e) => updateFilter("ordenacao", e.target.value)}
-            className="filter-select text-[11px]"
-          >
-            <option value="recentes">Recentes</option>
-            <option value="antigos">Antigos</option>
-            <option value="proximos">Próximos</option>
-            <option value="distantes">Distantes</option>
           </select>
         </div>
 

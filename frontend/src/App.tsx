@@ -8,6 +8,7 @@ import { Layout } from "./components/Layout"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { PerfilPage } from "./pages/Perfil"
+import { PipelineHealthPage } from "./pages/PipelineHealth"
 
 // Criar cliente do React Query
 const queryClient = new QueryClient({
@@ -40,6 +41,7 @@ function App() {
                 >
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/perfil" element={<PerfilPage />} />
+                  <Route path="/pipeline-health" element={<PipelineHealthPage />} />
                 </Route>
               </Route>
 

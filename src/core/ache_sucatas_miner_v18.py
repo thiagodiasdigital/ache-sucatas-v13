@@ -1010,7 +1010,13 @@ class OpenAIEnricher:
     """
     Componente de Inteligencia Artificial (V18).
     Transforma texto bruto e metadados em inteligencia de mercado.
+
+    Brief 3.6: Inclui tracking de tokens para FinOps.
     """
+
+    # Precos OpenAI GPT-4o-mini (USD por 1M tokens) - Jan 2026
+    PRICE_INPUT_PER_1M = 0.15
+    PRICE_OUTPUT_PER_1M = 0.60
 
     def __init__(self, api_key: str, model: str):
         """
@@ -1023,6 +1029,11 @@ class OpenAIEnricher:
         self.client = None
         self.model = model
         self.logger = logging.getLogger("AI_Enricher")
+
+        # Brief 3.6: Contadores de tokens para FinOps
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.total_requests = 0
 
         if not OPENAI_AVAILABLE:
             self.logger.warning("Biblioteca openai nao instalada - enriquecimento IA desabilitado")
@@ -1037,6 +1048,22 @@ class OpenAIEnricher:
                 self.client = None
         else:
             self.logger.warning("OPENAI_API_KEY nao configurada - enriquecimento IA desabilitado")
+
+    def get_estimated_cost(self) -> float:
+        """Brief 3.6: Retorna custo estimado total em USD."""
+        input_cost = (self.total_input_tokens / 1_000_000) * self.PRICE_INPUT_PER_1M
+        output_cost = (self.total_output_tokens / 1_000_000) * self.PRICE_OUTPUT_PER_1M
+        return round(input_cost + output_cost, 6)
+
+    def get_token_stats(self) -> dict:
+        """Brief 3.6: Retorna estatisticas de uso de tokens."""
+        return {
+            "total_requests": self.total_requests,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "estimated_cost_usd": self.get_estimated_cost(),
+        }
 
     def enriquecer_edital(self, texto_pdf: str, metadados_pncp: dict) -> dict:
         """
@@ -1118,6 +1145,12 @@ class OpenAIEnricher:
 
             content = response.choices[0].message.content
             dados = json.loads(content)
+
+            # Brief 3.6: Registrar uso de tokens para FinOps
+            if hasattr(response, 'usage') and response.usage:
+                self.total_input_tokens += response.usage.prompt_tokens
+                self.total_output_tokens += response.usage.completion_tokens
+                self.total_requests += 1
 
             self.logger.debug(f"IA retornou: {list(dados.keys())}")
             return dados
@@ -1561,12 +1594,14 @@ class SupabaseRepository:
         execucao_id: int,
         stats: dict,
         status: str = "SUCCESS",
-        quality_report: QualityReport = None
+        quality_report: QualityReport = None,
+        finops: dict = None
     ):
         """
         Finaliza registro de execucao.
 
         Brief 2.2: Inclui metricas do QualityReport para analise historica.
+        Brief 3.6: Inclui metricas de FinOps (custos).
         """
         if not self.enable_supabase or not execucao_id:
             return
@@ -1593,12 +1628,119 @@ class SupabaseRepository:
                 dados["taxa_quarentena_percent"] = quality_report.taxa_quarentena_percent
                 dados["duracao_segundos"] = quality_report.duration_seconds
 
+            # Brief 3.6: Metricas de FinOps
+            if finops:
+                dados["cost_estimated_total"] = finops.get("cost_total", 0)
+                dados["cost_openai_estimated"] = finops.get("cost_openai", 0)
+                dados["num_pdfs"] = finops.get("num_pdfs", 0)
+                dados["custo_por_mil_registros"] = finops.get("custo_por_mil", 0)
+
             self.client.table("miner_execucoes").update(dados).eq(
                 "id", execucao_id
             ).execute()
 
         except Exception as e:
             self.logger.error(f"Erro ao finalizar execucao: {e}")
+
+    def salvar_quality_report(
+        self,
+        quality_report: QualityReport,
+        execucao_id: int = None
+    ) -> bool:
+        """
+        Brief 3.2: Persiste QualityReport detalhado na tabela quality_reports.
+
+        Guarda métricas completas incluindo breakdown por status e top_errors.
+        """
+        if not self.enable_supabase or not quality_report:
+            return False
+
+        try:
+            # Calcular top errors a partir do QualityReport
+            top_errors = []
+            if hasattr(quality_report, 'error_counts') and quality_report.error_counts:
+                total = sum(quality_report.error_counts.values())
+                for code, count in sorted(
+                    quality_report.error_counts.items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )[:10]:
+                    top_errors.append({
+                        "reason_code": code,
+                        "count": count,
+                        "percent": round(100.0 * count / total, 2) if total > 0 else 0
+                    })
+
+            dados = {
+                "run_id": quality_report.run_id,
+                "execucao_id": execucao_id,
+                "total_processados": quality_report.executed_total,
+                "total_validos": quality_report.valid_count,
+                "total_draft": getattr(quality_report, 'draft_count', 0),
+                "total_not_sellable": getattr(quality_report, 'not_sellable_count', 0),
+                "total_rejected": getattr(quality_report, 'rejected_count', 0),
+                "taxa_validos_percent": quality_report.taxa_validos_percent,
+                "taxa_quarentena_percent": quality_report.taxa_quarentena_percent,
+                "duracao_segundos": quality_report.duration_seconds,
+                "top_errors": top_errors,
+                "storage_path": f"quality_reports/{quality_report.run_id}.json",
+            }
+
+            # UPSERT: se já existe com mesmo run_id, atualiza
+            self.client.table("quality_reports").upsert(
+                dados,
+                on_conflict="run_id"
+            ).execute()
+
+            self.logger.info(f"QualityReport salvo na tabela: run_id={quality_report.run_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar QualityReport: {e}")
+            return False
+
+    def registrar_evento(
+        self,
+        run_id: str,
+        etapa: str,
+        evento: str,
+        nivel: str = "info",
+        mensagem: str = None,
+        dados: dict = None,
+        duracao_ms: int = None,
+        items_processados: int = 0,
+        items_sucesso: int = 0,
+        items_erro: int = 0
+    ) -> bool:
+        """
+        Brief 3.4: Registra evento do pipeline para observabilidade.
+
+        Etapas válidas: inicio, busca, coleta, pdf_download, pdf_parse,
+                        extract, enrich, validate, upsert, quarantine, fim
+        """
+        if not self.enable_supabase:
+            return False
+
+        try:
+            registro = {
+                "run_id": run_id,
+                "etapa": etapa,
+                "evento": evento,
+                "nivel": nivel,
+                "mensagem": mensagem,
+                "dados": dados or {},
+                "duracao_ms": duracao_ms,
+                "items_processados": items_processados,
+                "items_sucesso": items_sucesso,
+                "items_erro": items_erro,
+            }
+
+            self.client.table("pipeline_events").insert(registro).execute()
+            return True
+
+        except Exception as e:
+            # Não logar erro para evitar loop infinito
+            return False
 
     def inserir_quarentena(self, rejection_row: dict) -> bool:
         """
@@ -2266,6 +2408,22 @@ class MinerV18:
             if execucao_id:
                 self.logger.info(f"Execucao #{execucao_id} iniciada (run_id: {self.run_id})")
 
+            # Brief 3.4: Registrar evento de início
+            self.repo.registrar_evento(
+                run_id=self.run_id,
+                etapa="inicio",
+                evento="start",
+                nivel="info",
+                mensagem=f"Pipeline iniciado - Modo: {'FULL' if self.config.force_reprocess else 'INCREMENTAL'}",
+                dados={
+                    "versao": "V18",
+                    "modo": "FULL" if self.config.force_reprocess else "INCREMENTAL",
+                    "dias_retroativos": self.config.dias_retroativos,
+                    "termos": len(self.config.search_terms),
+                    "paginas_por_termo": self.config.paginas_por_termo,
+                }
+            )
+
         try:
             for i, termo in enumerate(self.config.search_terms, 1):
                 if self.config.run_limit > 0 and self.stats["editais_encontrados"] >= self.config.run_limit:
@@ -2314,12 +2472,16 @@ class MinerV18:
             self.stats["fim"] = datetime.now().isoformat()
 
             if self.repo and execucao_id:
+                # Brief 3.6: Calcular metricas de FinOps
+                finops = self._calcular_finops()
+
                 # Brief 2.2: Incluir QualityReport na finalizacao
                 self.repo.finalizar_execucao(
                     execucao_id,
                     self.stats,
                     "SUCCESS",
-                    quality_report=self.quality_report
+                    quality_report=self.quality_report,
+                    finops=finops
                 )
 
         except Exception as e:
@@ -2328,12 +2490,16 @@ class MinerV18:
             self.stats["fim"] = datetime.now().isoformat()
 
             if self.repo and execucao_id:
+                # Brief 3.6: Calcular metricas de FinOps mesmo em falha
+                finops = self._calcular_finops()
+
                 # Brief 2.2: Incluir QualityReport mesmo em falha
                 self.repo.finalizar_execucao(
                     execucao_id,
                     self.stats,
                     "FAILED",
-                    quality_report=self.quality_report
+                    quality_report=self.quality_report,
+                    finops=finops
                 )
 
             raise
@@ -2343,6 +2509,29 @@ class MinerV18:
 
         # Brief 1.3: Finalizar relatório com timestamp e duração
         self.quality_report.finalize()
+
+        # Brief 3.2: Persistir QualityReport na tabela
+        if self.repo:
+            self.repo.salvar_quality_report(self.quality_report, execucao_id)
+
+        # Brief 3.4: Registrar evento de fim
+        if self.repo:
+            self.repo.registrar_evento(
+                run_id=self.run_id,
+                etapa="fim",
+                evento="success",
+                nivel="info",
+                mensagem=f"Pipeline finalizado com sucesso",
+                dados={
+                    "total_processados": self.quality_report.executed_total,
+                    "total_validos": self.quality_report.valid_count,
+                    "taxa_validos": self.quality_report.taxa_validos_percent,
+                },
+                duracao_ms=int(self.quality_report.duration_seconds * 1000),
+                items_processados=self.quality_report.executed_total,
+                items_sucesso=self.quality_report.valid_count,
+                items_erro=self.stats.get("erros", 0)
+            )
 
         self._imprimir_resumo()
         self._imprimir_relatorio_qualidade()
@@ -2435,6 +2624,42 @@ class MinerV18:
         except Exception as e:
             # Não é crítico se falhar - relatório local já foi salvo
             self.logger.warning(f"Erro ao fazer upload do relatorio para Storage: {e}")
+
+    def _calcular_finops(self) -> dict:
+        """
+        Brief 3.6: Calcula metricas de FinOps para a execucao.
+
+        Retorna:
+            dict com cost_total, cost_openai, num_pdfs, custo_por_mil
+        """
+        # Custo OpenAI (se disponivel)
+        cost_openai = 0.0
+        if self.ai_enricher and hasattr(self.ai_enricher, 'get_estimated_cost'):
+            cost_openai = self.ai_enricher.get_estimated_cost()
+
+        # Custo estimado de infraestrutura (Supabase, storage, etc)
+        # Estimativa: $0.001 por PDF + $0.0005 por edital processado
+        num_pdfs = self.stats.get("pdf_extractions", 0)
+        num_editais = self.stats.get("editais_novos", 0)
+
+        cost_infra = (num_pdfs * 0.001) + (num_editais * 0.0005)
+        cost_total = cost_openai + cost_infra
+
+        # Custo por 1000 registros
+        custo_por_mil = 0.0
+        if num_editais > 0:
+            custo_por_mil = (cost_total / num_editais) * 1000
+
+        finops = {
+            "cost_total": round(cost_total, 6),
+            "cost_openai": round(cost_openai, 6),
+            "num_pdfs": num_pdfs,
+            "custo_por_mil": round(custo_por_mil, 4),
+        }
+
+        self.logger.info(f"FinOps: custo_total=${finops['cost_total']:.4f}, openai=${finops['cost_openai']:.4f}")
+
+        return finops
 
     def _imprimir_resumo(self):
         """Imprime resumo da execucao."""
