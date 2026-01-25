@@ -178,3 +178,115 @@ export function useHealthMetrics() {
     refetchInterval: 60000,
   })
 }
+
+/**
+ * Tipos para alertas
+ */
+export interface PipelineAlert {
+  id: number
+  run_id: string | null
+  execucao_id: number | null
+  tipo: string
+  severidade: "info" | "warning" | "critical"
+  titulo: string
+  mensagem: string
+  dados: Record<string, unknown>
+  status: "open" | "acknowledged" | "resolved"
+  created_at: string
+}
+
+export interface AlertCounts {
+  critical: number
+  warning: number
+  info: number
+  total: number
+}
+
+/**
+ * Hook para buscar alertas abertos
+ */
+export function useOpenAlerts(limit = 10) {
+  return useQuery({
+    queryKey: ["pipeline-alerts-open", limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_alerts")
+        .select("*")
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+      return data as PipelineAlert[]
+    },
+    refetchInterval: 15000, // Atualiza a cada 15s
+  })
+}
+
+/**
+ * Hook para contar alertas por severidade
+ */
+export function useAlertCounts() {
+  return useQuery({
+    queryKey: ["pipeline-alerts-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_alerts")
+        .select("severidade")
+        .eq("status", "open")
+
+      if (error) throw error
+
+      const counts: AlertCounts = {
+        critical: 0,
+        warning: 0,
+        info: 0,
+        total: 0,
+      }
+
+      const alerts = data as { severidade: string }[]
+      alerts.forEach((alert) => {
+        counts.total++
+        if (alert.severidade === "critical") counts.critical++
+        else if (alert.severidade === "warning") counts.warning++
+        else counts.info++
+      })
+
+      return counts
+    },
+    refetchInterval: 15000,
+  })
+}
+
+/**
+ * Hook para reconhecer/resolver alertas
+ */
+export function useAcknowledgeAlert() {
+  const acknowledge = async (alertId: number) => {
+    const { error } = await supabase
+      .from("pipeline_alerts")
+      .update({
+        status: "acknowledged",
+        acknowledged_at: new Date().toISOString(),
+      })
+      .eq("id", alertId)
+
+    if (error) throw error
+    return true
+  }
+
+  const resolve = async (alertId: number) => {
+    const { error } = await supabase
+      .from("pipeline_alerts")
+      .update({
+        status: "resolved",
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", alertId)
+
+    if (error) throw error
+    return true
+  }
+
+  return { acknowledge, resolve }
+}

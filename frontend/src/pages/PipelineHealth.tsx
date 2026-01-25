@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { Skeleton } from "../components/ui/skeleton"
+import { AlertsBanner } from "../components/AlertsBanner"
 import {
   useExecutions,
   useTopReasonCodes,
@@ -38,6 +39,9 @@ export function PipelineHealthPage() {
           Auto-refresh: 30s
         </Badge>
       </div>
+
+      {/* Alertas */}
+      <AlertsBanner />
 
       {/* Metricas Principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

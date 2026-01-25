@@ -66,6 +66,7 @@ except ImportError:
 # Adicionar path do projeto para importar validador
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from src.core.email_notifier import send_alert_email
 from validators.dataset_validator import (
     validate_record,
     ValidationResult,
@@ -1742,6 +1743,179 @@ class SupabaseRepository:
             # Não logar erro para evitar loop infinito
             return False
 
+    def criar_alerta(
+        self,
+        run_id: str,
+        execucao_id: int,
+        tipo: str,
+        severidade: str,
+        titulo: str,
+        mensagem: str,
+        dados: dict = None
+    ) -> bool:
+        """
+        Cria um alerta no sistema de observabilidade.
+
+        Tipos válidos:
+            - high_quarantine_rate: Taxa de quarentena acima do limite
+            - execution_failed: Execução falhou
+            - long_duration: Duração anormalmente longa
+            - no_valid_records: Nenhum registro válido
+            - api_error: Erro de API externa
+            - storage_error: Erro de storage
+            - openai_error: Erro de OpenAI
+
+        Severidades: info, warning, critical
+        """
+        if not self.enable_supabase:
+            return False
+
+        try:
+            registro = {
+                "run_id": run_id,
+                "execucao_id": execucao_id,
+                "tipo": tipo,
+                "severidade": severidade,
+                "titulo": titulo,
+                "mensagem": mensagem,
+                "dados": dados or {},
+            }
+
+            self.client.table("pipeline_alerts").insert(registro).execute()
+            self.logger.warning(f"[ALERTA:{severidade.upper()}] {titulo}")
+
+            # Enviar email para alertas críticos e warnings
+            if severidade in ["critical", "warning"]:
+                email_enviado = send_alert_email(
+                    severidade=severidade,
+                    titulo=titulo,
+                    mensagem=mensagem,
+                    dados=dados,
+                    run_id=run_id
+                )
+                if email_enviado:
+                    self.logger.info(f"[EMAIL] Alerta enviado por email")
+                    # Atualizar registro no banco
+                    try:
+                        self.client.table("pipeline_alerts").update({
+                            "email_enviado": True,
+                            "email_enviado_at": datetime.utcnow().isoformat()
+                        }).eq("run_id", run_id).eq("tipo", tipo).execute()
+                    except Exception:
+                        pass  # Não falhar se não conseguir atualizar
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Erro ao criar alerta: {e}")
+            return False
+
+    def verificar_e_criar_alertas(
+        self,
+        run_id: str,
+        execucao_id: int,
+        quality_report,
+        duracao_segundos: float,
+        status: str
+    ) -> int:
+        """
+        Verifica métricas e cria alertas automaticamente.
+
+        Regras:
+            - Taxa quarentena > 30%: critical
+            - Taxa quarentena > 15%: warning
+            - Execução falhou: critical
+            - Duração > 30 min: warning
+            - Nenhum válido (com processados > 0): warning
+
+        Retorna: número de alertas criados
+        """
+        alertas_criados = 0
+
+        # 1. Verificar se execução falhou
+        if status == "FAILED":
+            self.criar_alerta(
+                run_id=run_id,
+                execucao_id=execucao_id,
+                tipo="execution_failed",
+                severidade="critical",
+                titulo="Execucao do pipeline falhou",
+                mensagem=f"A execucao {run_id} terminou com status FAILED.",
+                dados={"status": status}
+            )
+            alertas_criados += 1
+
+        # 2. Verificar taxa de quarentena
+        if quality_report and quality_report.executed_total > 0:
+            taxa_quarentena = quality_report.taxa_quarentena_percent
+
+            if taxa_quarentena > 30:
+                self.criar_alerta(
+                    run_id=run_id,
+                    execucao_id=execucao_id,
+                    tipo="high_quarantine_rate",
+                    severidade="critical",
+                    titulo=f"Taxa de quarentena critica: {taxa_quarentena:.1f}%",
+                    mensagem=f"A taxa de quarentena esta em {taxa_quarentena:.1f}%, muito acima do limite de 30%.",
+                    dados={
+                        "taxa_quarentena": taxa_quarentena,
+                        "total_processados": quality_report.executed_total,
+                        "total_quarentena": quality_report.total_quarentena,
+                        "limite": 30
+                    }
+                )
+                alertas_criados += 1
+            elif taxa_quarentena > 15:
+                self.criar_alerta(
+                    run_id=run_id,
+                    execucao_id=execucao_id,
+                    tipo="high_quarantine_rate",
+                    severidade="warning",
+                    titulo=f"Taxa de quarentena elevada: {taxa_quarentena:.1f}%",
+                    mensagem=f"A taxa de quarentena esta em {taxa_quarentena:.1f}%, acima do limite de 15%.",
+                    dados={
+                        "taxa_quarentena": taxa_quarentena,
+                        "total_processados": quality_report.executed_total,
+                        "total_quarentena": quality_report.total_quarentena,
+                        "limite": 15
+                    }
+                )
+                alertas_criados += 1
+
+        # 3. Verificar se nenhum registro válido
+        if quality_report and quality_report.executed_total > 0 and quality_report.valid_count == 0:
+            self.criar_alerta(
+                run_id=run_id,
+                execucao_id=execucao_id,
+                tipo="no_valid_records",
+                severidade="warning",
+                titulo="Nenhum registro valido na execucao",
+                mensagem=f"Foram processados {quality_report.executed_total} registros, mas nenhum foi considerado valido.",
+                dados={
+                    "total_processados": quality_report.executed_total,
+                    "total_quarentena": quality_report.total_quarentena
+                }
+            )
+            alertas_criados += 1
+
+        # 4. Verificar duração anormal (> 30 minutos)
+        if duracao_segundos > 1800:  # 30 minutos
+            self.criar_alerta(
+                run_id=run_id,
+                execucao_id=execucao_id,
+                tipo="long_duration",
+                severidade="warning",
+                titulo=f"Execucao muito longa: {duracao_segundos/60:.1f} minutos",
+                mensagem=f"A execucao levou {duracao_segundos/60:.1f} minutos, acima do esperado.",
+                dados={
+                    "duracao_segundos": duracao_segundos,
+                    "duracao_minutos": duracao_segundos / 60
+                }
+            )
+            alertas_criados += 1
+
+        return alertas_criados
+
     def inserir_quarentena(self, rejection_row: dict) -> bool:
         """
         Insere registro na tabela de quarentena.
@@ -2502,6 +2676,15 @@ class MinerV18:
                     finops=finops
                 )
 
+                # Brief 3.4.1: Criar alerta de falha
+                self.repo.verificar_e_criar_alertas(
+                    run_id=self.run_id,
+                    execucao_id=execucao_id,
+                    quality_report=self.quality_report,
+                    duracao_segundos=self.quality_report.duration_seconds if self.quality_report else 0,
+                    status="FAILED"
+                )
+
             raise
 
         finally:
@@ -2532,6 +2715,18 @@ class MinerV18:
                 items_sucesso=self.quality_report.valid_count,
                 items_erro=self.stats.get("erros", 0)
             )
+
+        # Brief 3.4.1: Verificar e criar alertas automáticos
+        if self.repo:
+            alertas = self.repo.verificar_e_criar_alertas(
+                run_id=self.run_id,
+                execucao_id=execucao_id,
+                quality_report=self.quality_report,
+                duracao_segundos=self.quality_report.duration_seconds,
+                status="SUCCESS"
+            )
+            if alertas > 0:
+                self.logger.warning(f"[ALERTAS] {alertas} alerta(s) criado(s) nesta execucao")
 
         self._imprimir_resumo()
         self._imprimir_relatorio_qualidade()
