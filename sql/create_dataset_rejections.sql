@@ -33,7 +33,10 @@ CREATE TABLE IF NOT EXISTS public.dataset_rejections (
 
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Idempotência: mesmo registro no mesmo run não duplica
+    UNIQUE(run_id, id_interno)
 );
 
 -- Índices para consultas frequentes

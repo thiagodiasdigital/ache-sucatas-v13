@@ -87,13 +87,28 @@ class RecordStatus(str, Enum):
 
 
 class ErrorCode(str, Enum):
+    # Campos obrigatórios
     MISSING_REQUIRED_FIELD = "missing_required_field"
+
+    # Formato de data
     INVALID_DATE_FORMAT = "invalid_date_format"
+
+    # URLs
     INVALID_URL = "invalid_url"
     TEXT_AS_URL = "text_as_url"
-    URL_NORMALIZED = "url_normalized"
-    TAGS_NORMALIZED = "tags_normalized"
+    URL_NORMALIZED = "url_normalized"  # Info, não erro
+
+    # Tags
+    TAGS_NORMALIZED = "tags_normalized"  # Info, não erro
     TAGS_EMPTY_AFTER_NORMALIZATION = "tags_empty_after_normalization"
+
+    # Brief 1.2: Códigos adicionais para quarentena
+    INVALID_UF = "invalid_uf"
+    BELOW_MINIMUM_SCORE = "below_minimum_score"
+    REJECTED_CATEGORY = "rejected_category"  # ex: imóvel sem veículo
+    DUPLICATE_RECORD = "duplicate_record"
+    EXTRACTION_ERROR = "extraction_error"  # PDF quebrado, etc
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -116,27 +131,53 @@ class ValidationResult:
 
 
 # ============================================================
-# RELATÓRIO DE QUALIDADE POR EXECUÇÃO (números, não terapia)
+# RELATÓRIO DE QUALIDADE POR EXECUÇÃO - BRIEF 1.3
 # ============================================================
 
 @dataclass
 class QualityReport:
+    """
+    Relatório de qualidade por execução (run_id).
+
+    BRIEF 1.3: Contém métricas agregadas, taxas e top 10 motivos de rejeição.
+    """
     run_id: str
+
+    # Timestamps (Brief 1.3)
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_seconds: float = 0.0
+
+    # Contagens
     executed_total: int = 0
     valid_count: int = 0
     draft_count: int = 0
     not_sellable_count: int = 0
     rejected_count: int = 0
+
+    # Contagem de erros por código
     error_counts: Dict[str, int] = field(default_factory=dict)
 
-    # gancho: “município com múltiplos editais processado parcialmente”
+    # Metadados extras
     municipio_incomplete_count: int = 0
 
+    # Tempos por etapa (opcional, Brief 1.3)
+    tempo_extracao_seconds: float = 0.0
+    tempo_validacao_seconds: float = 0.0
+    tempo_persistencia_seconds: float = 0.0
+
+    def __post_init__(self):
+        """Registra timestamp de início automaticamente."""
+        if self.started_at is None:
+            self.started_at = datetime.utcnow().isoformat() + "Z"
+
     def bump_error(self, code: ErrorCode) -> None:
+        """Incrementa contador de um código de erro."""
         k = code.value
         self.error_counts[k] = self.error_counts.get(k, 0) + 1
 
     def register(self, result: ValidationResult) -> None:
+        """Registra resultado de validação no relatório."""
         self.executed_total += 1
 
         if result.status == RecordStatus.VALID:
@@ -151,26 +192,107 @@ class QualityReport:
         for err in result.errors:
             self.bump_error(err.code)
 
+    def finalize(self) -> None:
+        """Finaliza o relatório com timestamp de fim e duração."""
+        self.finished_at = datetime.utcnow().isoformat() + "Z"
+        if self.started_at:
+            try:
+                start = datetime.fromisoformat(self.started_at.replace("Z", "+00:00"))
+                end = datetime.fromisoformat(self.finished_at.replace("Z", "+00:00"))
+                self.duration_seconds = (end - start).total_seconds()
+            except (ValueError, TypeError):
+                pass
+
+    # ========== Propriedades calculadas (Brief 1.3) ==========
+
+    @property
+    def total_quarentena(self) -> int:
+        """Total de registros em quarentena (não válidos)."""
+        return self.draft_count + self.not_sellable_count + self.rejected_count
+
+    @property
+    def taxa_validos_percent(self) -> float:
+        """Percentual de registros válidos."""
+        if self.executed_total == 0:
+            return 0.0
+        return round(self.valid_count / self.executed_total * 100, 2)
+
+    @property
+    def taxa_quarentena_percent(self) -> float:
+        """Percentual de registros em quarentena."""
+        if self.executed_total == 0:
+            return 0.0
+        return round(self.total_quarentena / self.executed_total * 100, 2)
+
+    @property
+    def top_reason_codes(self) -> List[Dict[str, Any]]:
+        """Top 10 códigos de erro ordenados por frequência."""
+        sorted_errors = sorted(
+            self.error_counts.items(),
+            key=lambda x: (-x[1], x[0])
+        )
+        return [{"code": code, "count": count} for code, count in sorted_errors[:10]]
+
+    # ========== Serialização ==========
+
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        """Converte para dicionário com todos os campos do Brief 1.3."""
+        return {
+            "run_id": self.run_id,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_seconds": self.duration_seconds,
+
+            # Contagens
+            "total_processados": self.executed_total,
+            "total_validos": self.valid_count,
+            "total_quarentena": self.total_quarentena,
+            "total_draft": self.draft_count,
+            "total_not_sellable": self.not_sellable_count,
+            "total_rejected": self.rejected_count,
+
+            # Taxas
+            "taxa_validos_percent": self.taxa_validos_percent,
+            "taxa_quarentena_percent": self.taxa_quarentena_percent,
+
+            # Top motivos
+            "top_reason_codes": self.top_reason_codes,
+
+            # Detalhes completos
+            "error_counts": self.error_counts,
+
+            # Tempos por etapa
+            "tempo_extracao_seconds": self.tempo_extracao_seconds,
+            "tempo_validacao_seconds": self.tempo_validacao_seconds,
+            "tempo_persistencia_seconds": self.tempo_persistencia_seconds,
+
+            # Extras
+            "municipio_incomplete_count": self.municipio_incomplete_count,
+        }
 
     def to_json(self) -> str:
+        """Serializa para JSON."""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
     def print_summary(self) -> None:
-        print(f"Run: {self.run_id}")
-        print(f"Executados: {self.executed_total}")
-        print(f"Válidos: {self.valid_count}")
-        print(f"Draft: {self.draft_count}")
-        print(f"Not sellable: {self.not_sellable_count}")
-        print(f"Rejeitados: {self.rejected_count}")
-        if self.municipio_incomplete_count:
-            print(f"Municípios com processamento incompleto: {self.municipio_incomplete_count}")
-
-        if self.error_counts:
-            print("Erros (contagem):")
-            for k, v in sorted(self.error_counts.items(), key=lambda x: (-x[1], x[0])):
-                print(f"  - {k}: {v}")
+        """Imprime resumo no console."""
+        print("=" * 60)
+        print(f"RELATORIO DE QUALIDADE - {self.run_id}")
+        print("=" * 60)
+        print(f"Processados:  {self.executed_total}")
+        print(f"Validos:      {self.valid_count} ({self.taxa_validos_percent}%)")
+        print(f"Quarentena:   {self.total_quarentena} ({self.taxa_quarentena_percent}%)")
+        print(f"  - Draft:        {self.draft_count}")
+        print(f"  - Not sellable: {self.not_sellable_count}")
+        print(f"  - Rejected:     {self.rejected_count}")
+        print("-" * 60)
+        if self.duration_seconds > 0:
+            print(f"Duracao:      {self.duration_seconds:.2f}s")
+        if self.top_reason_codes:
+            print("Top motivos de quarentena:")
+            for item in self.top_reason_codes[:5]:
+                print(f"  - {item['code']}: {item['count']}")
+        print("=" * 60)
 
 
 def new_run_id() -> str:

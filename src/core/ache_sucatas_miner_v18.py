@@ -903,6 +903,9 @@ class MinerConfig:
     openai_model: str = "gpt-4o-mini"  # Modelo rapido e barato
     enable_ai_enrichment: bool = True  # Flag para habilitar/desabilitar enriquecimento IA
 
+    # Fase 2: Processamento Incremental
+    force_reprocess: bool = False  # Se True, reprocessa mesmo editais que já existem no banco
+
     # Termos de busca
     search_terms: List[str] = field(default_factory=lambda: [
         "leilao de veiculos",
@@ -1523,8 +1526,12 @@ class SupabaseRepository:
             self.logger.error(f"Erro ao inserir edital: {e}")
             return False
 
-    def iniciar_execucao(self, config: MinerConfig) -> Optional[int]:
-        """Registra inicio de execucao do miner."""
+    def iniciar_execucao(self, config: MinerConfig, run_id: str = None) -> Optional[int]:
+        """
+        Registra inicio de execucao do miner.
+
+        Brief 2.2: Inclui run_id para correlacao com QualityReport.
+        """
         if not self.enable_supabase:
             return None
 
@@ -1536,6 +1543,8 @@ class SupabaseRepository:
                 "paginas_por_termo": config.paginas_por_termo,
                 "status": "RUNNING",
                 "inicio": datetime.now().isoformat(),
+                "run_id": run_id,  # Brief 2.2: Correlacao com QualityReport
+                "modo_processamento": "FULL" if config.force_reprocess else "INCREMENTAL",
             }
 
             result = self.client.table("miner_execucoes").insert(dados).execute()
@@ -1551,9 +1560,14 @@ class SupabaseRepository:
         self,
         execucao_id: int,
         stats: dict,
-        status: str = "SUCCESS"
+        status: str = "SUCCESS",
+        quality_report: QualityReport = None
     ):
-        """Finaliza registro de execucao."""
+        """
+        Finaliza registro de execucao.
+
+        Brief 2.2: Inclui metricas do QualityReport para analise historica.
+        """
         if not self.enable_supabase or not execucao_id:
             return
 
@@ -1566,7 +1580,18 @@ class SupabaseRepository:
                 "editais_enriquecidos": stats.get("editais_enriquecidos", 0),
                 "arquivos_baixados": stats.get("arquivos_baixados", 0),
                 "erros": stats.get("erros", 0),
+                # Brief 2.1: Processamento incremental
+                "editais_skip_existe": stats.get("editais_skip_existe", 0),
             }
+
+            # Brief 2.2: Metricas do QualityReport
+            if quality_report:
+                dados["total_processados"] = quality_report.executed_total
+                dados["total_validos"] = quality_report.valid_count
+                dados["total_quarentena"] = quality_report.total_quarentena
+                dados["taxa_validos_percent"] = quality_report.taxa_validos_percent
+                dados["taxa_quarentena_percent"] = quality_report.taxa_quarentena_percent
+                dados["duracao_segundos"] = quality_report.duration_seconds
 
             self.client.table("miner_execucoes").update(dados).eq(
                 "id", execucao_id
@@ -1576,21 +1601,46 @@ class SupabaseRepository:
             self.logger.error(f"Erro ao finalizar execucao: {e}")
 
     def inserir_quarentena(self, rejection_row: dict) -> bool:
-        """Insere registro na tabela de quarentena."""
+        """
+        Insere registro na tabela de quarentena.
+
+        IDEMPOTÊNCIA: Usa upsert com on_conflict(run_id, id_interno).
+        Se o mesmo registro do mesmo run já existe, atualiza em vez de duplicar.
+
+        BRIEF 1.2: Inclui reason_code e reason_detail para queries diretas.
+        """
         if not self.enable_supabase:
             return False
 
         try:
+            errors = rejection_row.get("errors", [])
+            status = rejection_row.get("status", "unknown")
+
+            # Extrair reason_code e reason_detail do primeiro erro
+            if errors and len(errors) > 0:
+                first_error = errors[0]
+                reason_code = first_error.get("code", status)
+                reason_detail = first_error.get("message", f"Status: {status}")[:500]
+            else:
+                reason_code = status
+                reason_detail = f"Status: {status}"
+
             dados = {
                 "run_id": rejection_row.get("run_id"),
                 "id_interno": rejection_row.get("id_interno"),
-                "status": rejection_row.get("status"),
-                "errors": rejection_row.get("errors", []),
+                "status": status,
+                "reason_code": reason_code,
+                "reason_detail": reason_detail,
+                "errors": errors,
                 "raw_record": rejection_row.get("raw_record", {}),
                 "normalized_record": rejection_row.get("normalized_record", {}),
             }
 
-            result = self.client.table("dataset_rejections").insert(dados).execute()
+            # UPSERT: idempotência garantida via UNIQUE(run_id, id_interno)
+            result = self.client.table("dataset_rejections").upsert(
+                dados,
+                on_conflict="run_id,id_interno"
+            ).execute()
             return len(result.data) > 0
 
         except Exception as e:
@@ -1910,6 +1960,15 @@ class MinerV18:
             return False
 
         self.processed_ids.add(pncp_id)
+
+        # Fase 2: Processamento Incremental
+        # Verifica se edital já existe no banco (skip se não for force_reprocess)
+        if self.repo and self.repo.enable_supabase and not self.config.force_reprocess:
+            if self.repo.edital_existe(pncp_id):
+                self.stats["editais_skip_existe"] = self.stats.get("editais_skip_existe", 0) + 1
+                self.logger.debug(f"[SKIP] Edital {pncp_id} ja existe no banco (use --force para reprocessar)")
+                return False
+
         self.stats["editais_novos"] += 1
 
         try:
@@ -2189,13 +2248,23 @@ class MinerV18:
         self.logger.info(f"  - Tags disponiveis: {len(self.taxonomia_automotiva)}")
         self.logger.info(f"  - Total de termos: {total_termos}")
         self.logger.info("  - NOTA: IMOVEL, MOBILIARIO, ELETRONICO foram REMOVIDOS")
+        self.logger.info("-" * 70)
+        self.logger.info("MODO DE PROCESSAMENTO (Fase 2):")
+        if self.config.force_reprocess:
+            self.logger.info("  - Modo: FULL (--force)")
+            self.logger.info("  - Todos os editais serao processados, mesmo existentes")
+        else:
+            self.logger.info("  - Modo: INCREMENTAL")
+            self.logger.info("  - Editais existentes no banco serao ignorados")
+            self.logger.info("  - Use --force para reprocessar todos")
         self.logger.info("=" * 70)
 
         execucao_id = None
         if self.repo:
-            execucao_id = self.repo.iniciar_execucao(self.config)
+            # Brief 2.2: Passar run_id para correlacao com QualityReport
+            execucao_id = self.repo.iniciar_execucao(self.config, run_id=self.run_id)
             if execucao_id:
-                self.logger.info(f"Execucao #{execucao_id} iniciada")
+                self.logger.info(f"Execucao #{execucao_id} iniciada (run_id: {self.run_id})")
 
         try:
             for i, termo in enumerate(self.config.search_terms, 1):
@@ -2245,7 +2314,13 @@ class MinerV18:
             self.stats["fim"] = datetime.now().isoformat()
 
             if self.repo and execucao_id:
-                self.repo.finalizar_execucao(execucao_id, self.stats, "SUCCESS")
+                # Brief 2.2: Incluir QualityReport na finalizacao
+                self.repo.finalizar_execucao(
+                    execucao_id,
+                    self.stats,
+                    "SUCCESS",
+                    quality_report=self.quality_report
+                )
 
         except Exception as e:
             self.logger.error(f"Erro na mineracao: {e}")
@@ -2253,29 +2328,69 @@ class MinerV18:
             self.stats["fim"] = datetime.now().isoformat()
 
             if self.repo and execucao_id:
-                self.repo.finalizar_execucao(execucao_id, self.stats, "FAILED")
+                # Brief 2.2: Incluir QualityReport mesmo em falha
+                self.repo.finalizar_execucao(
+                    execucao_id,
+                    self.stats,
+                    "FAILED",
+                    quality_report=self.quality_report
+                )
 
             raise
 
         finally:
             self.pncp.close()
 
+        # Brief 1.3: Finalizar relatório com timestamp e duração
+        self.quality_report.finalize()
+
         self._imprimir_resumo()
         self._imprimir_relatorio_qualidade()
         self._salvar_relatorio_json()
+        self._upload_relatorio_storage()
 
         return self.stats
 
     def _imprimir_relatorio_qualidade(self):
-        """Imprime resumo do relatorio de qualidade."""
+        """
+        Brief 1.3: Imprime relatório de qualidade com métricas completas.
+
+        Inclui: totais, taxas percentuais, duração e top motivos.
+        """
+        report = self.quality_report
+        self.logger.info("")
         self.logger.info("=" * 70)
-        self.logger.info("RELATORIO DE QUALIDADE - VALIDACAO")
+        self.logger.info("RELATORIO DE QUALIDADE - BRIEF 1.3")
         self.logger.info("=" * 70)
-        self.quality_report.print_summary()
+        self.logger.info(f"Run ID:       {report.run_id}")
+        self.logger.info(f"Inicio:       {report.started_at}")
+        self.logger.info(f"Fim:          {report.finished_at}")
+        self.logger.info(f"Duracao:      {report.duration_seconds:.2f}s")
+        self.logger.info("-" * 70)
+        self.logger.info(f"Processados:  {report.executed_total}")
+        self.logger.info(f"Validos:      {report.valid_count} ({report.taxa_validos_percent}%)")
+        self.logger.info(f"Quarentena:   {report.total_quarentena} ({report.taxa_quarentena_percent}%)")
+        self.logger.info(f"  |- Draft:        {report.draft_count}")
+        self.logger.info(f"  |- Not sellable: {report.not_sellable_count}")
+        self.logger.info(f"  |- Rejected:     {report.rejected_count}")
+        self.logger.info("-" * 70)
+
+        if report.top_reason_codes:
+            self.logger.info("Top motivos de quarentena:")
+            for item in report.top_reason_codes[:5]:
+                self.logger.info(f"  - {item['code']}: {item['count']}")
+
+        # Alerta se taxa de quarentena > 20%
+        if report.taxa_quarentena_percent > 20:
+            self.logger.warning(
+                f"[ALERTA] Taxa de quarentena acima de 20%! "
+                f"({report.taxa_quarentena_percent}%)"
+            )
+
         self.logger.info("=" * 70)
 
     def _salvar_relatorio_json(self):
-        """Salva relatorio de qualidade em JSON."""
+        """Salva relatorio de qualidade em JSON local."""
         try:
             reports_dir = Path(__file__).parent.parent.parent / "reports" / "quality"
             reports_dir.mkdir(parents=True, exist_ok=True)
@@ -2284,10 +2399,42 @@ class MinerV18:
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(self.quality_report.to_json())
 
-            self.logger.info(f"Relatorio salvo: {filepath}")
+            self.logger.info(f"Relatorio local salvo: {filepath}")
 
         except Exception as e:
-            self.logger.error(f"Erro ao salvar relatorio JSON: {e}")
+            self.logger.error(f"Erro ao salvar relatorio JSON local: {e}")
+
+    def _upload_relatorio_storage(self):
+        """
+        Brief 1.3: Upload do relatório de qualidade para Supabase Storage.
+
+        Bucket: reports
+        Path: quality_reports/{run_id}.json
+        """
+        if not self.storage or not self.storage.enable_storage:
+            self.logger.debug("Storage desativado, skip upload do relatorio")
+            return
+
+        try:
+            report_json = self.quality_report.to_json()
+            filename = f"quality_reports/{self.run_id}.json"
+
+            # Upload para o bucket de reports
+            url = self.storage.client.storage.from_("reports").upload(
+                filename,
+                report_json.encode("utf-8"),
+                {"content-type": "application/json", "upsert": "true"}
+            )
+
+            # Gerar URL pública (se bucket for público) ou URL assinada
+            public_url = self.storage.client.storage.from_("reports").get_public_url(filename)
+
+            self.logger.info(f"Relatorio enviado para Storage: {filename}")
+            self.logger.info(f"URL: {public_url}")
+
+        except Exception as e:
+            # Não é crítico se falhar - relatório local já foi salvo
+            self.logger.warning(f"Erro ao fazer upload do relatorio para Storage: {e}")
 
     def _imprimir_resumo(self):
         """Imprime resumo da execucao."""
@@ -2296,8 +2443,9 @@ class MinerV18:
         self.logger.info("=" * 70)
         self.logger.info(f"Run ID: {self.run_id}")
         self.logger.info(f"Editais encontrados: {self.stats['editais_encontrados']}")
-        self.logger.info(f"  |- Novos: {self.stats['editais_novos']}")
-        self.logger.info(f"  |- Duplicados: {self.stats['editais_duplicados']}")
+        self.logger.info(f"  |- Novos processados: {self.stats['editais_novos']}")
+        self.logger.info(f"  |- Duplicados (mesmo run): {self.stats['editais_duplicados']}")
+        self.logger.info(f"  |- Skip (ja existe no banco): {self.stats.get('editais_skip_existe', 0)}")
         self.logger.info(f"  |- Filtrados (data passada): {self.stats['editais_filtrados_data_passada']}")
         self.logger.info(f"  |- Rejeitados (imoveis): {self.stats.get('editais_rejeitados_categoria', 0)}")
         self.logger.info(f"Editais enriquecidos: {self.stats['editais_enriquecidos']}")
@@ -2370,6 +2518,11 @@ def main():
         action="store_true",
         help="Ativa modo debug com logs detalhados"
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Forca reprocessamento de editais que ja existem no banco (modo full)"
+    )
 
     args = parser.parse_args()
 
@@ -2391,6 +2544,7 @@ def main():
         run_limit=run_limit,
         enable_ai_enrichment=not args.sem_ia,
         openai_model=args.modelo_ia,
+        force_reprocess=args.force,  # Fase 2: Processamento Incremental
     )
 
     miner = MinerV18(config)
