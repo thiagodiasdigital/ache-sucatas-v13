@@ -6,6 +6,7 @@ ACHE SUCATAS DaaS V13
 """
 import os
 import re
+import uuid
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -880,8 +881,8 @@ class SupabaseRepository:
         cidade = cidade[:30]  # Limitar tamanho
         pncp_id = edital.get("pncp_id", "")
 
-        # Gerar id_interno: UF_CIDADE_PNCP_ID
-        id_interno = f"{uf}_{cidade}_{pncp_id}"
+        # Gerar id_interno no formato padrão: ID_XXXXXXXXXXXX (12 chars hex)
+        id_interno = f"ID_{uuid.uuid4().hex[:12].upper()}"
 
         # Formatar data_publicacao
         data_pub = edital.get("data_publicacao")
