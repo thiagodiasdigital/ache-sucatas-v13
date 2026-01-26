@@ -1,9 +1,17 @@
 import { useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "react-router-dom"
-import { LayoutGrid, Map, Calendar } from "lucide-react"
+import { LayoutGrid, Map, Calendar, FileSearch } from "lucide-react"
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group"
+import { Badge } from "./ui/badge"
 
 export type ViewMode = "grid" | "map" | "calendar"
+
+interface ModeSwitcherProps {
+  /** Total de leilões encontrados (exibido como indicador) */
+  totalItems?: number
+  /** Se está carregando os dados */
+  isLoading?: boolean
+}
 
 const VIEW_MODES = [
   { value: "grid", label: "Grid", icon: LayoutGrid, shortcut: "G" },
@@ -13,7 +21,7 @@ const VIEW_MODES = [
 
 const LOCAL_STORAGE_KEY = "ache-sucatas-view-mode"
 
-export function ModeSwitcher() {
+export function ModeSwitcher({ totalItems, isLoading }: ModeSwitcherProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialSyncDone = useRef(false)
 
@@ -84,29 +92,65 @@ export function ModeSwitcher() {
     }
   }, [setView])
 
+  // Formatar número com separador de milhares (pt-BR)
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat("pt-BR").format(num)
+  }
+
   return (
-    <div className="flex items-center gap-4">
-      <span className="text-sm text-muted-foreground">Visualização:</span>
-      <ToggleGroup
-        type="single"
-        value={currentView}
-        onValueChange={(value: string) => {
-          if (value) setView(value as ViewMode)
-        }}
-        aria-label="Modo de visualização"
-      >
-        {VIEW_MODES.map((mode) => (
-          <ToggleGroupItem
-            key={mode.value}
-            value={mode.value}
-            aria-label={`${mode.label} (${mode.shortcut})`}
-            title={`${mode.label} (${mode.shortcut})`}
+    <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Lado esquerdo: Modos de visualização */}
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-muted-foreground">Visualização:</span>
+        <ToggleGroup
+          type="single"
+          value={currentView}
+          onValueChange={(value: string) => {
+            if (value) setView(value as ViewMode)
+          }}
+          aria-label="Modo de visualização"
+        >
+          {VIEW_MODES.map((mode) => (
+            <ToggleGroupItem
+              key={mode.value}
+              value={mode.value}
+              aria-label={`${mode.label} (${mode.shortcut})`}
+              title={`${mode.label} (${mode.shortcut})`}
+            >
+              <mode.icon className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">{mode.label}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
+      {/* Lado direito: Contador de resultados */}
+      <div className="flex items-center gap-2">
+        <FileSearch className="h-4 w-4 text-muted-foreground" />
+        {isLoading ? (
+          <span className="text-sm text-muted-foreground animate-pulse">
+            Buscando...
+          </span>
+        ) : (
+          <Badge
+            variant="secondary"
+            className="text-sm font-medium px-3 py-1"
           >
-            <mode.icon className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">{mode.label}</span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+            {totalItems !== undefined ? (
+              <>
+                <span className="font-bold text-primary">
+                  {formatNumber(totalItems)}
+                </span>
+                <span className="ml-1 text-muted-foreground">
+                  {totalItems === 1 ? "leilão encontrado" : "leilões encontrados"}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </Badge>
+        )}
+      </div>
     </div>
   )
 }

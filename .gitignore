@@ -97,3 +97,6 @@ coverage.xml
 
 # Ruff cache
 .ruff_cache/
+
+# Relatórios gerados
+reports/

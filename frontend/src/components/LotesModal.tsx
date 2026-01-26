@@ -14,7 +14,7 @@ import type { Lote } from "../types/database"
 interface LotesModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  editalId: number | null
+  idInterno: string | null
   tituloEdital?: string
 }
 
@@ -123,8 +123,8 @@ function LoteItem({ lote, index }: { lote: Lote; index: number }) {
 /**
  * Modal/Drawer para exibir lista completa de lotes de um edital
  */
-export function LotesModal({ open, onOpenChange, editalId, tituloEdital }: LotesModalProps) {
-  const { lotes, isLoading, error, totalLotes } = useLotes(editalId)
+export function LotesModal({ open, onOpenChange, idInterno, tituloEdital }: LotesModalProps) {
+  const { lotes, isLoading, error, totalLotes } = useLotes(idInterno)
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>

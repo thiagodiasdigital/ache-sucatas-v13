@@ -73,8 +73,8 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
   const categoryImage = getCategoryImage(tags)
 
-  // Buscar lotes do edital (usando o id numérico do auction)
-  const { lotes, isLoading: isLoadingLotes, totalLotes } = useLotes(auction.id)
+  // Buscar lotes do edital (usando id_interno - campo único compartilhado)
+  const { lotes, isLoading: isLoadingLotes, totalLotes } = useLotes(auction.id_interno)
   const lotesPreview = getLotesPreview(lotes, 80)
 
   return (
@@ -242,7 +242,7 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
       <LotesModal
         open={showLotesModal}
         onOpenChange={setShowLotesModal}
-        editalId={auction.id}
+        idInterno={auction.id_interno}
         tituloEdital={titulo || objeto_resumido || undefined}
       />
     </div>

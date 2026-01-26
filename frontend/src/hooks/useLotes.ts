@@ -4,22 +4,20 @@ import type { Lote } from "../types/database"
 
 /**
  * Hook para buscar lotes de um edital específico.
- * Retorna lista de lotes com informações de veículos.
+ * Usa RPC get_lotes_by_id_interno para resolver incompatibilidade
+ * entre raw.leiloes.id e editais_leilao.id.
  *
- * @param editalId - ID do edital (tabela editais_leilao)
+ * @param idInterno - id_interno do edital (campo único compartilhado)
  * @returns { lotes, isLoading, error, totalLotes }
  */
-export function useLotes(editalId: number | null) {
+export function useLotes(idInterno: string | null) {
   const query = useQuery<Lote[], Error>({
-    queryKey: ["lotes", editalId],
+    queryKey: ["lotes", idInterno],
     queryFn: async () => {
-      if (!editalId) return []
+      if (!idInterno) return []
 
       const { data, error } = await supabase
-        .from("lotes_leilao")
-        .select("*")
-        .eq("edital_id", editalId)
-        .order("numero_lote", { ascending: true })
+        .rpc("get_lotes_by_id_interno", { p_id_interno: idInterno })
 
       if (error) {
         throw new Error(error.message)
@@ -27,7 +25,7 @@ export function useLotes(editalId: number | null) {
 
       return (data as Lote[]) || []
     },
-    enabled: !!editalId,
+    enabled: !!idInterno,
     staleTime: 1000 * 60 * 5, // 5 minutos
   })
 

@@ -44,6 +44,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import do integrador de lotes (V19.1)
+try:
+    from src.extractors.lotes_integration import LotesIntegration
+    LOTES_INTEGRATION_DISPONIVEL = True
+except ImportError:
+    LOTES_INTEGRATION_DISPONIVEL = False
+
 
 # ============================================================
 # LOGGING
@@ -451,6 +458,11 @@ class AuditorMetrics:
     excels_processados: int = 0
     csvs_processados: int = 0
 
+    # V19.1: Metricas de lotes
+    lotes_extraidos: int = 0
+    lotes_quarentena: int = 0
+    pdfs_com_lotes: int = 0
+
     erros: int = 0
     start_time: datetime = field(default_factory=datetime.now)
 
@@ -488,6 +500,11 @@ class AuditorMetrics:
         logger.info(f"  |- PDFs: {self.pdfs_processados}")
         logger.info(f"  |- Excels: {self.excels_processados}")
         logger.info(f"  |- CSVs: {self.csvs_processados}")
+        logger.info("-" * 70)
+        logger.info("EXTRACAO DE LOTES (V19.1):")
+        logger.info(f"  |- Lotes extraidos: {self.lotes_extraidos}")
+        logger.info(f"  |- PDFs com lotes: {self.pdfs_com_lotes}")
+        logger.info(f"  |- Quarentena: {self.lotes_quarentena}")
         logger.info("=" * 70)
 
 
@@ -1058,6 +1075,45 @@ class SupabaseRepositoryV19:
             self.logger.error(f"Erro atualizando edital {pncp_id}: {e}")
             return False
 
+    def marcar_processado_v19(self, pncp_id: str, motivo: str = "sem_link") -> bool:
+        """
+        Marca edital como processado pelo V19 mesmo sem encontrar link.
+
+        Isso garante rastreabilidade: sabemos que o V19 processou,
+        mesmo que nao tenha encontrado link de leiloeiro.
+
+        Args:
+            pncp_id: pncp_id do edital
+            motivo: motivo de nao ter link (ex: "sem_link", "pdf_escaneado")
+
+        Returns:
+            True se sucesso
+        """
+        if not self.enable_supabase:
+            return False
+
+        try:
+            # Valores validos para link_leiloeiro_origem_tipo (constraint do banco):
+            # pncp_api, pdf_anexo, pdf_edital, xlsx_anexo, csv_anexo,
+            # titulo_descricao, manual, unknown, NULL
+            # Usamos 'unknown' para indicar processado mas sem link encontrado
+            dados = {
+                "versao_auditor": self.config.versao_auditor,
+                "link_leiloeiro_origem_tipo": "unknown",
+                "link_leiloeiro_confianca": 0,  # Confianca zero = nao encontrou
+                "updated_at": datetime.now().isoformat(),
+            }
+
+            self.client.table("editais_leilao").update(dados).eq(
+                "pncp_id", pncp_id
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Erro marcando edital {pncp_id} como processado: {e}")
+            return False
+
     def _extrair_dominio(self, url: str) -> Optional[str]:
         """
         Extrai o domínio base de uma URL.
@@ -1167,7 +1223,7 @@ class SupabaseRepositoryV19:
 class AuditorV19:
     """Auditor de editais - Versao 19 com gate de validacao e proveniencia."""
 
-    def __init__(self, config: AuditorConfig):
+    def __init__(self, config: AuditorConfig, extrair_lotes: bool = True):
         self.config = config
         self.repo = SupabaseRepositoryV19(config)
         self.url_validator = URLValidatorV19(timeout=config.timeout_seconds)
@@ -1176,6 +1232,19 @@ class AuditorV19:
         self.logger = logging.getLogger("AuditorV19")
         self.metrics = AuditorMetrics()
         self.temp_dir = tempfile.mkdtemp(prefix="auditor_v19_")
+
+        # Integrador de lotes (V19.1)
+        self.extrair_lotes = extrair_lotes and LOTES_INTEGRATION_DISPONIVEL
+        self.lotes_integrador = None
+        if self.extrair_lotes:
+            try:
+                self.lotes_integrador = LotesIntegration(
+                    supabase_client=self.repo.client if self.repo.enable_supabase else None
+                )
+                self.logger.info("Integrador de lotes inicializado")
+            except Exception as e:
+                self.logger.warning(f"Falha ao inicializar integrador de lotes: {e}")
+                self.extrair_lotes = False
 
     def _is_data_passada(self, data_leilao) -> bool:
         """Verifica se a data do leilao ja passou."""
@@ -1257,6 +1326,8 @@ class AuditorV19:
         # ============================================================
         # CASCATA 1: PDFs
         # ============================================================
+        lotes_extraidos_total = 0  # V19.1: contador de lotes
+
         for pdf_info in pdfs:
             pdf_data = self.repo.baixar_arquivo(pdf_info["path"])
             if not pdf_data:
@@ -1275,6 +1346,32 @@ class AuditorV19:
                     fonte = "PDF"
                     self.metrics.url_extraida_pdf += 1
                     self._atualizar_metricas_gate(proveniencia)
+
+                    # V19.1: Extrair lotes do PDF
+                    if self.extrair_lotes and self.lotes_integrador and edital_id:
+                        try:
+                            pdf_bytesio.seek(0)  # Reset para reler
+                            stats_lotes = self.lotes_integrador.processar_pdf_completo(
+                                pdf_bytesio=pdf_bytesio,
+                                edital_id=edital_id,
+                                arquivo_nome=pdf_info["name"],
+                                pncp_id=pncp_id,
+                                salvar_banco=True,
+                            )
+                            lotes_salvos = stats_lotes.get('lotes_salvos', 0)
+                            lotes_extraidos_total += lotes_salvos
+                            self.metrics.lotes_extraidos += lotes_salvos
+                            if lotes_salvos > 0:
+                                self.metrics.pdfs_com_lotes += 1
+                                self.logger.info(
+                                    f"  Lotes extraidos: {lotes_salvos} "
+                                    f"({stats_lotes.get('familia_pdf', '?')})"
+                                )
+                            if not stats_lotes.get('sucesso', True):
+                                self.metrics.lotes_quarentena += 1
+                        except Exception as e:
+                            self.logger.warning(f"Erro extraindo lotes de {pdf_info['name']}: {e}")
+
                     break
                 elif proveniencia:
                     # Guardar rejeitado caso nao encontre nada valido
@@ -1454,6 +1551,12 @@ class AuditorV19:
                             )
                     else:
                         self.metrics.falhas += 1
+                else:
+                    # V19 FIX: Marcar como processado mesmo sem link encontrado
+                    # Isso garante rastreabilidade e evita reprocessamento
+                    self.repo.marcar_processado_v19(pncp_id, motivo="sem_link")
+                    self.metrics.url_nao_encontrada += 1
+                    self.logger.debug(f"  Nenhum link encontrado, marcado como processado V19")
 
             except Exception as e:
                 self.logger.error(f"Erro processando {pncp_id}: {e}")

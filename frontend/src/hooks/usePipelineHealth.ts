@@ -263,8 +263,8 @@ export function useAlertCounts() {
  */
 export function useAcknowledgeAlert() {
   const acknowledge = async (alertId: number) => {
-    const { error } = await supabase
-      .from("pipeline_alerts")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("pipeline_alerts") as any)
       .update({
         status: "acknowledged",
         acknowledged_at: new Date().toISOString(),
@@ -276,8 +276,8 @@ export function useAcknowledgeAlert() {
   }
 
   const resolve = async (alertId: number) => {
-    const { error } = await supabase
-      .from("pipeline_alerts")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("pipeline_alerts") as any)
       .update({
         status: "resolved",
         resolved_at: new Date().toISOString(),
