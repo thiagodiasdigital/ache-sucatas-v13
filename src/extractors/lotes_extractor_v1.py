@@ -47,6 +47,17 @@ import pdfplumber
 from supabase import create_client, Client
 
 # =============================================================================
+# V1.1: VERIFICAR DISPONIBILIDADE DO OPENAI (LLM FALLBACK)
+# =============================================================================
+
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    OpenAI = None
+
+# =============================================================================
 # CONFIGURAÇÃO DE LOGGING
 # =============================================================================
 
@@ -473,6 +484,11 @@ class MetricasExecucao:
     por_familia: Dict[str, int] = field(default_factory=dict)
     erros: List[str] = field(default_factory=list)
 
+    # V1.1: Métricas LLM Fallback
+    llm_requests: int = 0
+    llm_lotes_extraidos: int = 0
+    llm_cost_usd: float = 0.0
+
     def finalizar(self):
         self.fim = datetime.now()
 
@@ -487,6 +503,10 @@ class MetricasExecucao:
             'total_quarentena': self.total_quarentena,
             'por_familia': self.por_familia,
             'erros': self.erros,
+            # V1.1: Métricas LLM
+            'llm_requests': self.llm_requests,
+            'llm_lotes_extraidos': self.llm_lotes_extraidos,
+            'llm_cost_usd': self.llm_cost_usd,
         }
 
 
@@ -668,13 +688,19 @@ class ExtratorTabelas:
     def __init__(self):
         self.classificador = ClassificadorPDF()
 
-    def extrair(self, caminho_pdf: str, edital_id: int) -> ResultadoExtracao:
+    def extrair(self, caminho_pdf: str, edital_id: int, llm_extractor: 'LLMExtractor' = None) -> ResultadoExtracao:
         """
-        Extrai lotes de um PDF.
+        Extrai lotes de um PDF usando cascata de estratégias.
+
+        V1.1: Cascata (ordem de custo crescente):
+        1. pdfplumber (tabelas)     → CUSTO: $0
+        2. Regex patterns           → CUSTO: $0
+        3. LLM fallback (GPT-4o)    → CUSTO: ~$0.0008
 
         Args:
             caminho_pdf: Caminho para o arquivo PDF
             edital_id: ID do edital no banco de dados
+            llm_extractor: Instância do LLMExtractor para fallback (opcional)
 
         Returns:
             ResultadoExtracao com lotes extraídos ou erros
@@ -696,21 +722,43 @@ class ExtratorTabelas:
                 tempo_processamento_ms=int((time.time() - inicio) * 1000)
             )
 
-        # Extrair baseado na família
+        # === CASCATA DE EXTRAÇÃO ===
+        lotes = []
+        metodo_usado = None
+
         try:
+            # NÍVEL 1: pdfplumber (tabelas)
             if classificacao.familia == FamiliaPDF.PDF_TABELA_INICIO:
                 lotes = self._extrair_tabelas_inicio(caminho_pdf, classificacao)
+                if lotes:
+                    metodo_usado = "pdfplumber_tabela_inicio"
             elif classificacao.familia == FamiliaPDF.PDF_TABELA_MEIO_FIM:
                 lotes = self._extrair_tabelas_meio_fim(caminho_pdf, classificacao)
+                if lotes:
+                    metodo_usado = "pdfplumber_tabela_meio_fim"
             elif classificacao.familia == FamiliaPDF.PDF_NATIVO_SEM_TABELA:
                 lotes = self._extrair_via_regex(caminho_pdf)
-            else:
-                lotes = []
+                if lotes:
+                    metodo_usado = "regex_nativo"
 
-            # FALLBACK: Se não extraiu lotes via tabelas, tentar via regex
+            # NÍVEL 2: Regex (se tabelas não funcionaram)
             if not lotes and classificacao.familia in [FamiliaPDF.PDF_TABELA_INICIO, FamiliaPDF.PDF_TABELA_MEIO_FIM]:
-                logger.info("Tabelas sem lotes válidos, tentando extração via regex...")
+                logger.info("Cascata: tabelas sem lotes, tentando regex...")
                 lotes = self._extrair_via_regex(caminho_pdf)
+                if lotes:
+                    metodo_usado = "regex_fallback"
+
+            # NÍVEL 3: LLM Fallback (se regex não funcionou)
+            if not lotes and llm_extractor and llm_extractor.client:
+                logger.info("Cascata: tentando LLM fallback...")
+
+                # Extrair texto completo para LLM
+                texto_completo = self._extrair_texto_completo(caminho_pdf)
+
+                if texto_completo and len(texto_completo) >= 100:
+                    lotes = llm_extractor.extrair_lotes(texto_completo)
+                    if lotes:
+                        metodo_usado = "llm_fallback"
 
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -720,10 +768,12 @@ class ExtratorTabelas:
                     familia_pdf=classificacao.familia,
                     erros=[{
                         'codigo': CodigoErro.TABELA_NAO_ENCONTRADA.value,
-                        'mensagem': 'Nenhum lote extraído do PDF'
+                        'mensagem': 'Nenhum lote extraído (pdfplumber + regex + LLM)'
                     }],
                     tempo_processamento_ms=tempo_ms
                 )
+
+            logger.info(f"Extração OK: {len(lotes)} lotes via {metodo_usado}")
 
             return ResultadoExtracao(
                 sucesso=True,
@@ -743,6 +793,19 @@ class ExtratorTabelas:
                 }],
                 tempo_processamento_ms=int((time.time() - inicio) * 1000)
             )
+
+    def _extrair_texto_completo(self, caminho_pdf: str) -> str:
+        """Extrai texto completo do PDF para uso com LLM."""
+        try:
+            with pdfplumber.open(caminho_pdf) as pdf:
+                textos = []
+                for pagina in pdf.pages:
+                    texto = pagina.extract_text() or ""
+                    textos.append(texto)
+                return "\n\n".join(textos)
+        except Exception as e:
+            logger.warning(f"Erro ao extrair texto completo: {e}")
+            return ""
 
     def _extrair_tabelas_inicio(
         self,
@@ -1044,6 +1107,210 @@ class ExtratorTabelas:
 
 
 # =============================================================================
+# V1.1: EXTRATOR LLM (FALLBACK)
+# =============================================================================
+
+class LLMExtractor:
+    """
+    Extrator de lotes via LLM (GPT-4o-mini).
+    Usado como fallback quando pdfplumber e regex falham.
+
+    Padrão: Graceful degradation (se IA indisponível, retorna [])
+    Segue padrão do OpenAIEnricher do Miner V18.
+    """
+
+    # FinOps: Preços GPT-4o-mini (USD por 1M tokens) - Jan 2026
+    PRICE_INPUT_PER_1M = 0.15
+    PRICE_OUTPUT_PER_1M = 0.60
+
+    def __init__(self, api_key: str = None, model: str = "gpt-4o-mini"):
+        """
+        Inicializa o extrator LLM.
+
+        Args:
+            api_key: Chave da API OpenAI (se None, usa env OPENAI_API_KEY)
+            model: Modelo a usar (default: gpt-4o-mini)
+        """
+        self.client = None
+        self.model = model
+        self.logger = logging.getLogger("LLMExtractor")
+
+        # FinOps: Contadores de tokens
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.total_requests = 0
+
+        # Graceful degradation
+        if not OPENAI_AVAILABLE:
+            self.logger.warning("openai não instalado - LLM fallback desabilitado")
+            return
+
+        api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        if api_key:
+            try:
+                self.client = OpenAI(api_key=api_key)
+                self.logger.info(f"LLMExtractor inicializado: {model}")
+            except Exception as e:
+                self.logger.error(f"Erro ao inicializar OpenAI: {e}")
+                self.client = None
+        else:
+            self.logger.warning("OPENAI_API_KEY não configurada - LLM fallback desabilitado")
+
+    def extrair_lotes(self, texto_pdf: str, contexto: dict = None) -> List[LoteExtraido]:
+        """
+        Extrai lotes de texto usando LLM.
+
+        Args:
+            texto_pdf: Texto extraído do PDF
+            contexto: Metadados opcionais (municipio, orgao, etc)
+
+        Returns:
+            Lista de LoteExtraido ou [] em caso de falha
+        """
+        # Validações
+        if not self.client:
+            return []
+
+        if not texto_pdf or len(texto_pdf) < 100:
+            self.logger.debug("Texto insuficiente para LLM")
+            return []
+
+        # Otimização: limitar texto (economiza tokens)
+        texto_otimizado = self._otimizar_texto(texto_pdf, max_chars=8000)
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "user", "content": self._get_user_prompt(texto_otimizado, contexto)}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,  # Precisão > criatividade
+                max_tokens=2000
+            )
+
+            # FinOps: Registrar tokens
+            if hasattr(response, 'usage') and response.usage:
+                self.total_input_tokens += response.usage.prompt_tokens
+                self.total_output_tokens += response.usage.completion_tokens
+                self.total_requests += 1
+
+            # Parse resposta
+            content = response.choices[0].message.content
+            dados = json.loads(content)
+
+            lotes = self._converter_para_lotes(dados)
+            if lotes:
+                self.logger.info(f"LLM extraiu {len(lotes)} lotes")
+
+            return lotes
+
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Erro parse JSON: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"Erro LLM: {e}")
+            return []
+
+    def _get_system_prompt(self) -> str:
+        """Prompt de sistema para extração estruturada."""
+        return '''Você é um extrator de dados de editais de leilão de veículos.
+Extraia TODOS os lotes/itens do texto e retorne JSON no formato:
+
+{
+  "lotes": [
+    {
+      "numero": "01",
+      "descricao": "FIAT STRADA WORKING 1.4 2015 BRANCO",
+      "placa": "ABC1234",
+      "chassi": "9BD178226F5123456",
+      "renavam": "12345678901",
+      "marca": "FIAT",
+      "modelo": "STRADA WORKING 1.4",
+      "ano": 2015,
+      "valor": 25000.00
+    }
+  ]
+}
+
+REGRAS:
+- Retorne APENAS JSON válido
+- Se um campo não existir, OMITA (não use null)
+- numero: string, ex: "01", "02", "1", "2"
+- placa: formato ABC1234 ou ABC1D23 (Mercosul), sem hífen
+- chassi: 17 caracteres alfanuméricos
+- renavam: 9-11 dígitos
+- ano: número inteiro 4 dígitos
+- valor: número decimal (avaliação/lance mínimo)
+- Se não encontrar lotes, retorne {"lotes": []}'''
+
+    def _get_user_prompt(self, texto: str, contexto: dict = None) -> str:
+        """Prompt do usuário com texto do PDF."""
+        ctx = ""
+        if contexto:
+            ctx = f"Contexto: {contexto.get('municipio', '')} - {contexto.get('orgao', '')}\n\n"
+
+        return f"{ctx}TEXTO DO EDITAL:\n\n{texto}"
+
+    def _otimizar_texto(self, texto: str, max_chars: int = 8000) -> str:
+        """Otimiza texto para economizar tokens."""
+        if len(texto) <= max_chars:
+            return texto
+
+        # Priorizar início (geralmente tem tabela de lotes) e fim
+        inicio = texto[:int(max_chars * 0.7)]
+        fim = texto[-int(max_chars * 0.3):]
+
+        return f"{inicio}\n\n[...texto omitido...]\n\n{fim}"
+
+    def _converter_para_lotes(self, dados: dict) -> List[LoteExtraido]:
+        """Converte resposta JSON em lista de LoteExtraido."""
+        lotes = []
+
+        for item in dados.get("lotes", []):
+            try:
+                lote = LoteExtraido(
+                    numero_lote_raw=str(item.get("numero", "")),
+                    descricao_raw=item.get("descricao", ""),
+                    valor_raw=str(item.get("valor", "")) if item.get("valor") else None,
+                    texto_fonte_completo=f"LLM: {item.get('descricao', '')[:100]}",
+                    placa=item.get("placa"),
+                    chassi=item.get("chassi"),
+                    renavam=item.get("renavam"),
+                    marca=item.get("marca"),
+                    modelo=item.get("modelo"),
+                    ano_fabricacao=item.get("ano")
+                )
+
+                # Validar lote mínimo
+                if lote.numero_lote and len(lote.descricao_completa) >= 5:
+                    lotes.append(lote)
+
+            except Exception as e:
+                self.logger.warning(f"Erro ao converter lote: {e}")
+                continue
+
+        return lotes
+
+    def get_estimated_cost(self) -> float:
+        """Retorna custo estimado em USD."""
+        input_cost = (self.total_input_tokens / 1_000_000) * self.PRICE_INPUT_PER_1M
+        output_cost = (self.total_output_tokens / 1_000_000) * self.PRICE_OUTPUT_PER_1M
+        return round(input_cost + output_cost, 6)
+
+    def get_token_stats(self) -> dict:
+        """Retorna estatísticas de tokens para FinOps."""
+        return {
+            "total_requests": self.total_requests,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "estimated_cost_usd": self.get_estimated_cost()
+        }
+
+
+# =============================================================================
 # REPOSITÓRIO SUPABASE
 # =============================================================================
 
@@ -1249,18 +1516,35 @@ class LotesExtractorV1:
     """
     Orquestrador principal do extrator de lotes.
 
+    V1.1: Adiciona LLM fallback na cascata de extração.
+
     Coordena:
     1. Busca de editais pendentes
     2. Download de PDFs do Storage
-    3. Classificação e extração
+    3. Classificação e extração (cascata: pdfplumber → regex → LLM)
     4. Validação
     5. Persistência ou quarentena
     """
 
-    def __init__(self):
+    def __init__(self, enable_llm: bool = True):
+        """
+        Inicializa o orquestrador.
+
+        Args:
+            enable_llm: Se True, habilita LLM fallback (default: True)
+        """
         self.repository = LotesRepository()
         self.extrator = ExtratorTabelas()
         self.metricas = MetricasExecucao()
+
+        # V1.1: LLM Fallback
+        self.llm_extractor = None
+        if enable_llm:
+            self.llm_extractor = LLMExtractor()
+            if self.llm_extractor.client:
+                logger.info("LLM Fallback: ATIVO")
+            else:
+                logger.info("LLM Fallback: DESATIVADO (sem API key)")
 
     def executar(
         self,
@@ -1297,11 +1581,22 @@ class LotesExtractorV1:
 
         self.metricas.finalizar()
 
+        # V1.1: Capturar métricas LLM
+        if self.llm_extractor:
+            llm_stats = self.llm_extractor.get_token_stats()
+            self.metricas.llm_requests = llm_stats['total_requests']
+            self.metricas.llm_cost_usd = llm_stats['estimated_cost_usd']
+
         # Log final
         logger.info(f"=== EXTRAÇÃO FINALIZADA ===")
         logger.info(f"Total lotes extraídos: {self.metricas.total_lotes_extraidos}")
         logger.info(f"Total quarentena: {self.metricas.total_quarentena}")
         logger.info(f"Por família: {self.metricas.por_familia}")
+
+        # V1.1: Log LLM
+        if self.llm_extractor and self.metricas.llm_requests > 0:
+            logger.info(f"LLM requests: {self.metricas.llm_requests}")
+            logger.info(f"LLM custo estimado: ${self.metricas.llm_cost_usd:.4f}")
 
         return self.metricas
 
@@ -1393,8 +1688,8 @@ class LotesExtractorV1:
 
         self.metricas.total_arquivos += 1
 
-        # Extrair lotes
-        resultado = self.extrator.extrair(caminho_pdf, edital_id)
+        # Extrair lotes (V1.1: passa LLM extractor para cascata)
+        resultado = self.extrator.extrair(caminho_pdf, edital_id, llm_extractor=self.llm_extractor)
 
         # Atualizar métricas por família
         if resultado.familia_pdf:
@@ -1473,24 +1768,26 @@ def main():
     """Entry point principal."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Extrator de Lotes V1')
+    parser = argparse.ArgumentParser(description='Extrator de Lotes V1.1 (com LLM fallback)')
     parser.add_argument('--limite', type=int, default=100, help='Limite de editais')
     parser.add_argument('--diretorio', type=str, help='Diretório local com PDFs')
     parser.add_argument('--verbose', action='store_true', help='Modo verbose')
+    parser.add_argument('--sem-llm', action='store_true', help='Desabilita LLM fallback (apenas pdfplumber + regex)')
 
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    extrator = LotesExtractorV1()
+    # V1.1: Passar flag enable_llm
+    extrator = LotesExtractorV1(enable_llm=not args.sem_llm)
     metricas = extrator.executar(
         limite_editais=args.limite,
         diretorio_pdfs=args.diretorio
     )
 
     print("\n" + "="*60)
-    print("RESULTADO DA EXTRAÇÃO")
+    print("RESULTADO DA EXTRAÇÃO V1.1")
     print("="*60)
     print(json.dumps(metricas.to_dict(), indent=2, ensure_ascii=False))
 
