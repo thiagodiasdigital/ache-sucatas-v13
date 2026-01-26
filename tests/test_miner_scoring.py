@@ -1,9 +1,14 @@
 """
-Tests for ScoringEngine and FileTypeDetector in ache_sucatas_miner_v11.py
+Tests for ScoringEngine and FileTypeDetector in ache_sucatas_miner_v18.py
 """
 import pytest
+import sys
+import os
 
-from ache_sucatas_miner_v11 import ScoringEngine, FileTypeDetector
+# Adiciona src/core ao path para imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'core'))
+
+from ache_sucatas_miner_v18 import ScoringEngine, FileTypeDetector
 
 
 class TestScoringEngine:
@@ -127,20 +132,17 @@ class TestFileTypeDetector:
         # Could be .zip, .xlsx, or .docx
         assert result in [".zip", ".xlsx", ".docx"]
 
-    def test_detect_zip_based_formats_as_zip(self):
-        # Note: Current implementation returns .zip for all PK-based files
-        # because MAGIC_BYTES dict has PK\x03\x04 -> .zip which matches first
-        # The xlsx/docx detection logic is unreachable
+    def test_detect_xlsx_by_magic_bytes(self):
+        # V18 corretamente detecta xlsx pelo conteúdo 'xl/'
         xlsx_header = b'PK\x03\x04' + b'xl/' + b'\x00' * 990
         result = FileTypeDetector.detect_by_magic_bytes(xlsx_header)
-        # Returns .zip because MAGIC_BYTES matches first
-        assert result == ".zip"
+        assert result == ".xlsx"
 
-    def test_detect_docx_returns_zip(self):
-        # Same issue - returns .zip due to MAGIC_BYTES priority
+    def test_detect_docx_by_magic_bytes(self):
+        # V18 corretamente detecta docx pelo conteúdo 'word/'
         docx_header = b'PK\x03\x04' + b'word/' + b'\x00' * 990
         result = FileTypeDetector.detect_by_magic_bytes(docx_header)
-        assert result == ".zip"
+        assert result == ".docx"
 
     def test_unknown_magic_bytes(self):
         unknown = b'\x00\x00\x00\x00'

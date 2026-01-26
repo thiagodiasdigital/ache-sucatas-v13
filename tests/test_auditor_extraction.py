@@ -1,13 +1,17 @@
 """
-Tests for extraction functions in cloud_auditor_v14.py
+Tests for extraction functions in cloud_auditor_v17.py
 These are pure functions that don't require Supabase connection.
 """
 import pytest
+import sys
+import os
 from urllib.parse import urlparse
 
-from cloud_auditor_v14 import (
+# Adiciona src/core ao path para imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'core'))
+
+from cloud_auditor_v17 import (
     corrigir_encoding,
-    limpar_texto,
     formatar_data_br,
     formatar_valor_br,
     extrair_urls_de_texto,
@@ -32,34 +36,6 @@ class TestCorrigirEncoding:
 
     def test_none_returns_none(self):
         assert corrigir_encoding(None) is None
-
-
-class TestLimparTexto:
-    def test_empty_string(self):
-        assert limpar_texto("") == ""
-
-    def test_nd_value(self):
-        assert limpar_texto("N/D") == "N/D"
-
-    def test_multiple_spaces(self):
-        assert limpar_texto("a  b   c") == "a b c"
-
-    def test_multiple_newlines(self):
-        assert limpar_texto("a\n\n\n\nb") == "a\n\nb"
-
-    def test_truncation_default(self):
-        long_text = "a" * 600
-        result = limpar_texto(long_text)
-        assert len(result) <= 503  # 500 + "..."
-        assert result.endswith("...")
-
-    def test_truncation_custom_length(self):
-        text = "a" * 100
-        result = limpar_texto(text, max_length=50)
-        assert len(result) <= 53  # 50 + "..."
-
-    def test_strips_whitespace(self):
-        assert limpar_texto("  hello  ") == "hello"
 
 
 class TestFormatarDataBr:
