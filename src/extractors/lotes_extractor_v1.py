@@ -707,6 +707,11 @@ class ExtratorTabelas:
             else:
                 lotes = []
 
+            # FALLBACK: Se não extraiu lotes via tabelas, tentar via regex
+            if not lotes and classificacao.familia in [FamiliaPDF.PDF_TABELA_INICIO, FamiliaPDF.PDF_TABELA_MEIO_FIM]:
+                logger.info("Tabelas sem lotes válidos, tentando extração via regex...")
+                lotes = self._extrair_via_regex(caminho_pdf)
+
             tempo_ms = int((time.time() - inicio) * 1000)
 
             if not lotes:
@@ -798,19 +803,11 @@ class ExtratorTabelas:
         """
         Extração fallback via regex para PDFs sem tabelas detectadas.
 
-        Procura padrões como:
-        - "LOTE 01 - DESCRIÇÃO DO ITEM"
-        - "1. PLACA ABC-1234 - FIAT UNO"
+        Suporta padrões:
+        1. Padrão Fátima/BA: "INFORMAÇÕES DO VEICULO – LOTE XX"
+        2. Padrão genérico: "LOTE 01 - DESCRIÇÃO"
         """
         lotes = []
-
-        # Padrões regex para identificar lotes
-        padroes = [
-            # LOTE 01: Descrição
-            r'(?:LOTE|ITEM)\s*[N°º.]?\s*(\d+)\s*[-:]\s*(.+?)(?=(?:LOTE|ITEM)\s*[N°º.]?\s*\d+|$)',
-            # 01 - Descrição
-            r'^(\d+)\s*[-–]\s*(.+?)(?=^\d+\s*[-–]|$)',
-        ]
 
         with pdfplumber.open(caminho_pdf) as pdf:
             texto_completo = ""
@@ -818,15 +815,76 @@ class ExtratorTabelas:
                 texto_pagina = pagina.extract_text() or ""
                 texto_completo += texto_pagina + "\n"
 
-            for padrao in padroes:
+            # PADRÃO 1: Fátima/BA - "LOTE XX" seguido de bloco com AVALIAÇÃO
+            # Captura blocos completos de cada lote
+            padrao_fatima = r'LOTE\s*(\d+)\s*\n([\s\S]*?)AVALIA[CÇ][AÃ]O[:\s]*([0-9.,]+)'
+
+            matches = re.findall(padrao_fatima, texto_completo, re.IGNORECASE)
+
+            for match in matches:
+                numero, bloco, valor_str = match
+
+                # Limitar bloco às primeiras linhas relevantes (antes do CHECK LIST)
+                bloco_limpo = bloco.split('CHECK LIST')[0] if 'CHECK LIST' in bloco else bloco
+                linhas = [l.strip() for l in bloco_limpo.split('\n') if l.strip()]
+
+                # Primeira linha não-vazia é a descrição principal
+                descricao = linhas[0] if linhas else ''
+
+                # Se primeira linha é só "RENAVAM", pegar a segunda
+                if descricao.upper() == 'RENAVAM' and len(linhas) > 1:
+                    descricao = linhas[1]
+
+                # Extrair placa do bloco
+                placa_match = re.search(r'PLACA\s*[:\s]?\s*([A-Z]{2,3}[-\s]?\d[A-Z0-9]?\d{2,4})', bloco, re.IGNORECASE)
+                placa = placa_match.group(1).replace(' ', '').replace('-', '') if placa_match else None
+
+                # Extrair chassi
+                chassi_match = re.search(r'CHASSI[:\s]+([A-HJ-NPR-Z0-9]{17})', bloco, re.IGNORECASE)
+                chassi = chassi_match.group(1) if chassi_match else None
+
+                # Extrair renavam (número de 9-11 dígitos após RENAVAM ou em linha própria)
+                renavam_match = re.search(r'RENAVA[MN]?\s*[:\s]*(\d{9,11})', bloco, re.IGNORECASE)
+                if not renavam_match:
+                    # Tentar pegar número solto após linha RENAVAM
+                    renavam_match = re.search(r'RENAVA[MN]\s*\n(\d{9,11})', bloco, re.IGNORECASE)
+                renavam = renavam_match.group(1) if renavam_match else None
+
+                # Limpar valor
+                try:
+                    valor = float(valor_str.replace('.', '').replace(',', '.'))
+                except:
+                    valor = None
+
+                if len(descricao) >= 5:
+                    lote = LoteExtraido(
+                        numero_lote_raw=str(numero).zfill(2),
+                        descricao_raw=descricao,
+                        texto_fonte_completo=descricao[:200],
+                        avaliacao_valor=valor,
+                        placa=placa,
+                        chassi=chassi,
+                        renavam=renavam
+                    )
+                    lotes.append(lote)
+
+            if lotes:
+                return lotes
+
+            # PADRÃO 2: Genérico - "LOTE 01: Descrição" ou "LOTE 01 - Descrição"
+            padroes_genericos = [
+                r'(?:LOTE|ITEM)\s*[N°º.]?\s*(\d+)\s*[-:]\s*(.+?)(?=(?:LOTE|ITEM)\s*[N°º.]?\s*\d+|$)',
+                r'^(\d+)\s*[-–]\s*(.+?)(?=^\d+\s*[-–]|$)',
+            ]
+
+            for padrao in padroes_genericos:
                 matches = re.findall(padrao, texto_completo, re.MULTILINE | re.IGNORECASE | re.DOTALL)
 
                 for match in matches:
                     numero, descricao = match
-                    # Limitar descrição a 500 caracteres
                     descricao = descricao[:500].strip()
 
-                    if len(descricao) >= 10:  # Descrição mínima válida
+                    if len(descricao) >= 10:
                         lote = LoteExtraido(
                             numero_lote_raw=str(numero),
                             descricao_raw=descricao,
@@ -834,7 +892,7 @@ class ExtratorTabelas:
                         )
                         lotes.append(lote)
 
-                if lotes:  # Se encontrou com um padrão, não tenta outros
+                if lotes:
                     break
 
         return lotes
@@ -877,6 +935,10 @@ class ExtratorTabelas:
     def _identificar_colunas(self, cabecalho: List) -> Dict[str, int]:
         """
         Identifica índices das colunas relevantes no cabeçalho.
+
+        IMPORTANTE: A ordem de verificação importa!
+        - 'descricao' deve ser verificada ANTES de 'numero' porque
+          "Descrição do lote" contém 'lote' mas é coluna de descrição.
         """
         indices = {}
 
@@ -886,11 +948,14 @@ class ExtratorTabelas:
 
             col_lower = self.classificador._normalizar_texto(str(coluna))
 
-            if any(kw in col_lower for kw in ['lote', 'item', 'n.', 'nº', 'numero']):
-                indices['numero'] = i
-            elif any(kw in col_lower for kw in ['descricao', 'especificacao', 'objeto']):
+            # Descrição PRIMEIRO (antes de numero, pois "Descrição do lote" contém "lote")
+            if any(kw in col_lower for kw in ['descricao', 'especificacao', 'objeto']):
                 indices['descricao'] = i
-            elif any(kw in col_lower for kw in ['valor', 'avaliacao', 'preco', 'lance']):
+            # Número do lote (só se não for descrição)
+            elif any(kw in col_lower for kw in ['lote', 'item', 'n.', 'nº', 'numero']):
+                indices['numero'] = i
+            # Valor (incluindo "minimo" para "Valor Mínimo")
+            elif any(kw in col_lower for kw in ['valor', 'avaliacao', 'preco', 'lance', 'minimo']):
                 indices['valor'] = i
             elif 'placa' in col_lower:
                 indices['placa'] = i
