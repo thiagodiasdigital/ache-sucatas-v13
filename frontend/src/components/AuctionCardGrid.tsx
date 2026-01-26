@@ -1,9 +1,11 @@
 import { useState } from "react"
 import type { Auction } from "../types/database"
 import { Badge } from "./ui/badge"
-import { formatCurrency, formatDate, cn } from "../lib/utils"
+import { formatDate, cn } from "../lib/utils"
 import { getPncpLinkFromId } from "../utils/pncp"
-import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye } from "lucide-react"
+import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye, Package } from "lucide-react"
+import { useLotes, getLotesPreview } from "../hooks/useLotes"
+import { LotesModal } from "./LotesModal"
 
 interface AuctionCardGridProps {
   auction: Auction
@@ -58,21 +60,22 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
     data_leilao,
     descricao,
     objeto_resumido,
-    valor_estimado,
     tags,
     link_leiloeiro,
     modalidade_leilao,
     status_temporal,
   } = auction
 
-  // Estado para controlar exibição completa do objeto
-  const [showFullObjeto, setShowFullObjeto] = useState(false)
-  const OBJETO_CHAR_LIMIT = 100
+  // Estado para controlar o modal de lotes
+  const [showLotesModal, setShowLotesModal] = useState(false)
 
   const isEncerrado = status_temporal === 'passado'
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
-  const showValue = valor_estimado !== null && valor_estimado > 0
   const categoryImage = getCategoryImage(tags)
+
+  // Buscar lotes do edital (usando o id numérico do auction)
+  const { lotes, isLoading: isLoadingLotes, totalLotes } = useLotes(auction.id)
+  const lotesPreview = getLotesPreview(lotes, 80)
 
   return (
     <div className={cn(
@@ -165,43 +168,30 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
           </p>
         )}
 
-        {/* Objeto - abaixo da descrição */}
-        {objeto_resumido && (
-          <div className="mb-2">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
-              Objeto
-            </p>
-            <p className="text-[11px] text-gray-600">
-              {showFullObjeto || objeto_resumido.length <= OBJETO_CHAR_LIMIT
-                ? objeto_resumido
-                : `${objeto_resumido.substring(0, OBJETO_CHAR_LIMIT)}...`}
-            </p>
-            {objeto_resumido.length > OBJETO_CHAR_LIMIT && (
-              <button
-                onClick={() => setShowFullObjeto(!showFullObjeto)}
-                className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 mt-1 font-medium"
-              >
-                <Eye className="h-3 w-3" />
-                {showFullObjeto ? "ver menos" : "ver detalhes"}
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Espaçador flexível */}
         <div className="flex-1" />
 
-        {/* Valor Estimado - MENOR destaque que título (estilo Meli) */}
-        {showValue && (
-          <div className="mb-2">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">
-              Valor Total dos Lotes
-            </p>
-            <p className="text-sm font-semibold text-green-600">
-              {formatCurrency(valor_estimado)}
+        {/* Seção de Lotes */}
+        <div className="mb-2 border-t border-gray-100 pt-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Package className="h-3.5 w-3.5 text-gray-400" />
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+              Lotes {totalLotes > 0 && `(${totalLotes})`}
             </p>
           </div>
-        )}
+          <p className="text-[11px] text-gray-600 line-clamp-1">
+            {isLoadingLotes ? "Carregando..." : lotesPreview}
+          </p>
+        </div>
+
+        {/* Botão VER DETALHES */}
+        <button
+          onClick={() => setShowLotesModal(true)}
+          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors mb-2"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          VER DETALHES
+        </button>
       </div>
 
       {/* Botões de Ação - Estilo Meli */}
@@ -247,6 +237,14 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
           <span>Ref: {id_interno}</span>
         </div>
       )}
+
+      {/* Modal de Lotes */}
+      <LotesModal
+        open={showLotesModal}
+        onOpenChange={setShowLotesModal}
+        editalId={auction.id}
+        tituloEdital={titulo || objeto_resumido || undefined}
+      />
     </div>
   )
 }

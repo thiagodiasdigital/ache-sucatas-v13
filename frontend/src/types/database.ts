@@ -7,8 +7,155 @@ export type Json =
   | Json[]
 
 export interface Database {
-  pub: {
+  public: {
     Tables: {
+      pipeline_alerts: {
+        Row: {
+          id: number
+          run_id: string | null
+          execucao_id: number | null
+          tipo: string
+          severidade: "info" | "warning" | "critical"
+          titulo: string
+          mensagem: string
+          dados: Json
+          status: "open" | "acknowledged" | "resolved"
+          created_at: string
+          acknowledged_at: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          run_id?: string | null
+          execucao_id?: number | null
+          tipo: string
+          severidade: "info" | "warning" | "critical"
+          titulo: string
+          mensagem: string
+          dados?: Json
+          status?: "open" | "acknowledged" | "resolved"
+          created_at?: string
+          acknowledged_at?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          run_id?: string | null
+          execucao_id?: number | null
+          tipo?: string
+          severidade?: "info" | "warning" | "critical"
+          titulo?: string
+          mensagem?: string
+          dados?: Json
+          status?: "open" | "acknowledged" | "resolved"
+          created_at?: string
+          acknowledged_at?: string | null
+          resolved_at?: string | null
+        }
+      }
+      miner_execucoes: {
+        Row: {
+          id: number
+          run_id: string | null
+          versao_miner: string
+          modo_processamento: string
+          inicio: string
+          fim: string | null
+          status: string
+          editais_encontrados: number
+          editais_novos: number
+          editais_skip_existe: number
+          erros: number
+          total_processados: number
+          total_validos: number
+          total_quarentena: number
+          taxa_validos_percent: number
+          taxa_quarentena_percent: number
+          duracao_segundos: number
+          cost_estimated_total: number
+          cost_openai_estimated: number
+        }
+        Insert: {
+          run_id?: string | null
+          versao_miner: string
+          modo_processamento: string
+          inicio: string
+          fim?: string | null
+          status: string
+          editais_encontrados?: number
+          editais_novos?: number
+          editais_skip_existe?: number
+          erros?: number
+          total_processados?: number
+          total_validos?: number
+          total_quarentena?: number
+          taxa_validos_percent?: number
+          taxa_quarentena_percent?: number
+          duracao_segundos?: number
+          cost_estimated_total?: number
+          cost_openai_estimated?: number
+        }
+        Update: {
+          run_id?: string | null
+          versao_miner?: string
+          modo_processamento?: string
+          inicio?: string
+          fim?: string | null
+          status?: string
+          editais_encontrados?: number
+          editais_novos?: number
+          editais_skip_existe?: number
+          erros?: number
+          total_processados?: number
+          total_validos?: number
+          total_quarentena?: number
+          taxa_validos_percent?: number
+          taxa_quarentena_percent?: number
+          duracao_segundos?: number
+          cost_estimated_total?: number
+          cost_openai_estimated?: number
+        }
+      }
+      pipeline_events: {
+        Row: {
+          id: number
+          run_id: string
+          etapa: string
+          evento: string
+          nivel: string
+          mensagem: string | null
+          created_at: string
+        }
+        Insert: {
+          run_id: string
+          etapa: string
+          evento: string
+          nivel: string
+          mensagem?: string | null
+          created_at?: string
+        }
+        Update: {
+          run_id?: string
+          etapa?: string
+          evento?: string
+          nivel?: string
+          mensagem?: string | null
+          created_at?: string
+        }
+      }
+      dataset_rejections: {
+        Row: {
+          id: number
+          reason_code: string | null
+          created_at: string
+        }
+        Insert: {
+          reason_code?: string | null
+          created_at?: string
+        }
+        Update: {
+          reason_code?: string | null
+          created_at?: string
+        }
+      }
       ref_municipios: {
         Row: {
           codigo_ibge: number
@@ -33,6 +180,96 @@ export interface Database {
           latitude?: number | null
           longitude?: number | null
           created_at?: string
+        }
+      }
+      lotes_leilao: {
+        Row: {
+          id: number
+          id_interno: string
+          edital_id: number
+          numero_lote_raw: string | null
+          numero_lote: string
+          descricao_raw: string | null
+          descricao_completa: string
+          valor_raw: string | null
+          avaliacao_valor: number | null
+          texto_fonte_completo: string | null
+          placa: string | null
+          chassi: string | null
+          renavam: string | null
+          marca: string | null
+          modelo: string | null
+          ano_fabricacao: number | null
+          categoria_id: string | null
+          tipo_venda: string | null
+          confidence_score: number | null
+          fonte_tipo: string | null
+          fonte_arquivo: string | null
+          fonte_pagina: number | null
+          hash_conteudo_fonte: string | null
+          versao_extrator: string | null
+          familia_pdf: string | null
+          data_extracao: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_interno: string
+          edital_id: number
+          numero_lote: string
+          descricao_completa: string
+          numero_lote_raw?: string | null
+          descricao_raw?: string | null
+          valor_raw?: string | null
+          avaliacao_valor?: number | null
+          texto_fonte_completo?: string | null
+          placa?: string | null
+          chassi?: string | null
+          renavam?: string | null
+          marca?: string | null
+          modelo?: string | null
+          ano_fabricacao?: number | null
+          categoria_id?: string | null
+          tipo_venda?: string | null
+          confidence_score?: number | null
+          fonte_tipo?: string | null
+          fonte_arquivo?: string | null
+          fonte_pagina?: number | null
+          hash_conteudo_fonte?: string | null
+          versao_extrator?: string | null
+          familia_pdf?: string | null
+          data_extracao?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_interno?: string
+          edital_id?: number
+          numero_lote?: string
+          descricao_completa?: string
+          numero_lote_raw?: string | null
+          descricao_raw?: string | null
+          valor_raw?: string | null
+          avaliacao_valor?: number | null
+          texto_fonte_completo?: string | null
+          placa?: string | null
+          chassi?: string | null
+          renavam?: string | null
+          marca?: string | null
+          modelo?: string | null
+          ano_fabricacao?: number | null
+          categoria_id?: string | null
+          tipo_venda?: string | null
+          confidence_score?: number | null
+          fonte_tipo?: string | null
+          fonte_arquivo?: string | null
+          fonte_pagina?: number | null
+          hash_conteudo_fonte?: string | null
+          versao_extrator?: string | null
+          familia_pdf?: string | null
+          data_extracao?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
     }
@@ -74,7 +311,7 @@ export interface Database {
         Args: {
           filter_params?: Json
         }
-        Returns: Database["pub"]["Views"]["v_auction_discovery"]["Row"][]
+        Returns: Database["public"]["Views"]["v_auction_discovery"]["Row"][]
       }
       get_available_ufs: {
         Args: Record<string, never>
@@ -147,7 +384,10 @@ export interface Database {
 }
 
 // Tipo auxiliar para Auction
-export type Auction = Database["pub"]["Views"]["v_auction_discovery"]["Row"]
+export type Auction = Database["public"]["Views"]["v_auction_discovery"]["Row"]
+
+// Tipo auxiliar para Lote
+export type Lote = Database["public"]["Tables"]["lotes_leilao"]["Row"]
 
 // Tipo para filtros
 export interface AuctionFilters {
