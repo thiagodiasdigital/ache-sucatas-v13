@@ -1215,21 +1215,21 @@ class LLMExtractor:
 
     def _get_system_prompt(self) -> str:
         """Prompt de sistema para extração estruturada."""
-        return '''Você é um extrator de dados de editais de leilão de veículos.
+        return '''Você é um extrator de dados de editais de leilão público.
 Extraia TODOS os lotes/itens do texto e retorne JSON no formato:
 
 {
   "lotes": [
     {
       "numero": "01",
-      "descricao": "FIAT STRADA WORKING 1.4 2015 BRANCO",
+      "descricao": "Descrição completa do item",
+      "valor": 25000.00,
       "placa": "ABC1234",
       "chassi": "9BD178226F5123456",
       "renavam": "12345678901",
       "marca": "FIAT",
-      "modelo": "STRADA WORKING 1.4",
-      "ano": 2015,
-      "valor": 25000.00
+      "modelo": "STRADA",
+      "ano": 2015
     }
   ]
 }
@@ -1237,12 +1237,11 @@ Extraia TODOS os lotes/itens do texto e retorne JSON no formato:
 REGRAS:
 - Retorne APENAS JSON válido
 - Se um campo não existir, OMITA (não use null)
-- numero: string, ex: "01", "02", "1", "2"
-- placa: formato ABC1234 ou ABC1D23 (Mercosul), sem hífen
-- chassi: 17 caracteres alfanuméricos
-- renavam: 9-11 dígitos
-- ano: número inteiro 4 dígitos
-- valor: número decimal (avaliação/lance mínimo)
+- numero: string obrigatória - número do lote (ex: "01", "02", "1", "2")
+- descricao: string obrigatória - descrição completa do item
+- valor: número decimal (avaliação ou lance mínimo)
+- Para VEÍCULOS, extraia também: placa, chassi, renavam, marca, modelo, ano
+- Para OUTROS BENS (móveis, equipamentos, instrumentos, sucatas), extraia apenas: numero, descricao, valor
 - Se não encontrar lotes, retorne {"lotes": []}'''
 
     def _get_user_prompt(self, texto: str, contexto: dict = None) -> str:
@@ -1497,7 +1496,7 @@ class LotesRepository:
         """
         try:
             result = self.client.table('editais_leilao').select(
-                'id, id_interno, titulo, storage_path, pdf_storage_url'
+                'id, id_interno, titulo, storage_path'
             ).not_.is_(
                 'storage_path', 'null'
             ).limit(limite).execute()
