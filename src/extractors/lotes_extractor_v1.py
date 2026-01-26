@@ -35,6 +35,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -60,6 +61,9 @@ logger = logging.getLogger('LotesExtractorV1')
 # =============================================================================
 
 VERSAO_EXTRATOR = "lotes_extractor_v1"
+
+# Supabase Storage bucket para PDFs de editais
+STORAGE_BUCKET = "editais-pdfs"
 
 # Threshold para classificar PDF como escaneado (caracteres mínimos em 3 páginas)
 THRESHOLD_CARACTERES_ESCANEADO = 100
@@ -1236,6 +1240,50 @@ class LotesExtractorV1:
 
         return self.metricas
 
+    def _download_do_storage(self, storage_path: str) -> Optional[str]:
+        """
+        Baixa PDF do Supabase Storage para arquivo temporário.
+
+        Args:
+            storage_path: Caminho do arquivo no bucket (ex: "PNCP_123/edital.pdf")
+
+        Returns:
+            Caminho do arquivo temporário local, ou None se falhar.
+            IMPORTANTE: Caller deve deletar o arquivo após uso.
+        """
+        try:
+            logger.info(f"Baixando do Storage: {storage_path}")
+
+            # Download do Supabase Storage
+            response = self.repository.client.storage.from_(
+                STORAGE_BUCKET
+            ).download(storage_path)
+
+            if not response:
+                logger.warning(f"Download vazio para: {storage_path}")
+                return None
+
+            # Criar arquivo temporário com extensão .pdf
+            fd, temp_path = tempfile.mkstemp(suffix='.pdf', prefix='lotes_')
+
+            try:
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(response)
+
+                logger.info(f"Download OK: {storage_path} -> {temp_path} ({len(response)} bytes)")
+                return temp_path
+
+            except Exception as e:
+                # Se falhar ao escrever, fechar e remover
+                os.close(fd)
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                raise e
+
+        except Exception as e:
+            logger.error(f"Erro no download de {storage_path}: {str(e)}")
+            return None
+
     def _processar_edital(
         self,
         edital: Dict,
@@ -1250,17 +1298,21 @@ class LotesExtractorV1:
             return
 
         # Determinar caminho do PDF
+        arquivo_temporario = False
+
         if diretorio_pdfs:
             # Usa diretório local
             caminho_pdf = os.path.join(diretorio_pdfs, os.path.basename(storage_path))
+            if not os.path.exists(caminho_pdf):
+                logger.warning(f"PDF não encontrado localmente: {caminho_pdf}")
+                return
         else:
-            # TODO: Implementar download do Supabase Storage
-            logger.warning(f"Download do Storage não implementado. Use diretorio_pdfs.")
-            return
-
-        if not os.path.exists(caminho_pdf):
-            logger.warning(f"PDF não encontrado: {caminho_pdf}")
-            return
+            # Download do Supabase Storage
+            caminho_pdf = self._download_do_storage(storage_path)
+            if not caminho_pdf:
+                logger.warning(f"Falha no download: {storage_path}")
+                return
+            arquivo_temporario = True
 
         # Calcular hash do arquivo para idempotência
         with open(caminho_pdf, 'rb') as f:
@@ -1269,6 +1321,9 @@ class LotesExtractorV1:
         # Verificar se já foi processado
         if self.repository.arquivo_ja_processado(hash_arquivo):
             logger.info(f"Arquivo já processado: {os.path.basename(caminho_pdf)}")
+            # Cleanup antes de retornar
+            if arquivo_temporario and os.path.exists(caminho_pdf):
+                os.unlink(caminho_pdf)
             return
 
         self.metricas.total_arquivos += 1
@@ -1335,6 +1390,14 @@ class LotesExtractorV1:
         self.metricas.total_quarentena += total_quarentena
 
         logger.info(f"Edital {edital_id}: {total_lotes} lotes, {total_quarentena} quarentena")
+
+        # Cleanup: remover arquivo temporário se baixou do Storage
+        if arquivo_temporario and caminho_pdf and os.path.exists(caminho_pdf):
+            try:
+                os.unlink(caminho_pdf)
+                logger.debug(f"Arquivo temporário removido: {caminho_pdf}")
+            except Exception as e:
+                logger.warning(f"Falha ao remover temporário {caminho_pdf}: {e}")
 
 
 # =============================================================================
