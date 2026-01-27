@@ -15,6 +15,8 @@ Changelog:
     - V19: Campos de quarentena (link_leiloeiro_raw, link_leiloeiro_valido)
     - V19: Bloqueio de falsos positivos como "ED.COMEMORA"
     - V19: Validacao estrutural obrigatoria (http/https/www/whitelist)
+    - V19.2: Idempotencia - rastreia processamento com auditor_v19_processed_at
+    - V19.2: Skip de editais ja processados (exceto com --force)
 
 Baseado em: V18 (CASCATA EXTRACAO)
 Autor: Claude Code
@@ -50,6 +52,18 @@ try:
     LOTES_INTEGRATION_DISPONIVEL = True
 except ImportError:
     LOTES_INTEGRATION_DISPONIVEL = False
+
+# V19.2: Import do módulo de resiliência
+try:
+    from src.core.resilience import (
+        retry_with_backoff,
+        CircuitBreaker,
+        CircuitOpenError,
+        circuit_registry,
+    )
+    RESILIENCE_DISPONIVEL = True
+except ImportError:
+    RESILIENCE_DISPONIVEL = False
 
 
 # ============================================================
@@ -394,29 +408,59 @@ class URLValidatorV19:
 
         return url
 
-    def validar_acessibilidade(self, url: str) -> bool:
-        """Verifica se URL esta acessivel (opcional)."""
+    def validar_acessibilidade(self, url: str, max_retries: int = 2) -> bool:
+        """
+        Verifica se URL esta acessivel (opcional).
+
+        V19.2 RESILIENCIA: Inclui retry com backoff para erros de timeout/conexao.
+
+        Args:
+            url: URL a validar
+            max_retries: Numero maximo de tentativas (default: 2)
+
+        Returns:
+            True se URL esta acessivel
+        """
         if not url:
             return False
 
         if url in self.cache:
             return self.cache[url]
 
-        try:
-            url_check = url
-            if not url_check.startswith("http"):
-                url_check = "https://" + url_check
+        url_check = url
+        if not url_check.startswith("http"):
+            url_check = "https://" + url_check
 
-            with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-                response = client.head(url_check)
-                valido = response.status_code < 400
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
+                    response = client.head(url_check)
+                    valido = response.status_code < 400
+                    self.cache[url] = valido
+                    return valido
 
-        except Exception as e:
-            self.logger.debug(f"URL inacessivel {url}: {e}")
-            valido = False
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.ConnectTimeout) as e:
+                # Erros de rede/timeout devem causar retry
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = (1.5 ** attempt) * (0.5 + __import__('random').random() * 0.5)
+                    self.logger.debug(
+                        f"[RETRY] validar_acessibilidade {url} tentativa {attempt + 1}/{max_retries} "
+                        f"timeout/conexao. Retry em {delay:.1f}s"
+                    )
+                    time.sleep(delay)
 
-        self.cache[url] = valido
-        return valido
+            except Exception as e:
+                # Outros erros nao causam retry
+                self.logger.debug(f"URL inacessivel {url}: {e}")
+                self.cache[url] = False
+                return False
+
+        # Todas as tentativas falharam
+        self.logger.debug(f"URL inacessivel {url} apos {max_retries} tentativas: {last_error}")
+        self.cache[url] = False
+        return False
 
 
 # ============================================================
@@ -954,16 +998,37 @@ class SupabaseRepositoryV19:
         except Exception as e:
             self.logger.error(f"Erro ao conectar Supabase: {e}")
 
-    def buscar_editais_pendentes(self, limite: int = 100) -> List[dict]:
-        """Busca editais sem link_leiloeiro ou com link 'N/D'."""
+    def buscar_editais_pendentes(self, limite: int = 100, incluir_ja_processados: bool = False) -> List[dict]:
+        """
+        Busca editais sem link_leiloeiro ou com link 'N/D'.
+
+        V19.2 IDEMPOTENCIA: Por padrao, exclui editais ja processados pelo V19.
+        Use incluir_ja_processados=True para reprocessar (flag --force).
+
+        Args:
+            limite: Numero maximo de editais
+            incluir_ja_processados: Se True, inclui editais ja processados pelo V19
+
+        Returns:
+            Lista de editais pendentes
+        """
         if not self.enable_supabase:
             return []
 
         try:
-            response = (
+            query = (
                 self.client.table("editais_leilao")
                 .select("*")
                 .or_("link_leiloeiro.is.null,link_leiloeiro.eq.N/D")
+            )
+
+            # V19.2: Filtro de idempotencia - exclui ja processados pelo V19
+            if not incluir_ja_processados:
+                query = query.is_("auditor_v19_processed_at", "null")
+                self.logger.debug("Filtrando editais ja processados pelo V19 (idempotencia ativa)")
+
+            response = (
+                query
                 .order("created_at", desc=True)
                 .limit(limite)
                 .execute()
@@ -996,48 +1061,85 @@ class SupabaseRepositoryV19:
             self.logger.error(f"Erro ao buscar editais: {e}")
             return []
 
-    def listar_arquivos_storage(self, pncp_id: str) -> List[dict]:
-        """Lista arquivos no storage para um edital."""
+    def listar_arquivos_storage(self, pncp_id: str, max_retries: int = 3) -> List[dict]:
+        """
+        Lista arquivos no storage para um edital.
+
+        V19.2: Inclui retry com backoff exponencial.
+        """
         if not self.enable_supabase:
             return []
 
-        try:
-            response = self.client.storage.from_(
-                self.config.storage_bucket
-            ).list(pncp_id)
-            return [
-                {"path": f"{pncp_id}/{item['name']}", "name": item["name"]}
-                for item in response
-            ]
-        except Exception as e:
-            self.logger.debug(f"Erro listando arquivos em {pncp_id}: {e}")
-            return []
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = self.client.storage.from_(
+                    self.config.storage_bucket
+                ).list(pncp_id)
+                return [
+                    {"path": f"{pncp_id}/{item['name']}", "name": item["name"]}
+                    for item in response
+                ]
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = (2 ** attempt) * (0.5 + __import__('random').random() * 0.5)
+                    self.logger.warning(
+                        f"[RETRY] listar_arquivos_storage tentativa {attempt + 1}/{max_retries} "
+                        f"falhou: {e}. Retry em {delay:.1f}s"
+                    )
+                    time.sleep(delay)
 
-    def baixar_arquivo(self, storage_path: str) -> Optional[bytes]:
-        """Baixa arquivo do storage."""
+        self.logger.error(f"Erro listando arquivos em {pncp_id} apos {max_retries} tentativas: {last_error}")
+        return []
+
+    def baixar_arquivo(self, storage_path: str, max_retries: int = 3) -> Optional[bytes]:
+        """
+        Baixa arquivo do storage.
+
+        V19.2: Inclui retry com backoff exponencial.
+        """
         if not self.enable_supabase:
             return None
 
-        try:
-            response = self.client.storage.from_(
-                self.config.storage_bucket
-            ).download(storage_path)
-            return response
-        except Exception as e:
-            self.logger.debug(f"Erro baixando {storage_path}: {e}")
-            return None
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = self.client.storage.from_(
+                    self.config.storage_bucket
+                ).download(storage_path)
+                return response
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = (2 ** attempt) * (0.5 + __import__('random').random() * 0.5)
+                    self.logger.warning(
+                        f"[RETRY] baixar_arquivo tentativa {attempt + 1}/{max_retries} "
+                        f"falhou: {e}. Retry em {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+
+        self.logger.error(f"Erro baixando {storage_path} apos {max_retries} tentativas: {last_error}")
+        return None
 
     def atualizar_link_leiloeiro_v19(
         self,
         pncp_id: str,
         proveniencia: LinkProveniencia,
+        run_id: str = None,
+        max_retries: int = 3,
     ) -> bool:
         """
         Atualiza link do leiloeiro com campos de proveniencia V19.
 
+        V19.2 IDEMPOTENCIA: Tambem registra timestamp e run_id do processamento.
+        V19.2 RESILIENCIA: Inclui retry com backoff exponencial.
+
         Args:
             pncp_id: pncp_id do edital
             proveniencia: Objeto LinkProveniencia com dados completos
+            run_id: ID unico da execucao atual (opcional)
+            max_retries: Numero maximo de tentativas
 
         Returns:
             True se sucesso
@@ -1045,46 +1147,74 @@ class SupabaseRepositoryV19:
         if not self.enable_supabase:
             return False
 
-        try:
-            dados = {
-                "link_leiloeiro": proveniencia.url_validada,
-                "link_leiloeiro_raw": proveniencia.candidato_raw,
-                "link_leiloeiro_valido": proveniencia.valido,
-                "link_leiloeiro_origem_tipo": proveniencia.origem_tipo,
-                "link_leiloeiro_origem_ref": proveniencia.origem_ref,
-                "link_leiloeiro_evidencia_trecho": proveniencia.evidencia_trecho[:200] if proveniencia.evidencia_trecho else None,
-                "link_leiloeiro_confianca": proveniencia.confianca,
-                "versao_auditor": self.config.versao_auditor,
-                "updated_at": datetime.now().isoformat(),
-            }
+        dados = {
+            "link_leiloeiro": proveniencia.url_validada,
+            "link_leiloeiro_raw": proveniencia.candidato_raw,
+            "link_leiloeiro_valido": proveniencia.valido,
+            "link_leiloeiro_origem_tipo": proveniencia.origem_tipo,
+            "link_leiloeiro_origem_ref": proveniencia.origem_ref,
+            "link_leiloeiro_evidencia_trecho": proveniencia.evidencia_trecho[:200] if proveniencia.evidencia_trecho else None,
+            "link_leiloeiro_confianca": proveniencia.confianca,
+            "versao_auditor": self.config.versao_auditor,
+            "updated_at": datetime.now().isoformat(),
+        }
 
-            self.client.table("editais_leilao").update(dados).eq(
-                "pncp_id", pncp_id
-            ).execute()
+        # V19.2: Campos de idempotencia
+        if run_id:
+            dados["auditor_v19_processed_at"] = datetime.now().isoformat()
+            dados["auditor_v19_run_id"] = run_id
+            dados["auditor_v19_result"] = "found_link" if proveniencia.valido else "no_link"
 
-            # Registrar domínio do leiloeiro se link válido
-            if proveniencia.valido and proveniencia.url_validada:
-                self.registrar_leiloeiro_url(
-                    url=proveniencia.url_validada,
-                    fonte="auditor"
-                )
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                self.client.table("editais_leilao").update(dados).eq(
+                    "pncp_id", pncp_id
+                ).execute()
 
-            return True
+                # Registrar domínio do leiloeiro se link válido
+                if proveniencia.valido and proveniencia.url_validada:
+                    self.registrar_leiloeiro_url(
+                        url=proveniencia.url_validada,
+                        fonte="auditor"
+                    )
 
-        except Exception as e:
-            self.logger.error(f"Erro atualizando edital {pncp_id}: {e}")
-            return False
+                return True
 
-    def marcar_processado_v19(self, pncp_id: str, motivo: str = "sem_link") -> bool:
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = (2 ** attempt) * (0.5 + __import__('random').random() * 0.5)
+                    self.logger.warning(
+                        f"[RETRY] atualizar_link_leiloeiro_v19 tentativa {attempt + 1}/{max_retries} "
+                        f"falhou: {e}. Retry em {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+
+        self.logger.error(f"Erro atualizando edital {pncp_id} apos {max_retries} tentativas: {last_error}")
+        return False
+
+    def marcar_processado_v19(
+        self,
+        pncp_id: str,
+        run_id: str,
+        resultado: str = "no_link",
+        motivo: str = "sem_link",
+        max_retries: int = 3,
+    ) -> bool:
         """
         Marca edital como processado pelo V19 mesmo sem encontrar link.
 
-        Isso garante rastreabilidade: sabemos que o V19 processou,
-        mesmo que nao tenha encontrado link de leiloeiro.
+        V19.2 IDEMPOTENCIA: Registra timestamp e run_id para garantir
+        que o mesmo edital nao seja reprocessado em execucoes futuras.
+        V19.2 RESILIENCIA: Inclui retry com backoff exponencial.
 
         Args:
             pncp_id: pncp_id do edital
+            run_id: ID unico da execucao atual
+            resultado: Resultado do processamento (found_link, no_link, error, skipped)
             motivo: motivo de nao ter link (ex: "sem_link", "pdf_escaneado")
+            max_retries: Numero maximo de tentativas
 
         Returns:
             True se sucesso
@@ -1092,27 +1222,43 @@ class SupabaseRepositoryV19:
         if not self.enable_supabase:
             return False
 
-        try:
-            # Valores validos para link_leiloeiro_origem_tipo (constraint do banco):
-            # pncp_api, pdf_anexo, pdf_edital, xlsx_anexo, csv_anexo,
-            # titulo_descricao, manual, unknown, NULL
-            # Usamos 'unknown' para indicar processado mas sem link encontrado
-            dados = {
-                "versao_auditor": self.config.versao_auditor,
-                "link_leiloeiro_origem_tipo": "unknown",
-                "link_leiloeiro_confianca": 0,  # Confianca zero = nao encontrou
-                "updated_at": datetime.now().isoformat(),
-            }
+        # Valores validos para link_leiloeiro_origem_tipo (constraint do banco):
+        # pncp_api, pdf_anexo, pdf_edital, xlsx_anexo, csv_anexo,
+        # titulo_descricao, manual, unknown, NULL
+        # Usamos 'unknown' para indicar processado mas sem link encontrado
+        dados = {
+            "versao_auditor": self.config.versao_auditor,
+            "link_leiloeiro_origem_tipo": "unknown",
+            "link_leiloeiro_confianca": 0,  # Confianca zero = nao encontrou
+            "updated_at": datetime.now().isoformat(),
+            # V19.2: Campos de idempotencia
+            "auditor_v19_processed_at": datetime.now().isoformat(),
+            "auditor_v19_run_id": run_id,
+            "auditor_v19_result": resultado,
+        }
 
-            self.client.table("editais_leilao").update(dados).eq(
-                "pncp_id", pncp_id
-            ).execute()
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                self.client.table("editais_leilao").update(dados).eq(
+                    "pncp_id", pncp_id
+                ).execute()
 
-            return True
+                self.logger.debug(f"[IDEMPOTENCIA] Edital {pncp_id} marcado como processado (result={resultado})")
+                return True
 
-        except Exception as e:
-            self.logger.error(f"Erro marcando edital {pncp_id} como processado: {e}")
-            return False
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = (2 ** attempt) * (0.5 + __import__('random').random() * 0.5)
+                    self.logger.warning(
+                        f"[RETRY] marcar_processado_v19 tentativa {attempt + 1}/{max_retries} "
+                        f"falhou: {e}. Retry em {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+
+        self.logger.error(f"Erro marcando edital {pncp_id} como processado apos {max_retries} tentativas: {last_error}")
+        return False
 
     def _extrair_dominio(self, url: str) -> Optional[str]:
         """
@@ -1482,37 +1628,45 @@ class AuditorV19:
         self.metrics.url_nao_encontrada += 1
         return None
 
-    def executar(self, limite: int = 100, reprocessar_todos: bool = False) -> dict:
+    def executar(self, limite: int = 100, reprocessar_todos: bool = False, force_reprocess: bool = False) -> dict:
         """
         Executa auditoria em editais pendentes.
 
+        V19.2 IDEMPOTENCIA: Gera run_id unico e rastreia processamento.
+
         Args:
             limite: Numero maximo de editais a processar
-            reprocessar_todos: Se True, reprocessa todos os editais
+            reprocessar_todos: Se True, reprocessa todos os editais (ignora filtro de link)
+            force_reprocess: Se True, reprocessa mesmo editais ja processados pelo V19
 
         Returns:
             Estatisticas da execucao
         """
+        # V19.2: Gerar run_id unico para esta execucao
+        run_id = f"auditor_v19_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{hashlib.md5(str(time.time()).encode()).hexdigest()[:8]}"
+        self.current_run_id = run_id
+
         self.logger.info("=" * 70)
-        self.logger.info("ACHE SUCATAS - CLOUD AUDITOR V19 (URL GATE + PROVENIENCIA)")
+        self.logger.info("ACHE SUCATAS - CLOUD AUDITOR V19.2 (IDEMPOTENTE)")
         self.logger.info("=" * 70)
-        self.logger.info("NOVIDADES V19:")
-        self.logger.info("  - Gate de validacao estrutural (http/https/www/whitelist)")
-        self.logger.info("  - Bloqueio de TLD colado em palavras (ex: ED.COMEMORA)")
-        self.logger.info("  - Proveniencia completa (fonte, arquivo, pagina)")
-        self.logger.info("  - Campos de quarentena (raw, valido, confianca)")
+        self.logger.info("NOVIDADES V19.2:")
+        self.logger.info("  - IDEMPOTENCIA: Rastreia processamento com timestamp e run_id")
+        self.logger.info("  - SKIP: Editais ja processados nao sao reprocessados")
+        self.logger.info("  - FORCE: Use --force para reprocessar mesmo assim")
         self.logger.info("-" * 70)
+        self.logger.info(f"Run ID: {run_id}")
         self.logger.info(f"Supabase: {'ATIVO' if self.repo.enable_supabase else 'DESATIVADO'}")
         self.logger.info(f"Validar URLs: {'SIM' if self.config.validar_urls else 'NAO'}")
-        self.logger.info(f"Filtrar data passada: {'SIM' if self.config.filtrar_data_passada else 'NAO'}")
+        self.logger.info(f"Force Reprocess: {'SIM' if force_reprocess else 'NAO'}")
         self.logger.info("=" * 70)
 
         if reprocessar_todos:
-            self.logger.info("Modo: Reprocessar TODOS os editais")
+            self.logger.info("Modo: Reprocessar TODOS os editais (ignora filtro de link)")
             editais = self.repo.buscar_todos_editais(limite)
         else:
             self.logger.info("Modo: Editais pendentes (sem link_leiloeiro)")
-            editais = self.repo.buscar_editais_pendentes(limite)
+            # V19.2: Passa flag de force para incluir ja processados
+            editais = self.repo.buscar_editais_pendentes(limite, incluir_ja_processados=force_reprocess)
 
         if not editais:
             self.logger.info("Nenhum edital para processar")
@@ -1532,9 +1686,11 @@ class AuditorV19:
                 if resultado:
                     proveniencia = resultado["proveniencia"]
 
+                    # V19.2: Passa run_id para rastreamento de idempotencia
                     sucesso = self.repo.atualizar_link_leiloeiro_v19(
                         pncp_id=resultado["pncp_id"],
                         proveniencia=proveniencia,
+                        run_id=run_id,
                     )
 
                     if sucesso:
@@ -1552,14 +1708,25 @@ class AuditorV19:
                     else:
                         self.metrics.falhas += 1
                 else:
-                    # V19 FIX: Marcar como processado mesmo sem link encontrado
-                    # Isso garante rastreabilidade e evita reprocessamento
-                    self.repo.marcar_processado_v19(pncp_id, motivo="sem_link")
+                    # V19.2: Marcar como processado com run_id para idempotencia
+                    self.repo.marcar_processado_v19(
+                        pncp_id=pncp_id,
+                        run_id=run_id,
+                        resultado="no_link",
+                        motivo="sem_link"
+                    )
                     self.metrics.url_nao_encontrada += 1
-                    self.logger.debug(f"  Nenhum link encontrado, marcado como processado V19")
+                    self.logger.debug(f"  [IDEMPOTENCIA] Marcado como processado (no_link)")
 
             except Exception as e:
                 self.logger.error(f"Erro processando {pncp_id}: {e}")
+                # V19.2: Marcar erro para nao reprocessar infinitamente
+                self.repo.marcar_processado_v19(
+                    pncp_id=pncp_id,
+                    run_id=run_id,
+                    resultado="error",
+                    motivo=str(e)[:100]
+                )
                 self.metrics.erros += 1
                 self.metrics.falhas += 1
 
@@ -1590,7 +1757,7 @@ class AuditorV19:
 def main():
     """Ponto de entrada do auditor."""
     parser = argparse.ArgumentParser(
-        description="Ache Sucatas - Cloud Auditor V19 (URL Gate + Proveniencia)"
+        description="Ache Sucatas - Cloud Auditor V19.2 (Idempotente)"
     )
     parser.add_argument(
         "--limite",
@@ -1601,7 +1768,12 @@ def main():
     parser.add_argument(
         "--reprocessar-todos",
         action="store_true",
-        help="Reprocessar TODOS os editais"
+        help="Reprocessar TODOS os editais (ignora filtro de link)"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="V19.2: Reprocessa editais ja processados pelo V19 (ignora idempotencia)"
     )
     parser.add_argument(
         "--sem-validacao",
@@ -1629,6 +1801,10 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # V19.2: Log de aviso quando --force e usado
+    if args.force:
+        logging.warning("[IDEMPOTENCIA] --force ativo: editais ja processados serao reprocessados")
+
     config = AuditorConfig(
         supabase_url=os.environ.get("SUPABASE_URL", ""),
         supabase_key=os.environ.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_KEY", "")),
@@ -1644,6 +1820,7 @@ def main():
     stats = auditor.executar(
         limite=limite,
         reprocessar_todos=args.reprocessar_todos,
+        force_reprocess=args.force,
     )
 
     logger.info(f"Auditoria finalizada: {stats}")
