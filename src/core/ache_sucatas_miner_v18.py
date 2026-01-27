@@ -67,6 +67,13 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.core.email_notifier import send_alert_email
+from src.core.resilience import (
+    retry_with_backoff,
+    CircuitBreaker,
+    CircuitOpenError,
+    circuit_registry,
+    RETRIABLE_EXCEPTIONS,
+)
 from validators.dataset_validator import (
     validate_record,
     ValidationResult,
@@ -1013,11 +1020,18 @@ class OpenAIEnricher:
     Transforma texto bruto e metadados em inteligencia de mercado.
 
     Brief 3.6: Inclui tracking de tokens para FinOps.
+    V18.3: Inclui retry com backoff e circuit breaker para resiliencia.
     """
 
     # Precos OpenAI GPT-4o-mini (USD por 1M tokens) - Jan 2026
     PRICE_INPUT_PER_1M = 0.15
     PRICE_OUTPUT_PER_1M = 0.60
+
+    # V18.3: Configuracao de resiliencia
+    MAX_RETRIES = 3
+    RETRY_BASE_DELAY = 2.0  # segundos
+    CIRCUIT_FAILURE_THRESHOLD = 5
+    CIRCUIT_RECOVERY_TIMEOUT = 120.0  # segundos
 
     def __init__(self, api_key: str, model: str):
         """
@@ -1035,6 +1049,17 @@ class OpenAIEnricher:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_requests = 0
+
+        # V18.3: Contadores de resiliencia
+        self.retry_count = 0
+        self.circuit_rejections = 0
+
+        # V18.3: Circuit breaker para OpenAI
+        self.circuit = circuit_registry.get_or_create(
+            name="openai",
+            failure_threshold=self.CIRCUIT_FAILURE_THRESHOLD,
+            recovery_timeout=self.CIRCUIT_RECOVERY_TIMEOUT,
+        )
 
         if not OPENAI_AVAILABLE:
             self.logger.warning("Biblioteca openai nao instalada - enriquecimento IA desabilitado")
@@ -1064,7 +1089,95 @@ class OpenAIEnricher:
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
             "estimated_cost_usd": self.get_estimated_cost(),
+            # V18.3: Metricas de resiliencia
+            "retry_count": self.retry_count,
+            "circuit_rejections": self.circuit_rejections,
+            "circuit_state": self.circuit.state.value if self.circuit else "unknown",
         }
+
+    def _call_openai_api_with_retry(self, messages: list, max_tokens: int = 500) -> dict:
+        """
+        V18.3: Chama a API OpenAI com retry e backoff exponencial.
+
+        Args:
+            messages: Lista de mensagens para a API
+            max_tokens: Maximo de tokens na resposta
+
+        Returns:
+            Dicionario com dados parseados ou {} em caso de falha
+
+        Raises:
+            Exception: Se todas as tentativas falharem
+        """
+        last_exception = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                    max_tokens=max_tokens,
+                    timeout=30.0,  # V18.3: Timeout explicito
+                )
+
+                content = response.choices[0].message.content
+                dados = json.loads(content)
+
+                # Registrar uso de tokens para FinOps
+                if hasattr(response, 'usage') and response.usage:
+                    self.total_input_tokens += response.usage.prompt_tokens
+                    self.total_output_tokens += response.usage.completion_tokens
+                    self.total_requests += 1
+
+                return dados
+
+            except json.JSONDecodeError as e:
+                # Erro de parsing nao deve causar retry
+                self.logger.error(f"Erro ao parsear resposta JSON da IA: {e}")
+                return {}
+
+            except Exception as e:
+                last_exception = e
+                error_type = type(e).__name__
+
+                # Verificar se e erro retriable
+                is_retriable = (
+                    "timeout" in str(e).lower() or
+                    "rate" in str(e).lower() or
+                    "limit" in str(e).lower() or
+                    "connection" in str(e).lower() or
+                    "503" in str(e) or
+                    "502" in str(e) or
+                    "500" in str(e) or
+                    "429" in str(e)
+                )
+
+                if not is_retriable or attempt >= self.MAX_RETRIES:
+                    self.logger.error(
+                        f"[OPENAI] Falha definitiva apos {attempt + 1} tentativas: {error_type}: {e}"
+                    )
+                    raise
+
+                # Calcular delay com backoff
+                delay = min(
+                    self.RETRY_BASE_DELAY * (2 ** attempt),
+                    60.0
+                ) * (0.75 + __import__('random').random() * 0.5)
+
+                self.retry_count += 1
+                self.logger.warning(
+                    f"[OPENAI] Tentativa {attempt + 1}/{self.MAX_RETRIES + 1} falhou: {error_type}. "
+                    f"Retry em {delay:.1f}s"
+                )
+
+                time.sleep(delay)
+
+        # Nao deveria chegar aqui
+        if last_exception:
+            raise last_exception
+        return {}
 
     def enriquecer_edital(self, texto_pdf: str, metadados_pncp: dict) -> dict:
         """
@@ -1130,37 +1243,42 @@ class OpenAIEnricher:
         {texto_input}
         """
 
-        try:
-            self.logger.debug("Enviando edital para analise IA...")
+        # V18.3: Verificar circuit breaker antes de chamar API
+        if self.circuit.state.value == "open":
+            self.circuit_rejections += 1
+            self.logger.warning(
+                f"[CIRCUIT] OpenAI circuit OPEN - chamada rejeitada "
+                f"(rejections={self.circuit_rejections})"
+            )
+            return {}
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,  # Baixa temperatura para precisao
-                max_tokens=500
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        try:
+            self.logger.debug("Enviando edital para analise IA (com resiliencia)...")
+
+            # V18.3: Usar circuit breaker + retry
+            dados = self.circuit.call(
+                self._call_openai_api_with_retry,
+                messages=messages,
+                max_tokens=500,
+                fallback=lambda **kw: {},  # Fallback retorna dict vazio
             )
 
-            content = response.choices[0].message.content
-            dados = json.loads(content)
-
-            # Brief 3.6: Registrar uso de tokens para FinOps
-            if hasattr(response, 'usage') and response.usage:
-                self.total_input_tokens += response.usage.prompt_tokens
-                self.total_output_tokens += response.usage.completion_tokens
-                self.total_requests += 1
-
-            self.logger.debug(f"IA retornou: {list(dados.keys())}")
+            if dados:
+                self.logger.debug(f"IA retornou: {list(dados.keys())}")
             return dados
 
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Erro ao parsear resposta JSON da IA: {e}")
+        except CircuitOpenError:
+            self.circuit_rejections += 1
+            self.logger.warning("[CIRCUIT] OpenAI circuit aberto - usando fallback")
             return {}
+
         except Exception as e:
-            self.logger.error(f"Falha na IA: {e}")
+            self.logger.error(f"[OPENAI] Falha na IA apos retry e circuit breaker: {e}")
             return {}
 
 

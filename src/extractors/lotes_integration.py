@@ -6,14 +6,20 @@ LOTES INTEGRATION - Módulo de Integração com Pipeline
 =============================================================================
 Conecta o extrator de lotes ao Cloud Auditor V19.
 
-Versão: 1.0.0
-Data: 2026-01-25
+Versão: 1.1.0
+Data: 2026-01-26
 Autor: Tech Lead (Claude Code)
+
+Changelog:
+- V1.1.0: Idempotência via tabela arquivos_processados_lotes
+- V1.1.0: Skip de PDFs já processados (usa hash SHA256)
+- V1.0.0: Versão inicial
 
 Funcionalidades:
 - Aceita BytesIO (memória) ou caminho de arquivo
 - Integra com repositório Supabase existente
 - Retorna métricas de extração
+- IDEMPOTÊNCIA: Verifica se PDF já foi processado via hash
 =============================================================================
 """
 
@@ -67,8 +73,120 @@ class LotesIntegration:
             'total_pdfs': 0,
             'total_lotes': 0,
             'total_quarentena': 0,
+            'pdfs_skip_ja_processados': 0,  # V1.1: Idempotência
             'por_familia': {},
         }
+
+    # =========================================================================
+    # V1.1: MÉTODOS DE IDEMPOTÊNCIA
+    # =========================================================================
+
+    def _calcular_hash_pdf(self, pdf_bytesio: BytesIO) -> str:
+        """
+        Calcula hash SHA256 do PDF para identificação única.
+
+        Args:
+            pdf_bytesio: PDF em memória
+
+        Returns:
+            Hash SHA256 em hexadecimal
+        """
+        pdf_bytesio.seek(0)
+        hash_sha256 = hashlib.sha256(pdf_bytesio.read()).hexdigest()
+        pdf_bytesio.seek(0)  # Reset para leitura posterior
+        return hash_sha256
+
+    def _verificar_arquivo_processado(self, hash_arquivo: str) -> Optional[Dict[str, Any]]:
+        """
+        Verifica se um arquivo já foi processado via tabela arquivos_processados_lotes.
+
+        Args:
+            hash_arquivo: Hash SHA256 do arquivo
+
+        Returns:
+            Registro encontrado ou None se não processado
+        """
+        if not self.client:
+            return None
+
+        try:
+            response = (
+                self.client.table('arquivos_processados_lotes')
+                .select('*')
+                .eq('hash_arquivo', hash_arquivo)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+
+        except Exception as e:
+            logger.error(f"Erro ao verificar arquivo processado: {e}")
+            return None
+
+    def _registrar_arquivo_processado(
+        self,
+        edital_id: int,
+        nome_arquivo: str,
+        hash_arquivo: str,
+        tipo_detectado: str,
+        familia_pdf: Optional[str],
+        total_lotes: int,
+        total_quarentena: int,
+        status: str,
+        mensagem: Optional[str],
+        tempo_ms: int,
+    ) -> bool:
+        """
+        Registra que um arquivo foi processado.
+
+        Args:
+            edital_id: ID do edital
+            nome_arquivo: Nome do arquivo
+            hash_arquivo: Hash SHA256
+            tipo_detectado: Tipo do arquivo (pdf_nativo, pdf_escaneado, etc)
+            familia_pdf: Família estrutural do PDF
+            total_lotes: Total de lotes extraídos
+            total_quarentena: Total enviado para quarentena
+            status: Status final (processado, erro, escaneado)
+            mensagem: Mensagem de status
+            tempo_ms: Tempo de processamento em ms
+
+        Returns:
+            True se registrado com sucesso
+        """
+        if not self.client:
+            return False
+
+        try:
+            dados = {
+                'edital_id': edital_id,
+                'nome_arquivo': nome_arquivo,
+                'hash_arquivo': hash_arquivo,
+                'tipo_detectado': tipo_detectado,
+                'familia_pdf': familia_pdf,
+                'total_lotes_extraidos': total_lotes,
+                'total_lotes_quarentena': total_quarentena,
+                'status': status,
+                'mensagem_status': mensagem,
+                'versao_extrator': VERSAO_EXTRATOR,
+                'processado_em': datetime.now().isoformat(),
+                'tempo_processamento_ms': tempo_ms,
+            }
+
+            # UPSERT: Se o hash já existir, atualiza (reprocessamento com --force)
+            self.client.table('arquivos_processados_lotes').upsert(
+                dados,
+                on_conflict='hash_arquivo'
+            ).execute()
+
+            logger.debug(f"[IDEMPOTENCIA] Arquivo registrado: {nome_arquivo} ({status})")
+            return True
+
+        except Exception as e:
+            logger.error(f"Erro ao registrar arquivo processado: {e}")
+            return False
 
     def extrair_lotes_de_bytesio(
         self,
@@ -252,11 +370,15 @@ class LotesIntegration:
         arquivo_nome: str,
         pncp_id: Optional[str] = None,
         salvar_banco: bool = True,
+        force_reprocess: bool = False,
     ) -> Dict[str, Any]:
         """
         Processa um PDF completo: extrai lotes e salva no banco.
 
         Este é o método principal a ser chamado pelo Auditor V19.
+
+        V1.1 IDEMPOTÊNCIA: Verifica se o PDF já foi processado via hash.
+        Use force_reprocess=True para reprocessar mesmo assim.
 
         Args:
             pdf_bytesio: PDF em memória
@@ -264,6 +386,7 @@ class LotesIntegration:
             arquivo_nome: Nome do arquivo
             pncp_id: ID PNCP (para logs)
             salvar_banco: Se True, salva no Supabase
+            force_reprocess: Se True, reprocessa mesmo se já foi processado
 
         Returns:
             Dict com estatísticas:
@@ -273,10 +396,37 @@ class LotesIntegration:
                 'lotes_salvos': int,
                 'familia_pdf': str,
                 'tempo_ms': int,
+                'skip_ja_processado': bool,  # V1.1
             }
         """
         import time
         inicio = time.time()
+
+        # V1.1: IDEMPOTÊNCIA - Verificar se já foi processado
+        hash_arquivo = self._calcular_hash_pdf(pdf_bytesio)
+        registro_existente = self._verificar_arquivo_processado(hash_arquivo)
+
+        if registro_existente and not force_reprocess:
+            # Já foi processado - SKIP
+            self.metricas['pdfs_skip_ja_processados'] += 1
+            logger.info(
+                f"[IDEMPOTENCIA] SKIP: {arquivo_nome} já processado em "
+                f"{registro_existente.get('processado_em', '?')} "
+                f"(lotes={registro_existente.get('total_lotes_extraidos', 0)})"
+            )
+            return {
+                'sucesso': True,
+                'total_lotes': registro_existente.get('total_lotes_extraidos', 0),
+                'lotes_salvos': registro_existente.get('total_lotes_extraidos', 0),
+                'familia_pdf': registro_existente.get('familia_pdf'),
+                'tempo_ms': 0,
+                'erros': [],
+                'skip_ja_processado': True,
+                'processado_em_anterior': registro_existente.get('processado_em'),
+            }
+
+        if registro_existente and force_reprocess:
+            logger.info(f"[IDEMPOTENCIA] FORCE: Reprocessando {arquivo_nome} (--force ativo)")
 
         # Extrair lotes
         resultado = self.extrair_lotes_de_bytesio(
@@ -293,7 +443,10 @@ class LotesIntegration:
             'familia_pdf': resultado.familia_pdf.value if resultado.familia_pdf else None,
             'tempo_ms': 0,
             'erros': resultado.erros,
+            'skip_ja_processado': False,
         }
+
+        total_quarentena = 0
 
         if resultado.sucesso and resultado.lotes and salvar_banco:
             # Salvar lotes
@@ -312,8 +465,25 @@ class LotesIntegration:
                 arquivo_nome=arquivo_nome,
                 resultado=resultado,
             )
+            total_quarentena = 1
 
         stats['tempo_ms'] = int((time.time() - inicio) * 1000)
+
+        # V1.1: Registrar arquivo como processado
+        if salvar_banco:
+            status_final = 'processado' if resultado.sucesso else 'erro'
+            self._registrar_arquivo_processado(
+                edital_id=edital_id,
+                nome_arquivo=arquivo_nome,
+                hash_arquivo=hash_arquivo,
+                tipo_detectado='pdf_nativo',  # TODO: detectar tipo real
+                familia_pdf=stats['familia_pdf'],
+                total_lotes=len(resultado.lotes),
+                total_quarentena=total_quarentena,
+                status=status_final,
+                mensagem=resultado.erros[0].get('mensagem') if resultado.erros else None,
+                tempo_ms=stats['tempo_ms'],
+            )
 
         return stats
 
