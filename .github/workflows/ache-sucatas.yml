@@ -40,6 +40,8 @@ env:
   ENABLE_SUPABASE_STORAGE: 'true'
   ENABLE_LOCAL_BACKUP: 'false'
   PYTHON_VERSION: '3.11'
+  # Timezone explícito para logs e datas em horário de Brasília
+  TZ: America/Sao_Paulo
 
 jobs:
   # ==========================================================================
@@ -214,13 +216,17 @@ jobs:
           if-no-files-found: ignore
 
   # ==========================================================================
-  # JOB 3: VERIFICACAO - Status final
+  # JOB 3: VERIFICACAO - Status final e detecção de anomalias
   # ==========================================================================
   verify:
     name: Verificacao Final
     runs-on: ubuntu-latest
     needs: [miner, auditor]
     if: always()
+    outputs:
+      editais_novos: ${{ steps.metrics.outputs.editais_novos }}
+      total_editais: ${{ steps.metrics.outputs.total_editais }}
+      has_anomaly: ${{ steps.metrics.outputs.has_anomaly }}
 
     steps:
       - name: Checkout repository
@@ -248,11 +254,13 @@ jobs:
           echo "=== Installed packages (top 20) ==="
           pip freeze | head -20
 
-      - name: Verify database status
+      - name: Verify database status and collect metrics
+        id: metrics
         env:
           PYTHONPATH: src/core
         run: |
           python -c "
+          import os
           from supabase_repository import SupabaseRepository
           repo = SupabaseRepository()
           if repo.enable_supabase:
@@ -262,16 +270,29 @@ jobs:
               print('=' * 60)
               print(f'Total de editais no banco: {count}')
 
+              # Exportar metricas para outputs
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f'total_editais={count}\n')
+
               # Buscar ultima execucao
+              editais_novos = 0
               try:
                   resp = repo.client.table('execucoes_miner').select('*').order('execution_start', desc=True).limit(1).execute()
                   if resp.data:
                       exec_data = resp.data[0]
                       print(f'Ultima execucao: {exec_data.get(\"execution_start\")}')
                       print(f'Status: {exec_data.get(\"status\")}')
-                      print(f'Novos editais: {exec_data.get(\"editais_novos\", 0)}')
+                      editais_novos = exec_data.get('editais_novos', 0) or 0
+                      print(f'Novos editais: {editais_novos}')
               except Exception as e:
                   print(f'Erro ao buscar execucoes: {e}')
+
+              # Exportar editais_novos e detectar anomalia
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f'editais_novos={editais_novos}\n')
+                  # Anomalia: execucao agendada com 0 editais novos (pode indicar problema)
+                  has_anomaly = 'true' if editais_novos == 0 and '${{ github.event_name }}' == 'schedule' else 'false'
+                  f.write(f'has_anomaly={has_anomaly}\n')
 
               print('=' * 60)
           else:
@@ -288,7 +309,11 @@ jobs:
           echo "| Miner V18 | ${{ needs.miner.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Auditor V19 | ${{ needs.auditor.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Executado em: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "### Metricas" >> $GITHUB_STEP_SUMMARY
+          echo "- Total editais: ${{ steps.metrics.outputs.total_editais }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Editais novos: ${{ steps.metrics.outputs.editais_novos }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Executado em: $(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # JOB 4: NOTIFICACAO - Email quando falhar
@@ -342,6 +367,72 @@ jobs:
 
             Verifique os logs em:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ----------------------------------------
+            Enviado automaticamente pelo GitHub Actions
+
+  # ==========================================================================
+  # JOB 5: NOTIFICACAO - Email quando detectar anomalia (0 editais coletados)
+  # ==========================================================================
+  notify-anomaly:
+    name: Notificar Anomalia por Email
+    runs-on: ubuntu-latest
+    needs: [miner, auditor, verify]
+    if: |
+      always() &&
+      needs.verify.outputs.has_anomaly == 'true' &&
+      needs.miner.result == 'success'
+
+    steps:
+      - name: Log anomaly
+        run: |
+          echo "::warning::ACHE SUCATAS - Anomalia detectada: 0 editais novos coletados"
+          echo "Total editais: ${{ needs.verify.outputs.total_editais }}"
+          echo "Editais novos: ${{ needs.verify.outputs.editais_novos }}"
+
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_ADDRESS }}
+          password: ${{ secrets.EMAIL_APP_PASSWORD }}
+          subject: "📊 ACHE SUCATAS - Anomalia: 0 editais coletados"
+          to: ${{ secrets.EMAIL_ADDRESS }}
+          from: ACHE SUCATAS <${{ secrets.EMAIL_ADDRESS }}>
+          body: |
+            O pipeline ACHE SUCATAS executou com sucesso, mas coletou 0 editais novos.
+
+            Isso pode indicar:
+            - API do PNCP fora do ar ou com problemas
+            - Nenhum edital novo publicado no período
+            - Problema nos filtros ou termos de busca
+
+            ----------------------------------------
+            MÉTRICAS
+            ----------------------------------------
+
+            Total de editais no banco: ${{ needs.verify.outputs.total_editais }}
+            Editais novos coletados:   ${{ needs.verify.outputs.editais_novos }}
+
+            ----------------------------------------
+            DETALHES DA EXECUÇÃO
+            ----------------------------------------
+
+            Repositório: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Evento: ${{ github.event_name }}
+
+            ----------------------------------------
+            AÇÃO SUGERIDA
+            ----------------------------------------
+
+            1. Verifique se a API PNCP está respondendo
+            2. Execute manualmente para confirmar comportamento
+            3. Verifique os logs em:
+               https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             ----------------------------------------
             Enviado automaticamente pelo GitHub Actions
