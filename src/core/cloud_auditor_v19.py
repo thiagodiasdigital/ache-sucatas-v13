@@ -1268,6 +1268,89 @@ class SupabaseRepositoryV19:
         self.logger.error(f"Erro marcando edital {pncp_id} como processado apos {max_retries} tentativas: {last_error}")
         return False
 
+    def inserir_run_report(
+        self,
+        run_id: str,
+        git_sha: Optional[str],
+        job_name: str = "auditor",
+    ) -> bool:
+        """
+        Insere relatorio de execucao na tabela pipeline_run_reports.
+
+        V19.4: Persiste metricas de qualidade para rastreamento historico.
+
+        Args:
+            run_id: ID unico da execucao
+            git_sha: SHA do commit git (pode ser None)
+            job_name: Nome do job (miner ou auditor)
+
+        Returns:
+            True se sucesso
+        """
+        if not self.enable_supabase:
+            return False
+
+        try:
+            # Buscar metricas atuais do banco
+            resp = self.client.rpc('get_pipeline_metrics', {}).execute()
+            if resp.data:
+                metrics = resp.data
+            else:
+                # Fallback: calcular via queries
+                total_resp = self.client.table("editais_leilao").select("id", count="exact").execute()
+                total = total_resp.count or 0
+
+                com_link_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").execute()
+                com_link = com_link_resp.count or 0
+
+                valido_true_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", True).execute()
+                valido_true = valido_true_resp.count or 0
+
+                valido_false_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", False).execute()
+                valido_false = valido_false_resp.count or 0
+
+                origem_pncp_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pncp_api").execute()
+                origem_pncp = origem_pncp_resp.count or 0
+
+                origem_pdf_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pdf_anexo").execute()
+                origem_pdf = origem_pdf_resp.count or 0
+
+                metrics = {
+                    'total': total,
+                    'com_link': com_link,
+                    'sem_link': total - com_link,
+                    'com_link_valido_true': valido_true,
+                    'com_link_valido_false': valido_false,
+                    'com_link_valido_null': com_link - valido_true - valido_false,
+                    'origem_pncp_api': origem_pncp,
+                    'origem_pdf_anexo': origem_pdf,
+                }
+
+            # Inserir relatorio
+            dados = {
+                "run_id": run_id,
+                "git_sha": git_sha,
+                "job_name": job_name,
+                "total": metrics.get('total', 0),
+                "com_link": metrics.get('com_link', 0),
+                "sem_link": metrics.get('sem_link', 0),
+                "com_link_valido_true": metrics.get('com_link_valido_true', 0),
+                "com_link_valido_false": metrics.get('com_link_valido_false', 0),
+                "com_link_valido_null": metrics.get('com_link_valido_null', 0),
+                "origem_pncp_api": metrics.get('origem_pncp_api', 0),
+                "origem_pdf_anexo": metrics.get('origem_pdf_anexo', 0),
+                "origem_unknown": metrics.get('origem_unknown', 0),
+                "origem_null": metrics.get('origem_null', 0),
+            }
+
+            self.client.table("pipeline_run_reports").insert(dados).execute()
+            self.logger.info(f"[RUN REPORT] Inserido relatorio: run_id={run_id}, total={dados['total']}, valido_null={dados['com_link_valido_null']}")
+            return True
+
+        except Exception as e:
+            self.logger.warning(f"Erro inserindo run_report: {e}")
+            return False
+
     def _extrair_dominio(self, url: str) -> Optional[str]:
         """
         Extrai o domínio base de uma URL.
@@ -1636,11 +1719,12 @@ class AuditorV19:
         self.metrics.url_nao_encontrada += 1
         return None
 
-    def executar(self, limite: int = 100, reprocessar_todos: bool = False, force_reprocess: bool = False) -> dict:
+    def executar(self, limite: int = 100, reprocessar_todos: bool = False, force_reprocess: bool = False, git_sha: Optional[str] = None) -> dict:
         """
         Executa auditoria em editais pendentes.
 
         V19.2 IDEMPOTENCIA: Gera run_id unico e rastreia processamento.
+        V19.4 RUN REPORT: Persiste metricas ao final da execucao.
 
         Args:
             limite: Numero maximo de editais a processar
@@ -1749,12 +1833,20 @@ class AuditorV19:
 
         self.metrics.print_summary()
 
+        # V19.4: Inserir run report para rastreamento historico
+        self.repo.inserir_run_report(
+            run_id=self.current_run_id,
+            git_sha=git_sha,
+            job_name="auditor"
+        )
+
         return {
             "total_processados": self.metrics.total_processados,
             "links_extraidos": self.metrics.sucessos,
             "links_validados": self.metrics.urls_validadas,
             "links_rejeitados_tld_colado": self.metrics.urls_rejeitadas_tld_colado,
             "erros": self.metrics.erros,
+            "run_id": self.current_run_id,
         }
 
 
@@ -1824,11 +1916,28 @@ def main():
     if args.test_mode:
         limite = 5
 
+    # V19.4: Obter git SHA para rastreamento
+    git_sha = os.environ.get("GITHUB_SHA")
+    if not git_sha:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                git_sha = result.stdout.strip()
+        except Exception:
+            git_sha = None
+
     auditor = AuditorV19(config)
     stats = auditor.executar(
         limite=limite,
         reprocessar_todos=args.reprocessar_todos,
         force_reprocess=args.force,
+        git_sha=git_sha,
     )
 
     logger.info(f"Auditoria finalizada: {stats}")
