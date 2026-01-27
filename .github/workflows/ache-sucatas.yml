@@ -332,7 +332,7 @@ jobs:
           echo "Auditor: ${{ needs.auditor.result }}"
 
       - name: Send email notification
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v7
         with:
           server_address: smtp.gmail.com
           server_port: 465
@@ -391,7 +391,7 @@ jobs:
           echo "Editais novos: ${{ needs.verify.outputs.editais_novos }}"
 
       - name: Send email notification
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v7
         with:
           server_address: smtp.gmail.com
           server_port: 465
