@@ -24,6 +24,15 @@ on:
         type: boolean
         default: false
 
+# =============================================================================
+# CONCURRENCY: Evita execuções paralelas do pipeline
+# =============================================================================
+# Se uma execução estiver em andamento, a próxima aguarda na fila.
+# cancel-in-progress: false = NÃO cancela execução anterior (evita perda de dados)
+concurrency:
+  group: ache-sucatas-pipeline
+  cancel-in-progress: false
+
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
