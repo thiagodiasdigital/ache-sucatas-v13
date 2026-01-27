@@ -95,7 +95,7 @@ class AuditorConfig:
 
     request_delay_seconds: float = 0.2
 
-    filtrar_data_passada: bool = True
+    filtrar_data_passada: bool = False  # V19.3: Desativado por padrão (--excluir-data-passada para ativar)
     excluir_data_passada: bool = False
 
     batch_size: int = 50
@@ -1066,18 +1066,22 @@ class SupabaseRepositoryV19:
         Lista arquivos no storage para um edital.
 
         V19.2: Inclui retry com backoff exponencial.
+        V19.3: Normaliza pncp_id substituindo / por - para compatibilidade com storage.
         """
         if not self.enable_supabase:
             return []
+
+        # V19.3: Normalizar pncp_id para nome de pasta (/ -> -)
+        folder_name = pncp_id.replace("/", "-")
 
         last_error = None
         for attempt in range(max_retries):
             try:
                 response = self.client.storage.from_(
                     self.config.storage_bucket
-                ).list(pncp_id)
+                ).list(folder_name)
                 return [
-                    {"path": f"{pncp_id}/{item['name']}", "name": item["name"]}
+                    {"path": f"{folder_name}/{item['name']}", "name": item["name"]}
                     for item in response
                 ]
             except Exception as e:
@@ -1090,7 +1094,7 @@ class SupabaseRepositoryV19:
                     )
                     time.sleep(delay)
 
-        self.logger.error(f"Erro listando arquivos em {pncp_id} apos {max_retries} tentativas: {last_error}")
+        self.logger.error(f"Erro listando arquivos em {folder_name} apos {max_retries} tentativas: {last_error}")
         return []
 
     def baixar_arquivo(self, storage_path: str, max_retries: int = 3) -> Optional[bytes]:
