@@ -57,15 +57,34 @@ jobs:
           pip install -r requirements.txt
 
       - name: Print environment info
+        id: env_info
         run: |
           echo "=== Git SHA ==="
-          git rev-parse HEAD
+          GIT_SHA=$(git rev-parse HEAD)
+          echo $GIT_SHA
+          echo "git_sha=$GIT_SHA" >> $GITHUB_OUTPUT
           echo ""
           echo "=== Python version ==="
           python --version
           echo ""
           echo "=== Installed packages (top 20) ==="
           pip freeze | head -20
+
+      - name: Generate run report (anti-drift)
+        run: |
+          cat > run_report.json << EOF
+          {
+            "git_sha": "${{ steps.env_info.outputs.git_sha }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "workflow": "ache-sucatas",
+            "job": "miner",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "event": "${{ github.event_name }}",
+            "ref": "${{ github.ref }}"
+          }
+          EOF
+          cat run_report.json
 
       - name: Verify Supabase connection
         env:
@@ -96,6 +115,7 @@ jobs:
           path: |
             ache_sucatas_metrics_v18.jsonl
             .ache_sucatas_checkpoint_v18.json
+            run_report.json
           retention-days: 30
 
   # ==========================================================================
@@ -126,15 +146,34 @@ jobs:
           pip install -r requirements.txt
 
       - name: Print environment info
+        id: env_info_auditor
         run: |
           echo "=== Git SHA ==="
-          git rev-parse HEAD
+          GIT_SHA=$(git rev-parse HEAD)
+          echo $GIT_SHA
+          echo "git_sha=$GIT_SHA" >> $GITHUB_OUTPUT
           echo ""
           echo "=== Python version ==="
           python --version
           echo ""
           echo "=== Installed packages (top 20) ==="
           pip freeze | head -20
+
+      - name: Generate run report (anti-drift)
+        run: |
+          cat > auditor_run_report.json << EOF
+          {
+            "git_sha": "${{ steps.env_info_auditor.outputs.git_sha }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "workflow": "ache-sucatas",
+            "job": "auditor",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "event": "${{ github.event_name }}",
+            "ref": "${{ github.ref }}"
+          }
+          EOF
+          cat auditor_run_report.json
 
       - name: Run Auditor V19
         env:
@@ -161,6 +200,7 @@ jobs:
           name: auditor-results-${{ github.run_number }}
           path: |
             analise_editais_v19.csv
+            auditor_run_report.json
           retention-days: 30
           if-no-files-found: ignore
 

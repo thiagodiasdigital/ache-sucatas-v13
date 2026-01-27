@@ -285,7 +285,7 @@ def extrair_descricao_pdf(texto_pdf: str) -> str:
             descricao = re.sub(r'\s+', ' ', descricao)
             return descricao[:500]
 
-    linhas = [l.strip() for l in texto_pdf.split('\n') if len(l.strip()) > 30]
+    linhas = [linha.strip() for linha in texto_pdf.split('\n') if len(linha.strip()) > 30]
     if linhas:
         return re.sub(r'\s+', ' ', ' '.join(linhas[:3]))[:500]
 

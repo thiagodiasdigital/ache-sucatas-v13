@@ -1212,6 +1212,8 @@ class SupabaseRepositoryV19:
         V19.2 IDEMPOTENCIA: Registra timestamp e run_id para garantir
         que o mesmo edital nao seja reprocessado em execucoes futuras.
         V19.2 RESILIENCIA: Inclui retry com backoff exponencial.
+        V19.4 LINEAGE: NAO sobrescreve link_leiloeiro_origem_tipo se ja estiver
+              definido (ex: pncp_api do Miner). Apenas atualiza campos de idempotencia.
 
         Args:
             pncp_id: pncp_id do edital
@@ -1226,20 +1228,22 @@ class SupabaseRepositoryV19:
         if not self.enable_supabase:
             return False
 
-        # Valores validos para link_leiloeiro_origem_tipo (constraint do banco):
-        # pncp_api, pdf_anexo, pdf_edital, xlsx_anexo, csv_anexo,
-        # titulo_descricao, manual, unknown, NULL
-        # Usamos 'unknown' para indicar processado mas sem link encontrado
+        # V19.4 LINEAGE FIX: Apenas atualiza campos de idempotencia quando no_link.
+        # NAO sobrescreve link_leiloeiro_origem_tipo - pode ter vindo do Miner (pncp_api).
+        # Apenas define origem_tipo se o edital realmente nao tinha nenhum link
+        # E o resultado e "no_link" (confirma que processamos e nao encontramos).
         dados = {
             "versao_auditor": self.config.versao_auditor,
-            "link_leiloeiro_origem_tipo": "unknown",
-            "link_leiloeiro_confianca": 0,  # Confianca zero = nao encontrou
             "updated_at": datetime.now().isoformat(),
             # V19.2: Campos de idempotencia
             "auditor_v19_processed_at": datetime.now().isoformat(),
             "auditor_v19_run_id": run_id,
             "auditor_v19_result": resultado,
         }
+
+        # V19.4: So define confianca zero se resultado for no_link
+        if resultado == "no_link":
+            dados["link_leiloeiro_confianca"] = 0
 
         last_error = None
         for attempt in range(max_retries):

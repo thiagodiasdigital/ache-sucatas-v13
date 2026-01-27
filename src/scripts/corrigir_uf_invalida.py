@@ -53,13 +53,13 @@ def main():
     print(f"      Encontrado(s) {len(leiloes)} leilao(es) com UF invalida:")
     print()
 
-    for l in leiloes:
-        print(f"      ID: {l['id']}")
-        print(f"      ID Interno: {l['id_interno']}")
-        print(f"      PNCP ID: {l['pncp_id']}")
-        print(f"      Cidade: {l['cidade']}")
-        print(f"      UF atual: {l['uf']}")
-        print(f"      Orgao: {l['orgao'][:60]}..." if l.get('orgao') and len(l.get('orgao', '')) > 60 else f"      Orgao: {l.get('orgao')}")
+    for leilao in leiloes:
+        print(f"      ID: {leilao['id']}")
+        print(f"      ID Interno: {leilao['id_interno']}")
+        print(f"      PNCP ID: {leilao['pncp_id']}")
+        print(f"      Cidade: {leilao['cidade']}")
+        print(f"      UF atual: {leilao['uf']}")
+        print(f"      Orgao: {leilao['orgao'][:60]}..." if leilao.get('orgao') and len(leilao.get('orgao', '')) > 60 else f"      Orgao: {leilao.get('orgao')}")
         print()
 
     # 2. Confirmar que Carmo de Minas e de MG
@@ -74,27 +74,27 @@ def main():
     # 3. Corrigir
     print("[3/3] Aplicando correcao...")
 
-    for l in leiloes:
-        if l['cidade'] and 'carmo' in l['cidade'].lower() and 'minas' in l['cidade'].lower():
+    for leilao in leiloes:
+        if leilao['cidade'] and 'carmo' in leilao['cidade'].lower() and 'minas' in leilao['cidade'].lower():
             # Corrigir UF
             update_resp = supabase.table("editais_leilao").update({
                 "uf": uf_correta
-            }).eq("id", l['id']).execute()
+            }).eq("id", leilao['id']).execute()
 
             if update_resp.data:
-                print(f"      [OK] Leilao ID {l['id']} corrigido: XX -> {uf_correta}")
+                print(f"      [OK] Leilao ID {leilao['id']} corrigido: XX -> {uf_correta}")
 
                 # Tambem atualizar o id_interno se necessario
-                if l['id_interno'] and l['id_interno'].startswith('XX_'):
-                    novo_id_interno = l['id_interno'].replace('XX_', f'{uf_correta}_', 1)
+                if leilao['id_interno'] and leilao['id_interno'].startswith('XX_'):
+                    novo_id_interno = leilao['id_interno'].replace('XX_', f'{uf_correta}_', 1)
                     supabase.table("editais_leilao").update({
                         "id_interno": novo_id_interno
-                    }).eq("id", l['id']).execute()
+                    }).eq("id", leilao['id']).execute()
                     print(f"      [OK] ID interno atualizado: {novo_id_interno}")
             else:
-                print(f"      [ERRO] Falha ao corrigir leilao ID {l['id']}")
+                print(f"      [ERRO] Falha ao corrigir leilao ID {leilao['id']}")
         else:
-            print(f"      [SKIP] Leilao ID {l['id']} - cidade '{l['cidade']}' nao e Carmo de Minas")
+            print(f"      [SKIP] Leilao ID {leilao['id']} - cidade '{leilao['cidade']}' nao e Carmo de Minas")
 
     print()
     print("=" * 60)

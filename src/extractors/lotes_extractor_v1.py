@@ -889,7 +889,7 @@ class ExtratorTabelas:
 
                 # Limitar bloco às primeiras linhas relevantes (antes do CHECK LIST)
                 bloco_limpo = bloco.split('CHECK LIST')[0] if 'CHECK LIST' in bloco else bloco
-                linhas = [l.strip() for l in bloco_limpo.split('\n') if l.strip()]
+                linhas = [linha.strip() for linha in bloco_limpo.split('\n') if linha.strip()]
 
                 # Primeira linha não-vazia é a descrição principal
                 descricao = linhas[0] if linhas else ''
