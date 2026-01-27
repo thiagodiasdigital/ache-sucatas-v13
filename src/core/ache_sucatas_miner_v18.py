@@ -886,7 +886,8 @@ class MinerConfig:
     retry_backoff_base: float = 2.0
 
     # Filtros
-    modalidades: str = "1|13"
+    # 1=Pregao Eletronico, 6=Leilao Eletronico, 7=Leilao Presencial, 13=Concorrencia
+    modalidades: str = "1|6|7|13"
     min_score: int = 60
     filtrar_data_passada: bool = True
 
