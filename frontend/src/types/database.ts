@@ -339,6 +339,12 @@ export interface Database {
           leiloes_proximos_7_dias: number
         }[]
       }
+      get_lotes_by_id_interno: {
+        Args: {
+          p_id_interno: string
+        }
+        Returns: Database["public"]["Tables"]["lotes_leilao"]["Row"][]
+      }
     }
   }
   audit: {

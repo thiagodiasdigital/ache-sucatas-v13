@@ -16,8 +16,9 @@ export function useLotes(idInterno: string | null) {
     queryFn: async () => {
       if (!idInterno) return []
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await supabase
-        .rpc("get_lotes_by_id_interno", { p_id_interno: idInterno })
+        .rpc("get_lotes_by_id_interno", { p_id_interno: idInterno } as any)
 
       if (error) {
         throw new Error(error.message)
