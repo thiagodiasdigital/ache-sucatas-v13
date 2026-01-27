@@ -7,8 +7,8 @@ Ache Sucatas DaaS - Auditor V19
 Extrai dados estruturados de editais com foco em links de leiloeiro.
 Usa estrategias em cascata para maximizar extracao.
 
-Versao: 19
-Data: 2026-01-21
+Versao: 19.5
+Data: 2026-01-27
 Changelog:
     - V19: Gate de validacao de URLs (rejeita TLD colado em palavras)
     - V19: Proveniencia do link (fonte, arquivo, pagina/posicao)
@@ -17,6 +17,8 @@ Changelog:
     - V19: Validacao estrutural obrigatoria (http/https/www/whitelist)
     - V19.2: Idempotencia - rastreia processamento com auditor_v19_processed_at
     - V19.2: Skip de editais ja processados (exceto com --force)
+    - V19.5: FIX - run_report gravado SEMPRE via try/finally (inclusive 0 editais)
+    - V19.5: --strict para levantar excecao se run_report falhar (util para CI)
 
 Baseado em: V18 (CASCATA EXTRACAO)
 Autor: Claude Code
@@ -100,7 +102,7 @@ class AuditorConfig:
 
     batch_size: int = 50
 
-    versao_auditor: str = "V19_URL_GATE_PROVENIENCIA"
+    versao_auditor: str = "V19.5_RUN_REPORT_FIX"
 
 
 # ============================================================
@@ -1278,6 +1280,7 @@ class SupabaseRepositoryV19:
         Insere relatorio de execucao na tabela pipeline_run_reports.
 
         V19.4: Persiste metricas de qualidade para rastreamento historico.
+        V19.5: Corrigido fallback quando RPC nao existe.
 
         Args:
             run_id: ID unico da execucao
@@ -1288,15 +1291,24 @@ class SupabaseRepositoryV19:
             True se sucesso
         """
         if not self.enable_supabase:
+            self.logger.warning("[RUN REPORT] Supabase desativado, ignorando run_report")
             return False
 
+        metrics = None
+
+        # V19.5: Tentar RPC primeiro, fallback para queries se RPC falhar
         try:
-            # Buscar metricas atuais do banco
             resp = self.client.rpc('get_pipeline_metrics', {}).execute()
             if resp.data:
                 metrics = resp.data
-            else:
-                # Fallback: calcular via queries
+                self.logger.debug("[RUN REPORT] Metricas obtidas via RPC")
+        except Exception as rpc_err:
+            self.logger.debug(f"[RUN REPORT] RPC get_pipeline_metrics indisponivel: {rpc_err}")
+
+        # Fallback: calcular via queries diretas se RPC falhou ou retornou vazio
+        if not metrics:
+            self.logger.debug("[RUN REPORT] Usando fallback de queries para metricas")
+            try:
                 total_resp = self.client.table("editais_leilao").select("id", count="exact").execute()
                 total = total_resp.count or 0
 
@@ -1325,8 +1337,17 @@ class SupabaseRepositoryV19:
                     'origem_pncp_api': origem_pncp,
                     'origem_pdf_anexo': origem_pdf,
                 }
+            except Exception as query_err:
+                self.logger.warning(f"[RUN REPORT] Erro obtendo metricas via queries: {query_err}")
+                # Usar metricas zeradas como fallback final
+                metrics = {
+                    'total': 0, 'com_link': 0, 'sem_link': 0,
+                    'com_link_valido_true': 0, 'com_link_valido_false': 0,
+                    'com_link_valido_null': 0, 'origem_pncp_api': 0, 'origem_pdf_anexo': 0,
+                }
 
-            # Inserir relatorio
+        # Inserir relatorio
+        try:
             dados = {
                 "run_id": run_id,
                 "git_sha": git_sha,
@@ -1347,8 +1368,8 @@ class SupabaseRepositoryV19:
             self.logger.info(f"[RUN REPORT] Inserido relatorio: run_id={run_id}, total={dados['total']}, valido_null={dados['com_link_valido_null']}")
             return True
 
-        except Exception as e:
-            self.logger.warning(f"Erro inserindo run_report: {e}")
+        except Exception as insert_err:
+            self.logger.error(f"[RUN REPORT] Erro ao inserir na tabela pipeline_run_reports: {insert_err}")
             return False
 
     def _extrair_dominio(self, url: str) -> Optional[str]:
@@ -1719,17 +1740,20 @@ class AuditorV19:
         self.metrics.url_nao_encontrada += 1
         return None
 
-    def executar(self, limite: int = 100, reprocessar_todos: bool = False, force_reprocess: bool = False, git_sha: Optional[str] = None) -> dict:
+    def executar(self, limite: int = 100, reprocessar_todos: bool = False, force_reprocess: bool = False, git_sha: Optional[str] = None, strict: bool = False) -> dict:
         """
         Executa auditoria em editais pendentes.
 
         V19.2 IDEMPOTENCIA: Gera run_id unico e rastreia processamento.
         V19.4 RUN REPORT: Persiste metricas ao final da execucao.
+        V19.5 FIX: Garante inserir_run_report SEMPRE via try/finally (mesmo 0 editais).
 
         Args:
             limite: Numero maximo de editais a processar
             reprocessar_todos: Se True, reprocessa todos os editais (ignora filtro de link)
             force_reprocess: Se True, reprocessa mesmo editais ja processados pelo V19
+            git_sha: SHA do commit git para rastreamento
+            strict: Se True, levanta excecao quando run_report falhar
 
         Returns:
             Estatisticas da execucao
@@ -1739,106 +1763,123 @@ class AuditorV19:
         self.current_run_id = run_id
 
         self.logger.info("=" * 70)
-        self.logger.info("ACHE SUCATAS - CLOUD AUDITOR V19.2 (IDEMPOTENTE)")
+        self.logger.info("ACHE SUCATAS - CLOUD AUDITOR V19.5 (IDEMPOTENTE + RUN REPORT FIX)")
         self.logger.info("=" * 70)
-        self.logger.info("NOVIDADES V19.2:")
-        self.logger.info("  - IDEMPOTENCIA: Rastreia processamento com timestamp e run_id")
-        self.logger.info("  - SKIP: Editais ja processados nao sao reprocessados")
-        self.logger.info("  - FORCE: Use --force para reprocessar mesmo assim")
+        self.logger.info("NOVIDADES V19.5:")
+        self.logger.info("  - FIX: run_report gravado SEMPRE (inclusive 0 editais)")
+        self.logger.info("  - STRICT: --strict para falhar CI se run_report falhar")
         self.logger.info("-" * 70)
         self.logger.info(f"Run ID: {run_id}")
         self.logger.info(f"Supabase: {'ATIVO' if self.repo.enable_supabase else 'DESATIVADO'}")
         self.logger.info(f"Validar URLs: {'SIM' if self.config.validar_urls else 'NAO'}")
         self.logger.info(f"Force Reprocess: {'SIM' if force_reprocess else 'NAO'}")
+        self.logger.info(f"Strict Mode: {'SIM' if strict else 'NAO'}")
         self.logger.info("=" * 70)
 
-        if reprocessar_todos:
-            self.logger.info("Modo: Reprocessar TODOS os editais (ignora filtro de link)")
-            editais = self.repo.buscar_todos_editais(limite)
-        else:
-            self.logger.info("Modo: Editais pendentes (sem link_leiloeiro)")
-            # V19.2: Passa flag de force para incluir ja processados
-            editais = self.repo.buscar_editais_pendentes(limite, incluir_ja_processados=force_reprocess)
+        try:
+            if reprocessar_todos:
+                self.logger.info("Modo: Reprocessar TODOS os editais (ignora filtro de link)")
+                editais = self.repo.buscar_todos_editais(limite)
+            else:
+                self.logger.info("Modo: Editais pendentes (sem link_leiloeiro)")
+                # V19.2: Passa flag de force para incluir ja processados
+                editais = self.repo.buscar_editais_pendentes(limite, incluir_ja_processados=force_reprocess)
 
-        if not editais:
-            self.logger.info("Nenhum edital para processar")
-            return self.metrics.__dict__
+            if not editais:
+                self.logger.info("Nenhum edital para processar (0 editais pendentes)")
+                # V19.5: NAO retorna cedo - continua para finally gravar run_report
+            else:
+                self.logger.info(f"Encontrados {len(editais)} editais para processar")
 
-        self.logger.info(f"Encontrados {len(editais)} editais para processar")
+                for i, edital in enumerate(editais, 1):
+                    self.metrics.total_processados += 1
+                    pncp_id = edital.get("pncp_id", "?")
 
-        for i, edital in enumerate(editais, 1):
-            self.metrics.total_processados += 1
-            pncp_id = edital.get("pncp_id", "?")
+                    self.logger.info(f"[{i}/{len(editais)}] Processando {pncp_id}")
 
-            self.logger.info(f"[{i}/{len(editais)}] Processando {pncp_id}")
+                    try:
+                        resultado = self._processar_edital(edital)
 
-            try:
-                resultado = self._processar_edital(edital)
+                        if resultado:
+                            proveniencia = resultado["proveniencia"]
 
-                if resultado:
-                    proveniencia = resultado["proveniencia"]
-
-                    # V19.2: Passa run_id para rastreamento de idempotencia
-                    sucesso = self.repo.atualizar_link_leiloeiro_v19(
-                        pncp_id=resultado["pncp_id"],
-                        proveniencia=proveniencia,
-                        run_id=run_id,
-                    )
-
-                    if sucesso:
-                        self.metrics.sucessos += 1
-                        if proveniencia.valido:
-                            self.logger.info(
-                                f"  Link VALIDO ({resultado['fonte']}, conf={proveniencia.confianca}): "
-                                f"{proveniencia.url_validada}"
+                            # V19.2: Passa run_id para rastreamento de idempotencia
+                            sucesso = self.repo.atualizar_link_leiloeiro_v19(
+                                pncp_id=resultado["pncp_id"],
+                                proveniencia=proveniencia,
+                                run_id=run_id,
                             )
+
+                            if sucesso:
+                                self.metrics.sucessos += 1
+                                if proveniencia.valido:
+                                    self.logger.info(
+                                        f"  Link VALIDO ({resultado['fonte']}, conf={proveniencia.confianca}): "
+                                        f"{proveniencia.url_validada}"
+                                    )
+                                else:
+                                    self.logger.info(
+                                        f"  Link REJEITADO ({proveniencia.motivo_rejeicao}): "
+                                        f"{proveniencia.candidato_raw}"
+                                    )
+                            else:
+                                self.metrics.falhas += 1
                         else:
-                            self.logger.info(
-                                f"  Link REJEITADO ({proveniencia.motivo_rejeicao}): "
-                                f"{proveniencia.candidato_raw}"
+                            # V19.2: Marcar como processado com run_id para idempotencia
+                            self.repo.marcar_processado_v19(
+                                pncp_id=pncp_id,
+                                run_id=run_id,
+                                resultado="no_link",
+                                motivo="sem_link"
                             )
-                    else:
+                            self.metrics.url_nao_encontrada += 1
+                            self.logger.debug(f"  [IDEMPOTENCIA] Marcado como processado (no_link)")
+
+                    except Exception as e:
+                        self.logger.error(f"Erro processando {pncp_id}: {e}")
+                        # V19.2: Marcar erro para nao reprocessar infinitamente
+                        self.repo.marcar_processado_v19(
+                            pncp_id=pncp_id,
+                            run_id=run_id,
+                            resultado="error",
+                            motivo=str(e)[:100]
+                        )
+                        self.metrics.erros += 1
                         self.metrics.falhas += 1
-                else:
-                    # V19.2: Marcar como processado com run_id para idempotencia
-                    self.repo.marcar_processado_v19(
-                        pncp_id=pncp_id,
-                        run_id=run_id,
-                        resultado="no_link",
-                        motivo="sem_link"
+
+                    if i % 10 == 0:
+                        self.logger.info(
+                            f"  Progresso: {i}/{len(editais)} | "
+                            f"Sucesso: {self.metrics.sucessos} | "
+                            f"URLs: PDF={self.metrics.url_extraida_pdf}, "
+                            f"Excel={self.metrics.url_extraida_excel}, "
+                            f"Descr={self.metrics.url_extraida_descricao}"
+                        )
+
+            self.metrics.print_summary()
+
+        finally:
+            # V19.5 FIX: SEMPRE gravar run_report, mesmo com 0 editais ou excecao
+            self.logger.info(f"[RUN REPORT] Gravando relatorio para run_id={self.current_run_id}")
+            run_report_ok = self.repo.inserir_run_report(
+                run_id=self.current_run_id,
+                git_sha=git_sha,
+                job_name="auditor"
+            )
+
+            if not run_report_ok:
+                self.logger.error(
+                    f"[RUN REPORT] FALHA ao gravar relatorio! "
+                    f"run_id={self.current_run_id}, git_sha={git_sha}, job_name=auditor"
+                )
+                if strict:
+                    raise RuntimeError(
+                        f"Falha ao inserir run_report: run_id={self.current_run_id}, "
+                        f"git_sha={git_sha}, job_name=auditor. "
+                        f"Verifique RLS e permissoes da tabela pipeline_run_reports."
                     )
-                    self.metrics.url_nao_encontrada += 1
-                    self.logger.debug(f"  [IDEMPOTENCIA] Marcado como processado (no_link)")
-
-            except Exception as e:
-                self.logger.error(f"Erro processando {pncp_id}: {e}")
-                # V19.2: Marcar erro para nao reprocessar infinitamente
-                self.repo.marcar_processado_v19(
-                    pncp_id=pncp_id,
-                    run_id=run_id,
-                    resultado="error",
-                    motivo=str(e)[:100]
-                )
-                self.metrics.erros += 1
-                self.metrics.falhas += 1
-
-            if i % 10 == 0:
-                self.logger.info(
-                    f"  Progresso: {i}/{len(editais)} | "
-                    f"Sucesso: {self.metrics.sucessos} | "
-                    f"URLs: PDF={self.metrics.url_extraida_pdf}, "
-                    f"Excel={self.metrics.url_extraida_excel}, "
-                    f"Descr={self.metrics.url_extraida_descricao}"
-                )
-
-        self.metrics.print_summary()
-
-        # V19.4: Inserir run report para rastreamento historico
-        self.repo.inserir_run_report(
-            run_id=self.current_run_id,
-            git_sha=git_sha,
-            job_name="auditor"
-        )
+            else:
+                self.logger.info(f"[RUN REPORT] Relatorio gravado com sucesso")
 
         return {
             "total_processados": self.metrics.total_processados,
@@ -1857,7 +1898,7 @@ class AuditorV19:
 def main():
     """Ponto de entrada do auditor."""
     parser = argparse.ArgumentParser(
-        description="Ache Sucatas - Cloud Auditor V19.2 (Idempotente)"
+        description="Ache Sucatas - Cloud Auditor V19.5 (Idempotente + Run Report Fix)"
     )
     parser.add_argument(
         "--limite",
@@ -1894,6 +1935,11 @@ def main():
         "--debug",
         action="store_true",
         help="Ativa modo debug com logs detalhados"
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="V19.5: Levanta excecao se run_report falhar (util para CI)"
     )
 
     args = parser.parse_args()
@@ -1938,6 +1984,7 @@ def main():
         reprocessar_todos=args.reprocessar_todos,
         force_reprocess=args.force,
         git_sha=git_sha,
+        strict=args.strict,
     )
 
     logger.info(f"Auditoria finalizada: {stats}")
