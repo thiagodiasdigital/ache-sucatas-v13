@@ -56,6 +56,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Print environment info
+        run: |
+          echo "=== Git SHA ==="
+          git rev-parse HEAD
+          echo ""
+          echo "=== Python version ==="
+          python --version
+          echo ""
+          echo "=== Installed packages (top 20) ==="
+          pip freeze | head -20
+
       - name: Verify Supabase connection
         env:
           PYTHONPATH: src/core
@@ -114,6 +125,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Print environment info
+        run: |
+          echo "=== Git SHA ==="
+          git rev-parse HEAD
+          echo ""
+          echo "=== Python version ==="
+          python --version
+          echo ""
+          echo "=== Installed packages (top 20) ==="
+          pip freeze | head -20
+
       - name: Run Auditor V19
         env:
           PYTHONPATH: src/core
@@ -165,6 +187,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Print environment info
+        run: |
+          echo "=== Git SHA ==="
+          git rev-parse HEAD
+          echo ""
+          echo "=== Python version ==="
+          python --version
+          echo ""
+          echo "=== Installed packages (top 20) ==="
+          pip freeze | head -20
 
       - name: Verify database status
         env:
