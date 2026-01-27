@@ -3,8 +3,13 @@ Ache Sucatas DaaS - Minerador V18
 =================================
 NOVA FUNCIONALIDADE: Enriquecimento com IA (OpenAI GPT-4o-mini).
 
-Versao: 18.2
-Data: 2026-01-24
+Versao: 18.3
+Data: 2026-01-27
+
+Changelog V18.3:
+    - NOVO: inserir_run_report para gravar execucoes em pipeline_run_reports
+    - NOVO: Rastreamento de git_sha para correlacao com deploys
+    - NOVO: Metricas de qualidade persistidas em cada execucao
 
 Changelog V18.2:
     - NOVO: TaxonomiaLoader para carregar taxonomia automotiva do Supabase
@@ -2081,6 +2086,107 @@ class SupabaseRepository:
             self.logger.error(f"Erro ao inserir na quarentena: {e}")
             return False
 
+    def inserir_run_report(
+        self,
+        run_id: str,
+        git_sha: str = None,
+        job_name: str = "miner",
+    ) -> bool:
+        """
+        Insere relatorio de execucao na tabela pipeline_run_reports.
+
+        V18.3: Adiciona rastreamento de execucoes do Miner para auditoria.
+
+        Args:
+            run_id: ID unico da execucao
+            git_sha: SHA do commit git (pode ser None)
+            job_name: Nome do job (miner ou auditor)
+
+        Returns:
+            True se sucesso
+        """
+        if not self.enable_supabase:
+            self.logger.warning("[RUN REPORT] Supabase desativado, ignorando run_report")
+            return False
+
+        metrics = None
+
+        # Tentar RPC primeiro, fallback para queries se RPC falhar
+        try:
+            resp = self.client.rpc('get_pipeline_metrics', {}).execute()
+            if resp.data:
+                metrics = resp.data
+                self.logger.debug("[RUN REPORT] Metricas obtidas via RPC")
+        except Exception as rpc_err:
+            self.logger.debug(f"[RUN REPORT] RPC get_pipeline_metrics indisponivel: {rpc_err}")
+
+        # Fallback: calcular via queries diretas se RPC falhou ou retornou vazio
+        if not metrics:
+            self.logger.debug("[RUN REPORT] Usando fallback de queries para metricas")
+            try:
+                total_resp = self.client.table("editais_leilao").select("id", count="exact").execute()
+                total = total_resp.count or 0
+
+                com_link_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").execute()
+                com_link = com_link_resp.count or 0
+
+                valido_true_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", True).execute()
+                valido_true = valido_true_resp.count or 0
+
+                valido_false_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", False).execute()
+                valido_false = valido_false_resp.count or 0
+
+                origem_pncp_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pncp_api").execute()
+                origem_pncp = origem_pncp_resp.count or 0
+
+                origem_pdf_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pdf_anexo").execute()
+                origem_pdf = origem_pdf_resp.count or 0
+
+                metrics = {
+                    'total': total,
+                    'com_link': com_link,
+                    'sem_link': total - com_link,
+                    'com_link_valido_true': valido_true,
+                    'com_link_valido_false': valido_false,
+                    'com_link_valido_null': com_link - valido_true - valido_false,
+                    'origem_pncp_api': origem_pncp,
+                    'origem_pdf_anexo': origem_pdf,
+                }
+            except Exception as query_err:
+                self.logger.warning(f"[RUN REPORT] Erro obtendo metricas via queries: {query_err}")
+                # Usar metricas zeradas como fallback final
+                metrics = {
+                    'total': 0, 'com_link': 0, 'sem_link': 0,
+                    'com_link_valido_true': 0, 'com_link_valido_false': 0,
+                    'com_link_valido_null': 0, 'origem_pncp_api': 0, 'origem_pdf_anexo': 0,
+                }
+
+        # Inserir relatorio
+        try:
+            dados = {
+                "run_id": run_id,
+                "git_sha": git_sha,
+                "job_name": job_name,
+                "total": metrics.get('total', 0),
+                "com_link": metrics.get('com_link', 0),
+                "sem_link": metrics.get('sem_link', 0),
+                "com_link_valido_true": metrics.get('com_link_valido_true', 0),
+                "com_link_valido_false": metrics.get('com_link_valido_false', 0),
+                "com_link_valido_null": metrics.get('com_link_valido_null', 0),
+                "origem_pncp_api": metrics.get('origem_pncp_api', 0),
+                "origem_pdf_anexo": metrics.get('origem_pdf_anexo', 0),
+                "origem_unknown": metrics.get('origem_unknown', 0),
+                "origem_null": metrics.get('origem_null', 0),
+            }
+
+            self.client.table("pipeline_run_reports").insert(dados).execute()
+            self.logger.info(f"[RUN REPORT] Inserido relatorio: run_id={run_id}, job_name={job_name}, total={dados['total']}")
+            return True
+
+        except Exception as insert_err:
+            self.logger.error(f"[RUN REPORT] Erro ao inserir na tabela pipeline_run_reports: {insert_err}")
+            return False
+
 
 # ============================================================
 # STORAGE - SUPABASE
@@ -2851,6 +2957,23 @@ class MinerV18:
         self._salvar_relatorio_json()
         self._upload_relatorio_storage()
 
+        # V18.3: Inserir run report para rastreamento historico
+        if self.repo:
+            git_sha = self._get_git_sha()
+            self.logger.info(f"[RUN REPORT] Gravando relatorio para run_id={self.run_id}")
+            run_report_ok = self.repo.inserir_run_report(
+                run_id=self.run_id,
+                git_sha=git_sha,
+                job_name="miner"
+            )
+            if not run_report_ok:
+                self.logger.error(
+                    f"[RUN REPORT] FALHA ao gravar relatorio! "
+                    f"run_id={self.run_id}, git_sha={git_sha}, job_name=miner"
+                )
+            else:
+                self.logger.info(f"[RUN REPORT] Relatorio gravado com sucesso")
+
         return self.stats
 
     def _imprimir_relatorio_qualidade(self):
@@ -2905,6 +3028,27 @@ class MinerV18:
 
         except Exception as e:
             self.logger.error(f"Erro ao salvar relatorio JSON local: {e}")
+
+    def _get_git_sha(self) -> str:
+        """
+        V18.3: Obtém o SHA do commit git atual para rastreamento.
+
+        Returns:
+            SHA do commit ou None se não disponível
+        """
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
 
     def _upload_relatorio_storage(self):
         """
