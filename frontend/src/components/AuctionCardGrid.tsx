@@ -183,27 +183,27 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
           </div>
         )}
 
-        {/* Botão VER DETALHES */}
+        {/* Botão VER DETALHES - min-h-[44px] para touch target adequado */}
         <button
           onClick={() => setShowLotesModal(true)}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors mb-2"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors mb-2"
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Eye className="h-4 w-4" />
           VER DETALHES
         </button>
       </div>
 
-      {/* Botões de Ação - Estilo Meli */}
-      <div className="px-3 pb-1.5 pt-1.5 border-t border-gray-100 flex gap-2">
+      {/* Botões de Ação - Estilo Meli - min-h-[44px] para touch targets */}
+      <div className="px-3 pb-2 pt-2 border-t border-gray-100 flex gap-2">
         {/* Botão VER PNCP */}
         {link_pncp && (
           <a
             href={link_pncp}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4" />
             VER PNCP
           </a>
         )}
@@ -214,16 +214,16 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
             href={link_leiloeiro}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4" />
             VER LEILOEIRO
           </a>
         )}
 
         {/* Indicador de encerrado */}
         {isEncerrado && (
-          <span className="flex-1 text-center text-xs text-gray-400 py-1.5">
+          <span className="flex-1 text-center text-xs text-gray-400 py-2.5 min-h-[44px] flex items-center justify-center">
             Leilão encerrado
           </span>
         )}
