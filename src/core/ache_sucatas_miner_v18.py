@@ -945,6 +945,14 @@ class MinerConfig:
         "sucata automotiva",
         "alienacao patrimonio",
         "desfazimento frota",
+        "bens moveis inserviveis",
+        "carros",
+        "veiculos",
+        "motos",
+        "carro",
+        "rodantes",
+        "sucatas",
+        "automoveis",
     ])
 
 
