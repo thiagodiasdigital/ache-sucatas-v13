@@ -4,7 +4,6 @@ import { Badge } from "./ui/badge"
 import { formatDate, cn } from "../lib/utils"
 import { getPncpLinkFromId } from "../utils/pncp"
 import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye, Package } from "lucide-react"
-import { useLotes, getLotesPreview } from "../hooks/useLotes"
 import { LotesModal } from "./LotesModal"
 
 interface AuctionCardGridProps {
@@ -72,10 +71,6 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
   const isEncerrado = status_temporal === 'passado'
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
   const categoryImage = getCategoryImage(tags)
-
-  // Buscar lotes do edital (usando id_interno - campo único compartilhado)
-  const { lotes, isLoading: isLoadingLotes, totalLotes } = useLotes(auction.id_interno)
-  const lotesPreview = getLotesPreview(lotes, 80)
 
   return (
     <div className={cn(
@@ -173,18 +168,20 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
         {/* Espaçador flexível */}
         <div className="flex-1" />
 
-        {/* Seção de Lotes */}
-        <div className="mb-2 border-t border-gray-100 pt-2">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Package className="h-3.5 w-3.5 text-gray-400" />
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-              Lotes {totalLotes > 0 && `(${totalLotes})`}
+        {/* Seção de Itens (preview via objeto_resumido) */}
+        {objeto_resumido && (
+          <div className="mb-2 border-t border-gray-100 pt-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Package className="h-3.5 w-3.5 text-gray-400" />
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                Itens
+              </p>
+            </div>
+            <p className="text-[11px] text-gray-600 line-clamp-1">
+              {objeto_resumido}
             </p>
           </div>
-          <p className="text-[11px] text-gray-600 line-clamp-1">
-            {isLoadingLotes ? "Carregando..." : lotesPreview}
-          </p>
-        </div>
+        )}
 
         {/* Botão VER DETALHES */}
         <button
