@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useAuth } from "../../contexts/AuthContext"
 import { useAvailableUFs, useCitiesByUF } from "../../hooks/useAuctions"
+import { useIsMobile } from "../../hooks/useIsMobile"
 import { NotificationBell } from "../NotificationBell"
+import { MobileFilterSheet, MobileFilterButton } from "../MobileFilterSheet"
 import { Search, User, LogOut, ChevronDown, X, Activity } from "lucide-react"
 import { cn } from "../../lib/utils"
 
@@ -117,6 +119,8 @@ function SearchableDropdown({
 export function Header() {
   const { user, signOut } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const isMobile = useIsMobile()
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
   // Estados dos filtros da URL
   const currentUF = searchParams.get("uf") || ""
@@ -198,6 +202,49 @@ export function Header() {
   // Verificar se há filtros ativos
   const hasFilters = currentUF || currentCidade || currentBusca || currentValorMin || currentValorMax ||
     urlDataPublicacaoDe || urlDataPublicacaoAte || urlDataLeilaoDe || urlDataLeilaoAte
+
+  // Contar filtros ativos (para badge do mobile)
+  const activeFiltersCount = [
+    currentValorMin,
+    currentValorMax,
+    urlDataPublicacaoDe,
+    urlDataPublicacaoAte,
+    urlDataLeilaoDe,
+    urlDataLeilaoAte,
+    currentTemporalidade !== "futuros" ? currentTemporalidade : "", // só conta se não for o default
+  ].filter(Boolean).length
+
+  // Callback para aplicar filtros do mobile sheet
+  const handleMobileApplyFilters = (filters: {
+    valor_min: string
+    valor_max: string
+    data_publicacao_de: string
+    data_publicacao_ate: string
+    data_leilao_de: string
+    data_leilao_ate: string
+    temporalidade: string
+  }) => {
+    const newParams = new URLSearchParams(searchParams)
+
+    // Atualizar cada filtro
+    const filterKeys = [
+      "valor_min", "valor_max",
+      "data_publicacao_de", "data_publicacao_ate",
+      "data_leilao_de", "data_leilao_ate",
+      "temporalidade"
+    ] as const
+
+    for (const key of filterKeys) {
+      if (filters[key]) {
+        newParams.set(key, filters[key])
+      } else {
+        newParams.delete(key)
+      }
+    }
+
+    newParams.delete("page") // Reset pagination
+    setSearchParams(newParams)
+  }
 
   // Opções para dropdowns
   const ufOptions = [
@@ -333,11 +380,34 @@ export function Header() {
         </div>
       </div>
 
-      {/* ========== LINHA 2 - FILTER BAR ========== */}
+      {/* ========== LINHA 2 - FILTER BAR (Desktop) / FILTER BUTTON (Mobile) ========== */}
       <div
         className="flex items-center justify-center gap-2 px-3 border-b border-gray-200"
         style={{ backgroundColor: "#E8F4FC", minHeight: "44px" }}
       >
+        {/* Mobile: Botão de Filtros */}
+        {isMobile && (
+          <div className="flex items-center justify-between w-full py-1">
+            <MobileFilterButton
+              onClick={() => setMobileFilterOpen(true)}
+              activeFiltersCount={activeFiltersCount}
+            />
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="flex items-center gap-1 px-3 py-2 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-h-[44px]"
+              >
+                <X className="h-4 w-4" />
+                Limpar
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Desktop: Filtros inline */}
+        {!isMobile && (
+          <>
         {/* Valor Mínimo */}
         <div className="flex items-center gap-1">
           <label htmlFor="valor_min" className="text-[11px] text-gray-600 whitespace-nowrap">
@@ -451,7 +521,7 @@ export function Header() {
           </select>
         </div>
 
-        {/* Botão Limpar Filtros */}
+        {/* Botão Limpar Filtros (Desktop) */}
         {hasFilters && (
           <button
             type="button"
@@ -462,7 +532,25 @@ export function Header() {
             Limpar
           </button>
         )}
+        </>
+        )}
       </div>
+
+      {/* Mobile Filter Sheet */}
+      <MobileFilterSheet
+        open={mobileFilterOpen}
+        onOpenChange={setMobileFilterOpen}
+        valorMin={currentValorMin}
+        valorMax={currentValorMax}
+        dataPublicacaoDe={urlDataPublicacaoDe}
+        dataPublicacaoAte={urlDataPublicacaoAte}
+        dataLeilaoDe={urlDataLeilaoDe}
+        dataLeilaoAte={urlDataLeilaoAte}
+        temporalidade={currentTemporalidade}
+        onApplyFilters={handleMobileApplyFilters}
+        onClearFilters={clearFilters}
+        activeFiltersCount={activeFiltersCount}
+      />
     </header>
   )
 }
