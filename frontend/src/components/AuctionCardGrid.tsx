@@ -4,7 +4,6 @@ import { Badge } from "./ui/badge"
 import { formatDate, cn } from "../lib/utils"
 import { getPncpLinkFromId } from "../utils/pncp"
 import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye, Package } from "lucide-react"
-import { useLotes, getLotesPreview } from "../hooks/useLotes"
 import { LotesModal } from "./LotesModal"
 
 interface AuctionCardGridProps {
@@ -73,22 +72,20 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
   const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
   const categoryImage = getCategoryImage(tags)
 
-  // Buscar lotes do edital (usando id_interno - campo único compartilhado)
-  const { lotes, isLoading: isLoadingLotes, totalLotes } = useLotes(auction.id_interno)
-  const lotesPreview = getLotesPreview(lotes, 80)
-
   return (
     <div className={cn(
       "bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col h-full",
       isEncerrado && "opacity-60"
     )}>
       {/* Área de Destaque Visual - Imagem da categoria */}
-      <div className="relative min-h-[85px] overflow-hidden">
-        {/* Imagem baseada na categoria do leilão */}
+      <div className="relative aspect-[4/1] overflow-hidden bg-gray-100">
+        {/* Imagem baseada na categoria do leilão - lazy loaded */}
         <img
           src={categoryImage}
           alt="Imagem do leilão"
-          className="w-full h-[85px] object-cover"
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover"
         />
 
         {/* Badge ENCERRADO */}
@@ -171,40 +168,42 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
         {/* Espaçador flexível */}
         <div className="flex-1" />
 
-        {/* Seção de Lotes */}
-        <div className="mb-2 border-t border-gray-100 pt-2">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Package className="h-3.5 w-3.5 text-gray-400" />
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-              Lotes {totalLotes > 0 && `(${totalLotes})`}
+        {/* Seção de Itens (preview via objeto_resumido) */}
+        {objeto_resumido && (
+          <div className="mb-2 border-t border-gray-100 pt-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Package className="h-3.5 w-3.5 text-gray-400" />
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                Itens
+              </p>
+            </div>
+            <p className="text-[11px] text-gray-600 line-clamp-1">
+              {objeto_resumido}
             </p>
           </div>
-          <p className="text-[11px] text-gray-600 line-clamp-1">
-            {isLoadingLotes ? "Carregando..." : lotesPreview}
-          </p>
-        </div>
+        )}
 
-        {/* Botão VER DETALHES */}
+        {/* Botão VER DETALHES - min-h-[44px] para touch target adequado */}
         <button
           onClick={() => setShowLotesModal(true)}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors mb-2"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors mb-2"
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Eye className="h-4 w-4" />
           VER DETALHES
         </button>
       </div>
 
-      {/* Botões de Ação - Estilo Meli */}
-      <div className="px-3 pb-1.5 pt-1.5 border-t border-gray-100 flex gap-2">
+      {/* Botões de Ação - Estilo Meli - min-h-[44px] para touch targets */}
+      <div className="px-3 pb-2 pt-2 border-t border-gray-100 flex gap-2">
         {/* Botão VER PNCP */}
         {link_pncp && (
           <a
             href={link_pncp}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4" />
             VER PNCP
           </a>
         )}
@@ -215,16 +214,16 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
             href={link_leiloeiro}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4" />
             VER LEILOEIRO
           </a>
         )}
 
         {/* Indicador de encerrado */}
         {isEncerrado && (
-          <span className="flex-1 text-center text-xs text-gray-400 py-1.5">
+          <span className="flex-1 text-center text-xs text-gray-400 py-2.5 min-h-[44px] flex items-center justify-center">
             Leilão encerrado
           </span>
         )}

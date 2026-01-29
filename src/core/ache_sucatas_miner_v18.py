@@ -3,8 +3,18 @@ Ache Sucatas DaaS - Minerador V18
 =================================
 NOVA FUNCIONALIDADE: Enriquecimento com IA (OpenAI GPT-4o-mini).
 
-Versao: 18.2
-Data: 2026-01-24
+Versao: 18.4
+Data: 2026-01-29
+
+Changelog V18.4:
+    - FIX: Aumentado dias_retroativos de 1 para 7 dias
+    - MOTIVO: Investigacao forense revelou que apenas 21/281 leiloes tinham data futura
+    - IMPACTO: Miner agora busca editais publicados nos ultimos 7 dias (antes: 24h)
+
+Changelog V18.3:
+    - NOVO: inserir_run_report para gravar execucoes em pipeline_run_reports
+    - NOVO: Rastreamento de git_sha para correlacao com deploys
+    - NOVO: Metricas de qualidade persistidas em cada execucao
 
 Changelog V18.2:
     - NOVO: TaxonomiaLoader para carregar taxonomia automotiva do Supabase
@@ -67,6 +77,13 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.core.email_notifier import send_alert_email
+from src.core.resilience import (
+    retry_with_backoff,
+    CircuitBreaker,
+    CircuitOpenError,
+    circuit_registry,
+    RETRIABLE_EXCEPTIONS,
+)
 from validators.dataset_validator import (
     validate_record,
     ValidationResult,
@@ -278,7 +295,7 @@ def extrair_descricao_pdf(texto_pdf: str) -> str:
             descricao = re.sub(r'\s+', ' ', descricao)
             return descricao[:500]
 
-    linhas = [l.strip() for l in texto_pdf.split('\n') if len(l.strip()) > 30]
+    linhas = [linha.strip() for linha in texto_pdf.split('\n') if len(linha.strip()) > 30]
     if linhas:
         return re.sub(r'\s+', ' ', ' '.join(linhas[:3]))[:500]
 
@@ -286,25 +303,44 @@ def extrair_descricao_pdf(texto_pdf: str) -> str:
 
 
 def extrair_tipo_leilao_pdf(texto_pdf: str) -> str:
-    """Extrai tipo/modalidade do leilao do texto do PDF."""
+    """
+    Extrai tipo/modalidade do leilao do texto do PDF.
+
+    FIX 2026-01-29: Corrigido bug onde patterns regex eram tratados como strings literais.
+    Agora usa re.search() para patterns com sintaxe regex.
+    """
     if not texto_pdf:
         return ""
 
     texto_lower = texto_pdf.lower()
 
-    tem_eletronico = any(p in texto_lower for p in [
-        "leil[aã]o eletr[oô]nico", "eletr[oô]nico", "online",
-        "modo eletronico", "forma eletronica", "virtual"
-    ])
-    tem_presencial = any(p in texto_lower for p in [
-        "leil[aã]o presencial", "presencial", "sede da",
-        "local:", "endereco:", "comparecimento"
-    ])
+    # Patterns para leilão eletrônico (alguns são regex, outros são literais)
+    ELETRONICO_REGEX = [
+        r"leil[aã]o\s*eletr[oô]nico",
+        r"eletr[oô]nico",
+        r"modo\s+eletr[oô]nico",
+        r"forma\s+eletr[oô]nica",
+    ]
+    ELETRONICO_LITERAL = ["online", "virtual", "pela internet"]
 
-    if re.search(r"leil[aã]o\s+eletr[oô]nico", texto_lower):
-        tem_eletronico = True
-    if re.search(r"leil[aã]o\s+presencial", texto_lower):
-        tem_presencial = True
+    # Patterns para leilão presencial
+    PRESENCIAL_REGEX = [
+        r"leil[aã]o\s*presencial",
+    ]
+    PRESENCIAL_LITERAL = [
+        "presencial", "sede da", "local:", "endereco:",
+        "comparecimento", "na sede", "no endereco"
+    ]
+
+    # Verificar patterns de eletrônico
+    tem_eletronico = any(re.search(p, texto_lower) for p in ELETRONICO_REGEX)
+    if not tem_eletronico:
+        tem_eletronico = any(p in texto_lower for p in ELETRONICO_LITERAL)
+
+    # Verificar patterns de presencial
+    tem_presencial = any(re.search(p, texto_lower) for p in PRESENCIAL_REGEX)
+    if not tem_presencial:
+        tem_presencial = any(p in texto_lower for p in PRESENCIAL_LITERAL)
 
     if tem_eletronico and tem_presencial:
         return "Hibrido"
@@ -864,7 +900,8 @@ class MinerConfig:
     search_page_delay_seconds: float = 0.5
 
     # Busca
-    dias_retroativos: int = 1
+    # V18.4 FIX: Aumentado de 1 para 7 dias para capturar mais leiloes futuros
+    dias_retroativos: int = 7
     paginas_por_termo: int = 3
     itens_por_pagina: int = 20
 
@@ -874,7 +911,8 @@ class MinerConfig:
     retry_backoff_base: float = 2.0
 
     # Filtros
-    modalidades: str = "1|13"
+    # 1=Pregao Eletronico, 6=Leilao Eletronico, 7=Leilao Presencial, 13=Concorrencia
+    modalidades: str = "1|6|7|13"
     min_score: int = 60
     filtrar_data_passada: bool = True
 
@@ -932,6 +970,14 @@ class MinerConfig:
         "sucata automotiva",
         "alienacao patrimonio",
         "desfazimento frota",
+        "bens moveis inserviveis",
+        "carros",
+        "veiculos",
+        "motos",
+        "carro",
+        "rodantes",
+        "sucatas",
+        "automoveis",
     ])
 
 
@@ -1013,11 +1059,18 @@ class OpenAIEnricher:
     Transforma texto bruto e metadados em inteligencia de mercado.
 
     Brief 3.6: Inclui tracking de tokens para FinOps.
+    V18.3: Inclui retry com backoff e circuit breaker para resiliencia.
     """
 
     # Precos OpenAI GPT-4o-mini (USD por 1M tokens) - Jan 2026
     PRICE_INPUT_PER_1M = 0.15
     PRICE_OUTPUT_PER_1M = 0.60
+
+    # V18.3: Configuracao de resiliencia
+    MAX_RETRIES = 3
+    RETRY_BASE_DELAY = 2.0  # segundos
+    CIRCUIT_FAILURE_THRESHOLD = 5
+    CIRCUIT_RECOVERY_TIMEOUT = 120.0  # segundos
 
     def __init__(self, api_key: str, model: str):
         """
@@ -1035,6 +1088,17 @@ class OpenAIEnricher:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_requests = 0
+
+        # V18.3: Contadores de resiliencia
+        self.retry_count = 0
+        self.circuit_rejections = 0
+
+        # V18.3: Circuit breaker para OpenAI
+        self.circuit = circuit_registry.get_or_create(
+            name="openai",
+            failure_threshold=self.CIRCUIT_FAILURE_THRESHOLD,
+            recovery_timeout=self.CIRCUIT_RECOVERY_TIMEOUT,
+        )
 
         if not OPENAI_AVAILABLE:
             self.logger.warning("Biblioteca openai nao instalada - enriquecimento IA desabilitado")
@@ -1064,7 +1128,95 @@ class OpenAIEnricher:
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
             "estimated_cost_usd": self.get_estimated_cost(),
+            # V18.3: Metricas de resiliencia
+            "retry_count": self.retry_count,
+            "circuit_rejections": self.circuit_rejections,
+            "circuit_state": self.circuit.state.value if self.circuit else "unknown",
         }
+
+    def _call_openai_api_with_retry(self, messages: list, max_tokens: int = 500) -> dict:
+        """
+        V18.3: Chama a API OpenAI com retry e backoff exponencial.
+
+        Args:
+            messages: Lista de mensagens para a API
+            max_tokens: Maximo de tokens na resposta
+
+        Returns:
+            Dicionario com dados parseados ou {} em caso de falha
+
+        Raises:
+            Exception: Se todas as tentativas falharem
+        """
+        last_exception = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                    max_tokens=max_tokens,
+                    timeout=30.0,  # V18.3: Timeout explicito
+                )
+
+                content = response.choices[0].message.content
+                dados = json.loads(content)
+
+                # Registrar uso de tokens para FinOps
+                if hasattr(response, 'usage') and response.usage:
+                    self.total_input_tokens += response.usage.prompt_tokens
+                    self.total_output_tokens += response.usage.completion_tokens
+                    self.total_requests += 1
+
+                return dados
+
+            except json.JSONDecodeError as e:
+                # Erro de parsing nao deve causar retry
+                self.logger.error(f"Erro ao parsear resposta JSON da IA: {e}")
+                return {}
+
+            except Exception as e:
+                last_exception = e
+                error_type = type(e).__name__
+
+                # Verificar se e erro retriable
+                is_retriable = (
+                    "timeout" in str(e).lower() or
+                    "rate" in str(e).lower() or
+                    "limit" in str(e).lower() or
+                    "connection" in str(e).lower() or
+                    "503" in str(e) or
+                    "502" in str(e) or
+                    "500" in str(e) or
+                    "429" in str(e)
+                )
+
+                if not is_retriable or attempt >= self.MAX_RETRIES:
+                    self.logger.error(
+                        f"[OPENAI] Falha definitiva apos {attempt + 1} tentativas: {error_type}: {e}"
+                    )
+                    raise
+
+                # Calcular delay com backoff
+                delay = min(
+                    self.RETRY_BASE_DELAY * (2 ** attempt),
+                    60.0
+                ) * (0.75 + __import__('random').random() * 0.5)
+
+                self.retry_count += 1
+                self.logger.warning(
+                    f"[OPENAI] Tentativa {attempt + 1}/{self.MAX_RETRIES + 1} falhou: {error_type}. "
+                    f"Retry em {delay:.1f}s"
+                )
+
+                time.sleep(delay)
+
+        # Nao deveria chegar aqui
+        if last_exception:
+            raise last_exception
+        return {}
 
     def enriquecer_edital(self, texto_pdf: str, metadados_pncp: dict) -> dict:
         """
@@ -1130,37 +1282,42 @@ class OpenAIEnricher:
         {texto_input}
         """
 
-        try:
-            self.logger.debug("Enviando edital para analise IA...")
+        # V18.3: Verificar circuit breaker antes de chamar API
+        if self.circuit.state.value == "open":
+            self.circuit_rejections += 1
+            self.logger.warning(
+                f"[CIRCUIT] OpenAI circuit OPEN - chamada rejeitada "
+                f"(rejections={self.circuit_rejections})"
+            )
+            return {}
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,  # Baixa temperatura para precisao
-                max_tokens=500
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        try:
+            self.logger.debug("Enviando edital para analise IA (com resiliencia)...")
+
+            # V18.3: Usar circuit breaker + retry
+            dados = self.circuit.call(
+                self._call_openai_api_with_retry,
+                messages=messages,
+                max_tokens=500,
+                fallback=lambda **kw: {},  # Fallback retorna dict vazio
             )
 
-            content = response.choices[0].message.content
-            dados = json.loads(content)
-
-            # Brief 3.6: Registrar uso de tokens para FinOps
-            if hasattr(response, 'usage') and response.usage:
-                self.total_input_tokens += response.usage.prompt_tokens
-                self.total_output_tokens += response.usage.completion_tokens
-                self.total_requests += 1
-
-            self.logger.debug(f"IA retornou: {list(dados.keys())}")
+            if dados:
+                self.logger.debug(f"IA retornou: {list(dados.keys())}")
             return dados
 
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Erro ao parsear resposta JSON da IA: {e}")
+        except CircuitOpenError:
+            self.circuit_rejections += 1
+            self.logger.warning("[CIRCUIT] OpenAI circuit aberto - usando fallback")
             return {}
+
         except Exception as e:
-            self.logger.error(f"Falha na IA: {e}")
+            self.logger.error(f"[OPENAI] Falha na IA apos retry e circuit breaker: {e}")
             return {}
 
 
@@ -1963,6 +2120,107 @@ class SupabaseRepository:
             self.logger.error(f"Erro ao inserir na quarentena: {e}")
             return False
 
+    def inserir_run_report(
+        self,
+        run_id: str,
+        git_sha: str = None,
+        job_name: str = "miner",
+    ) -> bool:
+        """
+        Insere relatorio de execucao na tabela pipeline_run_reports.
+
+        V18.3: Adiciona rastreamento de execucoes do Miner para auditoria.
+
+        Args:
+            run_id: ID unico da execucao
+            git_sha: SHA do commit git (pode ser None)
+            job_name: Nome do job (miner ou auditor)
+
+        Returns:
+            True se sucesso
+        """
+        if not self.enable_supabase:
+            self.logger.warning("[RUN REPORT] Supabase desativado, ignorando run_report")
+            return False
+
+        metrics = None
+
+        # Tentar RPC primeiro, fallback para queries se RPC falhar
+        try:
+            resp = self.client.rpc('get_pipeline_metrics', {}).execute()
+            if resp.data:
+                metrics = resp.data
+                self.logger.debug("[RUN REPORT] Metricas obtidas via RPC")
+        except Exception as rpc_err:
+            self.logger.debug(f"[RUN REPORT] RPC get_pipeline_metrics indisponivel: {rpc_err}")
+
+        # Fallback: calcular via queries diretas se RPC falhou ou retornou vazio
+        if not metrics:
+            self.logger.debug("[RUN REPORT] Usando fallback de queries para metricas")
+            try:
+                total_resp = self.client.table("editais_leilao").select("id", count="exact").execute()
+                total = total_resp.count or 0
+
+                com_link_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").execute()
+                com_link = com_link_resp.count or 0
+
+                valido_true_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", True).execute()
+                valido_true = valido_true_resp.count or 0
+
+                valido_false_resp = self.client.table("editais_leilao").select("id", count="exact").not_.is_("link_leiloeiro", "null").neq("link_leiloeiro", "N/D").eq("link_leiloeiro_valido", False).execute()
+                valido_false = valido_false_resp.count or 0
+
+                origem_pncp_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pncp_api").execute()
+                origem_pncp = origem_pncp_resp.count or 0
+
+                origem_pdf_resp = self.client.table("editais_leilao").select("id", count="exact").eq("link_leiloeiro_origem_tipo", "pdf_anexo").execute()
+                origem_pdf = origem_pdf_resp.count or 0
+
+                metrics = {
+                    'total': total,
+                    'com_link': com_link,
+                    'sem_link': total - com_link,
+                    'com_link_valido_true': valido_true,
+                    'com_link_valido_false': valido_false,
+                    'com_link_valido_null': com_link - valido_true - valido_false,
+                    'origem_pncp_api': origem_pncp,
+                    'origem_pdf_anexo': origem_pdf,
+                }
+            except Exception as query_err:
+                self.logger.warning(f"[RUN REPORT] Erro obtendo metricas via queries: {query_err}")
+                # Usar metricas zeradas como fallback final
+                metrics = {
+                    'total': 0, 'com_link': 0, 'sem_link': 0,
+                    'com_link_valido_true': 0, 'com_link_valido_false': 0,
+                    'com_link_valido_null': 0, 'origem_pncp_api': 0, 'origem_pdf_anexo': 0,
+                }
+
+        # Inserir relatorio
+        try:
+            dados = {
+                "run_id": run_id,
+                "git_sha": git_sha,
+                "job_name": job_name,
+                "total": metrics.get('total', 0),
+                "com_link": metrics.get('com_link', 0),
+                "sem_link": metrics.get('sem_link', 0),
+                "com_link_valido_true": metrics.get('com_link_valido_true', 0),
+                "com_link_valido_false": metrics.get('com_link_valido_false', 0),
+                "com_link_valido_null": metrics.get('com_link_valido_null', 0),
+                "origem_pncp_api": metrics.get('origem_pncp_api', 0),
+                "origem_pdf_anexo": metrics.get('origem_pdf_anexo', 0),
+                "origem_unknown": metrics.get('origem_unknown', 0),
+                "origem_null": metrics.get('origem_null', 0),
+            }
+
+            self.client.table("pipeline_run_reports").insert(dados).execute()
+            self.logger.info(f"[RUN REPORT] Inserido relatorio: run_id={run_id}, job_name={job_name}, total={dados['total']}")
+            return True
+
+        except Exception as insert_err:
+            self.logger.error(f"[RUN REPORT] Erro ao inserir na tabela pipeline_run_reports: {insert_err}")
+            return False
+
 
 # ============================================================
 # STORAGE - SUPABASE
@@ -2425,11 +2683,26 @@ class MinerV18:
                     descricao_final = descricao_pdf
 
             # tipo_leilao
+            # FIX 2026-01-29: Adiciona mapeamento de modalidade PNCP para tipo esperado
+            MODALIDADE_PARA_TIPO = {
+                "6": "Eletronico",      # PNCP: Leilão Eletrônico
+                "7": "Presencial",       # PNCP: Leilão Presencial
+                "Leilão": "Eletronico",
+                "Leilão Eletrônico": "Eletronico",
+                "Leilao Eletronico": "Eletronico",
+                "Leilão Presencial": "Presencial",
+                "Leilao Presencial": "Presencial",
+            }
+
             tipo_leilao = ""
             if texto_pdf:
                 tipo_leilao = extrair_tipo_leilao_pdf(texto_pdf)
-            if not tipo_leilao and edital_db.get("modalidade"):
-                tipo_leilao = edital_db.get("modalidade", "")
+
+            # Fallback para modalidade da API PNCP
+            if not tipo_leilao:
+                modalidade_raw = edital_db.get("modalidade", "")
+                if modalidade_raw:
+                    tipo_leilao = MODALIDADE_PARA_TIPO.get(str(modalidade_raw), modalidade_raw)
 
             # leiloeiro_url - fallback para PDF
             leiloeiro_url = edital_db.get("link_leiloeiro")
@@ -2733,6 +3006,23 @@ class MinerV18:
         self._salvar_relatorio_json()
         self._upload_relatorio_storage()
 
+        # V18.3: Inserir run report para rastreamento historico
+        if self.repo:
+            git_sha = self._get_git_sha()
+            self.logger.info(f"[RUN REPORT] Gravando relatorio para run_id={self.run_id}")
+            run_report_ok = self.repo.inserir_run_report(
+                run_id=self.run_id,
+                git_sha=git_sha,
+                job_name="miner"
+            )
+            if not run_report_ok:
+                self.logger.error(
+                    f"[RUN REPORT] FALHA ao gravar relatorio! "
+                    f"run_id={self.run_id}, git_sha={git_sha}, job_name=miner"
+                )
+            else:
+                self.logger.info(f"[RUN REPORT] Relatorio gravado com sucesso")
+
         return self.stats
 
     def _imprimir_relatorio_qualidade(self):
@@ -2787,6 +3077,27 @@ class MinerV18:
 
         except Exception as e:
             self.logger.error(f"Erro ao salvar relatorio JSON local: {e}")
+
+    def _get_git_sha(self) -> str:
+        """
+        V18.3: Obtém o SHA do commit git atual para rastreamento.
+
+        Returns:
+            SHA do commit ou None se não disponível
+        """
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
 
     def _upload_relatorio_storage(self):
         """

@@ -8,6 +8,7 @@ import {
 import { Badge } from "./ui/badge"
 import { ScrollArea } from "./ui/scroll-area"
 import { useLotes, formatLoteValor } from "../hooks/useLotes"
+import { useIsMobile } from "../hooks/useIsMobile"
 import { Car, Bike, Truck, Package, Hash, CreditCard, FileText } from "lucide-react"
 import type { Lote } from "../types/database"
 
@@ -122,13 +123,19 @@ function LoteItem({ lote, index }: { lote: Lote; index: number }) {
 
 /**
  * Modal/Drawer para exibir lista completa de lotes de um edital
+ * - Mobile: Bottom sheet para melhor UX com polegar
+ * - Desktop: Right drawer lateral
  */
 export function LotesModal({ open, onOpenChange, idInterno, tituloEdital }: LotesModalProps) {
   const { lotes, isLoading, error, totalLotes } = useLotes(idInterno)
+  const isMobile = useIsMobile()
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent side="right" className="w-full sm:max-w-lg">
+      <DrawerContent
+        side={isMobile ? "bottom" : "right"}
+        className={isMobile ? "max-h-[85vh]" : "w-full sm:max-w-lg"}
+      >
         <DrawerHeader className="border-b pb-4">
           <DrawerTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -148,7 +155,7 @@ export function LotesModal({ open, onOpenChange, idInterno, tituloEdital }: Lote
           )}
         </DrawerHeader>
 
-        <ScrollArea className="flex-1 h-[calc(100vh-180px)]">
+        <ScrollArea className={isMobile ? "flex-1 h-[calc(85vh-180px)]" : "flex-1 h-[calc(100vh-180px)]"}>
           <div className="p-4 space-y-3">
             {/* Loading */}
             {isLoading && (

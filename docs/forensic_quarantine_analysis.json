@@ -1,0 +1,968 @@
+{
+  "timestamp": "2026-01-29T10:04:42.230471",
+  "total_quarantine_records": 500,
+  "runs_with_quarantine": 27,
+  "global_analysis": {
+    "missing_fields": {
+      "tipo_leilao": 4,
+      "n_edital": 3,
+      "objeto_resumido": 2,
+      "tags": 2
+    },
+    "error_codes": {
+      "missing_required_field": 11
+    }
+  },
+  "samples": [
+    {
+      "id_interno": "76247329000113-1-000006/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "PR",
+        "tags": "CAMINHAO, VEICULO",
+        "orgao": "MUNICIPIO DE TUNEIRAS DO OESTE",
+        "titulo": "Edital nº 000006-/2026/2026",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/76247329000113-1-000006/2026",
+        "descricao": "AQUISIÇÃO DE 01 UM VEÍCULO, TIPO ‘CAMIONETE CABINE DUPLA, NOVO ZERO KM, PARA ATENDER AS NECESSIDADES",
+        "municipio": "Tuneiras do Oeste",
+        "id_interno": "76247329000113-1-000006/2026",
+        "data_leilao": "30-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": null,
+        "valor_estimado": "276518.45",
+        "data_publicacao": "28-01-2026",
+        "objeto_resumido": "Edital nº 000006-/2026/2026 AQUISIÇÃO DE 01 UM VEÍCULO, TIPO ‘CAMIONETE CABINE DUPLA, NOVO ZERO KM, ",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "89161475000173-1-000001/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "valor_estimado",
+          "message": "Campo obrigatório ausente: valor_estimado"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "valor_estimado",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "RS",
+        "tags": "CAMINHAO, CATERPILLAR, MASSEY_FERGUSON, NEW_HOLLAND, STRADA",
+        "orgao": "ASSOC RIOGR DE EMPR DE ASSIST TEC E EXTENSAO RURAL",
+        "titulo": "Edital nº 0004/2026",
+        "n_edital": "3",
+        "pncp_url": "https://pncp.gov.br/app/editais/89161475000173-1-000001/2026",
+        "descricao": "O presente procedimento licitatório tem por objeto a aquisição de 06 (seis) veículos automotores 0 k",
+        "municipio": "Porto Alegre",
+        "id_interno": "89161475000173-1-000001/2026",
+        "data_leilao": "29-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": "https://pregaobanrisul.com.br/editais/0004_2026/346789",
+        "valor_estimado": null,
+        "data_publicacao": "29-01-2026",
+        "objeto_resumido": "social seja compatível com o objeto da licitação e que atenda a todas as exigências estabelecidas ne",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "27174143000176-1-000212/2025",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "ES",
+        "tags": "CRETA, MAN",
+        "orgao": "MUNICIPIO DE SAO GABRIEL DA PALHA",
+        "titulo": "Edital nº 000076/2025",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/27174143000176-1-000212/2025",
+        "descricao": "[Portal de Compras Públicas] - AQUISICAO DE EQUIPAMENTO ODONTOLOGICO PARA ATENDER A DEMANDA DO DEPAR",
+        "municipio": "São Gabriel da Palha",
+        "id_interno": "27174143000176-1-000212/2025",
+        "data_leilao": "29-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": "https://portaldecompraspublicas.com.br/processos/ES/Prefeitura-Municipal-de-Sao-Gabriel-da-Palha-317",
+        "valor_estimado": "170408.89",
+        "data_publicacao": "28-01-2026",
+        "objeto_resumido": "Edital nº 000076/2025 [Portal de Compras Públicas] - AQUISICAO DE EQUIPAMENTO ODONTOLOGICO PARA ATEN",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "19130038000107-1-000002/2026",
+      "status": "draft",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "MG",
+        "tags": "CB, MERCEDES, NEW_HOLLAND",
+        "orgao": "DEPARTAMENTO MUNICIPAL DE AGUA E ESGOTO",
+        "titulo": "Edital nº PRE 1/2026",
+        "n_edital": "1",
+        "pncp_url": "https://pncp.gov.br/app/editais/19130038000107-1-000002/2026",
+        "descricao": "AQUISIÇÕES FUTURAS E EVENTUAIS DE MATERIAIS DE LIMPEZA, REFEITÓRIO, COZINHA, HIGIENE PESSOAL, ARTIGO",
+        "municipio": "Campo Belo",
+        "id_interno": "19130038000107-1-000002/2026",
+        "data_leilao": "29-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": "https://www.demaecb.com.br",
+        "valor_estimado": "53477.46",
+        "data_publicacao": "28-01-2026",
+        "objeto_resumido": "1.1. O objeto da presente licitação é a Contratação via registro de preço para AQUISIÇÕES FUTURAS E ",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "18299446000124-1-000001/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "objeto_resumido",
+          "message": "Campo obrigatório ausente: objeto_resumido"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tags",
+          "message": "Campo obrigatório ausente: tags"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "objeto_resumido",
+        "tags",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "MG",
+        "tags": null,
+        "orgao": "MUNICIPIO DE ITABIRA",
+        "titulo": "Edital nº 1 | Processo 1/2026",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/18299446000124-1-000001/2026",
+        "descricao": "Bens moveis inserviveis  antieconomicos ou irrecuperaveis  pertencentes a Prefeitura Municipal de It",
+        "municipio": "Itabira",
+        "id_interno": "18299446000124-1-000001/2026",
+        "data_leilao": "09-02-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": null,
+        "valor_estimado": "382910.0",
+        "data_publicacao": "20-01-2026",
+        "objeto_resumido": null,
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "18241349000180-1-000001/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "objeto_resumido",
+          "message": "Campo obrigatório ausente: objeto_resumido"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tags",
+          "message": "Campo obrigatório ausente: tags"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "objeto_resumido",
+        "tags",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "MG",
+        "tags": null,
+        "orgao": "MUNICIPIO DE SAO SEBASTIAO DO PARAISO",
+        "titulo": "Edital nº 000001/2026",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/18241349000180-1-000001/2026",
+        "descricao": "Alienação de diversos bens inservíveis pertencentes à Administração Pública Municipal, objetivando a",
+        "municipio": "São Sebastião do Paraíso",
+        "id_interno": "18241349000180-1-000001/2026",
+        "data_leilao": "10-02-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": null,
+        "valor_estimado": "1.0",
+        "data_publicacao": "09-01-2026",
+        "objeto_resumido": null,
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "92410422000153-1-000001/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "RS",
+        "tags": "SUCATA",
+        "orgao": "MUNICIPIO DE SAGRADA FAMILIA",
+        "titulo": "Edital nº 1/2026",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/92410422000153-1-000001/2026",
+        "descricao": "ALIENAÇÃO DE BENS MÓVEIS INSERVÍVEIS DO MUNICÍPIO DE SAGRADA FAMILIA /RS, DE ACORDO COM A LEI MUNICI",
+        "municipio": "Sagrada Família",
+        "id_interno": "92410422000153-1-000001/2026",
+        "data_leilao": "19-02-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": null,
+        "valor_estimado": "193040.0",
+        "data_publicacao": "15-01-2026",
+        "objeto_resumido": "Edital nº 1/2026 ALIENAÇÃO DE BENS MÓVEIS INSERVÍVEIS DO MUNICÍPIO DE SAGRADA FAMILIA /RS, DE ACORDO",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "76247329000113-1-000006/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T083054Z_b0f947208521",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "PR",
+        "tags": "CAMINHAO, VEICULO",
+        "orgao": "MUNICIPIO DE TUNEIRAS DO OESTE",
+        "titulo": "Edital nº 000006-/2026/2026",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/76247329000113-1-000006/2026",
+        "descricao": "AQUISIÇÃO DE 01 UM VEÍCULO, TIPO ‘CAMIONETE CABINE DUPLA, NOVO ZERO KM, PARA ATENDER AS NECESSIDADES",
+        "municipio": "Tuneiras do Oeste",
+        "id_interno": "76247329000113-1-000006/2026",
+        "data_leilao": "30-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": null,
+        "valor_estimado": "276518.45",
+        "data_publicacao": "28-01-2026",
+        "objeto_resumido": "Edital nº 000006-/2026/2026 AQUISIÇÃO DE 01 UM VEÍCULO, TIPO ‘CAMIONETE CABINE DUPLA, NOVO ZERO KM, ",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "89161475000173-1-000001/2026",
+      "status": "not_sellable",
+      "run_id": "20260129T083054Z_b0f947208521",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "valor_estimado",
+          "message": "Campo obrigatório ausente: valor_estimado"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "valor_estimado",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "RS",
+        "tags": "CAMINHAO, CATERPILLAR, MASSEY_FERGUSON, NEW_HOLLAND, STRADA",
+        "orgao": "ASSOC RIOGR DE EMPR DE ASSIST TEC E EXTENSAO RURAL",
+        "titulo": "Edital nº 0004/2026",
+        "n_edital": "3",
+        "pncp_url": "https://pncp.gov.br/app/editais/89161475000173-1-000001/2026",
+        "descricao": "O presente procedimento licitatório tem por objeto a aquisição de 06 (seis) veículos automotores 0 k",
+        "municipio": "Porto Alegre",
+        "id_interno": "89161475000173-1-000001/2026",
+        "data_leilao": "29-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": "https://pregaobanrisul.com.br/editais/0004_2026/346789",
+        "valor_estimado": null,
+        "data_publicacao": "29-01-2026",
+        "objeto_resumido": "social seja compatível com o objeto da licitação e que atenda a todas as exigências estabelecidas ne",
+        "data_atualizacao": "29-01-2026"
+      }
+    },
+    {
+      "id_interno": "27174143000176-1-000212/2025",
+      "status": "not_sellable",
+      "run_id": "20260129T083054Z_b0f947208521",
+      "errors": [
+        {
+          "code": "missing_required_field",
+          "field": "n_edital",
+          "message": "Campo obrigatório ausente: n_edital"
+        },
+        {
+          "code": "missing_required_field",
+          "field": "tipo_leilao",
+          "message": "Campo obrigatório ausente: tipo_leilao"
+        }
+      ],
+      "missing_fields": [
+        "n_edital",
+        "tipo_leilao"
+      ],
+      "raw_record_keys": [
+        "uf",
+        "tags",
+        "orgao",
+        "titulo",
+        "n_edital",
+        "pncp_url",
+        "descricao",
+        "municipio",
+        "id_interno",
+        "data_leilao",
+        "tipo_leilao",
+        "leiloeiro_url",
+        "valor_estimado",
+        "data_publicacao",
+        "objeto_resumido",
+        "data_atualizacao"
+      ],
+      "raw_record_sample": {
+        "uf": "ES",
+        "tags": "CRETA, MAN",
+        "orgao": "MUNICIPIO DE SAO GABRIEL DA PALHA",
+        "titulo": "Edital nº 000076/2025",
+        "n_edital": null,
+        "pncp_url": "https://pncp.gov.br/app/editais/27174143000176-1-000212/2025",
+        "descricao": "[Portal de Compras Públicas] - AQUISICAO DE EQUIPAMENTO ODONTOLOGICO PARA ATENDER A DEMANDA DO DEPAR",
+        "municipio": "São Gabriel da Palha",
+        "id_interno": "27174143000176-1-000212/2025",
+        "data_leilao": "29-01-2026",
+        "tipo_leilao": null,
+        "leiloeiro_url": "https://portaldecompraspublicas.com.br/processos/ES/Prefeitura-Municipal-de-Sao-Gabriel-da-Palha-317",
+        "valor_estimado": "170408.89",
+        "data_publicacao": "28-01-2026",
+        "objeto_resumido": "Edital nº 000076/2025 [Portal de Compras Públicas] - AQUISICAO DE EQUIPAMENTO ODONTOLOGICO PARA ATEN",
+        "data_atualizacao": "29-01-2026"
+      }
+    }
+  ],
+  "run_reports": [
+    {
+      "id": 23,
+      "run_id": "20260129T085904Z_993dc64e7e54",
+      "git_sha": "124689f84f7f6b257a6589d84ec3c157abeed31e",
+      "job_name": "miner",
+      "created_at": "2026-01-29T09:17:18.232963+00:00",
+      "total": 281,
+      "com_link": 269,
+      "sem_link": 12,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 6,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 22,
+      "run_id": "auditor_v19_20260129T054957_a61e1307",
+      "git_sha": "124689f84f7f6b257a6589d84ec3c157abeed31e",
+      "job_name": "auditor",
+      "created_at": "2026-01-29T08:50:01.739163+00:00",
+      "total": 281,
+      "com_link": 269,
+      "sem_link": 12,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 6,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 21,
+      "run_id": "20260129T083054Z_b0f947208521",
+      "git_sha": "124689f84f7f6b257a6589d84ec3c157abeed31e",
+      "job_name": "miner",
+      "created_at": "2026-01-29T08:49:14.114563+00:00",
+      "total": 281,
+      "com_link": 269,
+      "sem_link": 12,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 6,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 20,
+      "run_id": "auditor_v19_20260128T223426_02597b1b",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "auditor",
+      "created_at": "2026-01-29T01:34:29.636961+00:00",
+      "total": 278,
+      "com_link": 267,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 4,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 19,
+      "run_id": "20260129T012107Z_b35376702d14",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "miner",
+      "created_at": "2026-01-29T01:33:50.196701+00:00",
+      "total": 278,
+      "com_link": 267,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 4,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 18,
+      "run_id": "auditor_v19_20260128T134146_0167474c",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "auditor",
+      "created_at": "2026-01-28T16:41:48.715608+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 17,
+      "run_id": "20260128T162822Z_6b1837d1c72b",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "miner",
+      "created_at": "2026-01-28T16:41:06.77392+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 16,
+      "run_id": "auditor_v19_20260128T053609_675d59a2",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "auditor",
+      "created_at": "2026-01-28T08:36:11.790625+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 15,
+      "run_id": "20260128T082251Z_172cc42b1376",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "miner",
+      "created_at": "2026-01-28T08:35:30.32427+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 14,
+      "run_id": "auditor_v19_20260127T222401_2bffc449",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "auditor",
+      "created_at": "2026-01-28T01:24:04.459628+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 13,
+      "run_id": "20260128T011049Z_7d6e1a0ab991",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "miner",
+      "created_at": "2026-01-28T01:23:26.295066+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 12,
+      "run_id": "20260127T205314Z_7adaad62cd29",
+      "git_sha": "3fb055d7e2a01251d0e429a1f24087606c51cc5f",
+      "job_name": "miner",
+      "created_at": "2026-01-27T21:12:11.02143+00:00",
+      "total": 276,
+      "com_link": 265,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 2,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 11,
+      "run_id": "auditor_v19_20260127T170743_81d1e2c4",
+      "git_sha": "fdfc943d3464c49c072f0fa77f018beb33a69392",
+      "job_name": "auditor",
+      "created_at": "2026-01-27T20:07:45.98594+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 10,
+      "run_id": "20260127T195402Z_ef04f20836b7",
+      "git_sha": "fdfc943d3464c49c072f0fa77f018beb33a69392",
+      "job_name": "miner",
+      "created_at": "2026-01-27T20:07:06.76135+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 9,
+      "run_id": "auditor_v19_20260127T195010_ef3b4f44",
+      "git_sha": "cc8938b3ebbf89b4c0e3db08d3fc3db12616d6b8",
+      "job_name": "auditor",
+      "created_at": "2026-01-27T19:50:13.240675+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 8,
+      "run_id": "20260127T194030Z_affe0c42c1a9",
+      "git_sha": "cc8938b3ebbf89b4c0e3db08d3fc3db12616d6b8",
+      "job_name": "miner",
+      "created_at": "2026-01-27T19:49:34.224196+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 7,
+      "run_id": "auditor_v19_20260127T163446_c5b6fb15",
+      "git_sha": "076b8a8ccc27b707135b17d6cec0684a146f22ea",
+      "job_name": "auditor",
+      "created_at": "2026-01-27T19:34:49.908575+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 6,
+      "run_id": "20260127T190322Z_77b3d6c7d93e",
+      "git_sha": "250a21c2fb803280141f840188abceff96b0ae87",
+      "job_name": "miner",
+      "created_at": "2026-01-27T19:07:59.615225+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 4,
+      "run_id": "auditor_v19_20260127T153638_81a1f3c9",
+      "git_sha": "250a21c2fb803280141f840188abceff96b0ae87",
+      "job_name": "auditor",
+      "created_at": "2026-01-27T18:36:41.040446+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    },
+    {
+      "id": 3,
+      "run_id": "auditor_v19_20260127T144849_7ab79d0a",
+      "git_sha": "fae6a29724252ba506d318b86faa798f4be81ee7",
+      "job_name": "auditor",
+      "created_at": "2026-01-27T17:48:52.071912+00:00",
+      "total": 274,
+      "com_link": 263,
+      "sem_link": 11,
+      "com_link_valido_true": 263,
+      "com_link_valido_false": 0,
+      "com_link_valido_null": 0,
+      "origem_pncp_api": 256,
+      "origem_pdf_anexo": 7,
+      "origem_unknown": 0,
+      "origem_null": 0,
+      "metadata": {}
+    }
+  ]
+}
