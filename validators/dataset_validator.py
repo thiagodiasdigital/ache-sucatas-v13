@@ -23,11 +23,11 @@ REQUIRED_FIELDS: Tuple[str, ...] = (
     "titulo",
     "descricao",
     "orgao",
-    "n_edital",
+    # "n_edital",  # REMOVIDO: Contrato define como NÃO obrigatório (2026-01-29 audit)
     "objeto_resumido",
     "tags",
     "valor_estimado",
-    "tipo_leilao",
+    # "tipo_leilao",  # REMOVIDO: PDFs nem sempre contêm essa info (2026-01-29 audit)
 )
 
 OPTIONAL_FIELDS: Tuple[str, ...] = (
@@ -44,10 +44,10 @@ SELLABLE_REQUIRED_FIELDS: Tuple[str, ...] = (
     "titulo",
     "descricao",
     "orgao",
-    "n_edital",
+    # "n_edital",  # REMOVIDO: Contrato define como NÃO obrigatório (2026-01-29 audit)
     "tags",
     "valor_estimado",
-    "data_publicacao",  # aparece na regra de vendabilidade, mesmo não listado na tabela de campos :contentReference[oaicite:6]{index=6}
+    "data_publicacao",  # aparece na regra de vendabilidade, mesmo não listado na tabela de campos
 )
 
 # Datas devem ser DD-MM-YYYY (com hífen) e NÃO pode ter barra. :contentReference[oaicite:7]{index=7}

@@ -303,25 +303,44 @@ def extrair_descricao_pdf(texto_pdf: str) -> str:
 
 
 def extrair_tipo_leilao_pdf(texto_pdf: str) -> str:
-    """Extrai tipo/modalidade do leilao do texto do PDF."""
+    """
+    Extrai tipo/modalidade do leilao do texto do PDF.
+
+    FIX 2026-01-29: Corrigido bug onde patterns regex eram tratados como strings literais.
+    Agora usa re.search() para patterns com sintaxe regex.
+    """
     if not texto_pdf:
         return ""
 
     texto_lower = texto_pdf.lower()
 
-    tem_eletronico = any(p in texto_lower for p in [
-        "leil[aã]o eletr[oô]nico", "eletr[oô]nico", "online",
-        "modo eletronico", "forma eletronica", "virtual"
-    ])
-    tem_presencial = any(p in texto_lower for p in [
-        "leil[aã]o presencial", "presencial", "sede da",
-        "local:", "endereco:", "comparecimento"
-    ])
+    # Patterns para leilão eletrônico (alguns são regex, outros são literais)
+    ELETRONICO_REGEX = [
+        r"leil[aã]o\s*eletr[oô]nico",
+        r"eletr[oô]nico",
+        r"modo\s+eletr[oô]nico",
+        r"forma\s+eletr[oô]nica",
+    ]
+    ELETRONICO_LITERAL = ["online", "virtual", "pela internet"]
 
-    if re.search(r"leil[aã]o\s+eletr[oô]nico", texto_lower):
-        tem_eletronico = True
-    if re.search(r"leil[aã]o\s+presencial", texto_lower):
-        tem_presencial = True
+    # Patterns para leilão presencial
+    PRESENCIAL_REGEX = [
+        r"leil[aã]o\s*presencial",
+    ]
+    PRESENCIAL_LITERAL = [
+        "presencial", "sede da", "local:", "endereco:",
+        "comparecimento", "na sede", "no endereco"
+    ]
+
+    # Verificar patterns de eletrônico
+    tem_eletronico = any(re.search(p, texto_lower) for p in ELETRONICO_REGEX)
+    if not tem_eletronico:
+        tem_eletronico = any(p in texto_lower for p in ELETRONICO_LITERAL)
+
+    # Verificar patterns de presencial
+    tem_presencial = any(re.search(p, texto_lower) for p in PRESENCIAL_REGEX)
+    if not tem_presencial:
+        tem_presencial = any(p in texto_lower for p in PRESENCIAL_LITERAL)
 
     if tem_eletronico and tem_presencial:
         return "Hibrido"
@@ -2664,11 +2683,26 @@ class MinerV18:
                     descricao_final = descricao_pdf
 
             # tipo_leilao
+            # FIX 2026-01-29: Adiciona mapeamento de modalidade PNCP para tipo esperado
+            MODALIDADE_PARA_TIPO = {
+                "6": "Eletronico",      # PNCP: Leilão Eletrônico
+                "7": "Presencial",       # PNCP: Leilão Presencial
+                "Leilão": "Eletronico",
+                "Leilão Eletrônico": "Eletronico",
+                "Leilao Eletronico": "Eletronico",
+                "Leilão Presencial": "Presencial",
+                "Leilao Presencial": "Presencial",
+            }
+
             tipo_leilao = ""
             if texto_pdf:
                 tipo_leilao = extrair_tipo_leilao_pdf(texto_pdf)
-            if not tipo_leilao and edital_db.get("modalidade"):
-                tipo_leilao = edital_db.get("modalidade", "")
+
+            # Fallback para modalidade da API PNCP
+            if not tipo_leilao:
+                modalidade_raw = edital_db.get("modalidade", "")
+                if modalidade_raw:
+                    tipo_leilao = MODALIDADE_PARA_TIPO.get(str(modalidade_raw), modalidade_raw)
 
             # leiloeiro_url - fallback para PDF
             leiloeiro_url = edital_db.get("link_leiloeiro")
