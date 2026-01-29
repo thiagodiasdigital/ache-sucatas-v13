@@ -3,8 +3,13 @@ Ache Sucatas DaaS - Minerador V18
 =================================
 NOVA FUNCIONALIDADE: Enriquecimento com IA (OpenAI GPT-4o-mini).
 
-Versao: 18.3
-Data: 2026-01-27
+Versao: 18.4
+Data: 2026-01-29
+
+Changelog V18.4:
+    - FIX: Aumentado dias_retroativos de 1 para 7 dias
+    - MOTIVO: Investigacao forense revelou que apenas 21/281 leiloes tinham data futura
+    - IMPACTO: Miner agora busca editais publicados nos ultimos 7 dias (antes: 24h)
 
 Changelog V18.3:
     - NOVO: inserir_run_report para gravar execucoes em pipeline_run_reports
@@ -876,7 +881,8 @@ class MinerConfig:
     search_page_delay_seconds: float = 0.5
 
     # Busca
-    dias_retroativos: int = 1
+    # V18.4 FIX: Aumentado de 1 para 7 dias para capturar mais leiloes futuros
+    dias_retroativos: int = 7
     paginas_por_termo: int = 3
     itens_por_pagina: int = 20
 
