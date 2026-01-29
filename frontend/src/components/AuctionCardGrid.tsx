@@ -83,12 +83,14 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
       isEncerrado && "opacity-60"
     )}>
       {/* Área de Destaque Visual - Imagem da categoria */}
-      <div className="relative min-h-[85px] overflow-hidden">
-        {/* Imagem baseada na categoria do leilão */}
+      <div className="relative aspect-[4/1] overflow-hidden bg-gray-100">
+        {/* Imagem baseada na categoria do leilão - lazy loaded */}
         <img
           src={categoryImage}
           alt="Imagem do leilão"
-          className="w-full h-[85px] object-cover"
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover"
         />
 
         {/* Badge ENCERRADO */}
