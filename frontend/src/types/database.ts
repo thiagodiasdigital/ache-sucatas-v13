@@ -278,7 +278,7 @@ export interface Database {
         Row: {
           id: number
           id_interno: string
-          pncp_id: string
+          pncp_id: string | null
           orgao: string | null
           uf: string | null
           cidade: string | null
@@ -289,6 +289,9 @@ export interface Database {
           descricao: string | null
           objeto_resumido: string | null
           tags: string[] | null
+          // NOVO: link_edital para UI limpa (alias de link_pncp)
+          link_edital: string | null
+          // MANTIDO: link_pncp para compatibilidade temporária
           link_pncp: string | null
           link_leiloeiro: string | null
           modalidade_leilao: string | null
@@ -303,6 +306,10 @@ export interface Database {
           longitude: number | null
           municipio_oficial: string | null
           status_temporal: 'futuro' | 'passado' | null
+          // Novos campos para diferenciação de origem
+          source_type: 'pncp' | 'leiloeiro' | null
+          source_name: string | null
+          metadata: Json | null
         }
       }
     }
