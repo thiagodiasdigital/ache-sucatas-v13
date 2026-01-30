@@ -3,8 +3,8 @@ import { Card, CardContent, CardFooter, CardHeader } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { buttonVariants } from "./ui/button"
 import { formatCurrency, formatDateTime, formatDate, cn } from "../lib/utils"
-import { getPncpLinkFromId } from "../utils/pncp"
-import { Calendar, MapPin, ExternalLink, Gavel, FileText, Hash, Building2, Monitor, RefreshCw } from "lucide-react"
+import { getEditalUrl } from "../utils/edital"
+import { Calendar, MapPin, ExternalLink, Gavel, FileText, Hash, Building2, Monitor } from "lucide-react"
 
 interface AuctionCardProps {
   auction: Auction
@@ -37,7 +37,7 @@ function getTagVariant(tag: string): "sucata" | "documentado" | "secondary" {
  * 11- descricao
  * 12- objeto_resumido
  * 13- tags
- * 14- link_pncp
+ * 14- link_edital (storage interno ou fallback)
  * 15- link_leiloeiro
  * 16- valor_estimado
  * 17- tipo_leilao (modalidade_leilao)
@@ -60,12 +60,13 @@ export function AuctionCard({ auction }: AuctionCardProps) {
     link_leiloeiro,
     modalidade_leilao,
     status_temporal,
+    storage_path,
   } = auction
 
   const isEncerrado = status_temporal === 'passado'
 
-  // Gerar link PNCP correto a partir do pncp_id
-  const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
+  // Link do edital: prioriza storage interno, fallback para fonte externa
+  const link_edital = getEditalUrl(storage_path, pncp_id)
 
   const showValue = valor_estimado !== null && valor_estimado > 0
 
@@ -182,20 +183,14 @@ export function AuctionCard({ auction }: AuctionCardProps) {
               <span className="truncate">Edital: {n_edital}</span>
             </div>
           )}
-          {pncp_id && (
-            <div className="flex items-center gap-1.5">
-              <RefreshCw className="h-3 w-3 shrink-0" />
-              <span className="truncate">PNCP: {pncp_id}</span>
-            </div>
-          )}
         </div>
       </CardContent>
 
       <CardFooter className="pt-2 gap-2">
-        {/* Botão Ver Edital (PNCP) */}
-        {link_pncp && (
+        {/* Botão Ver Edital - PDF interno ou fallback */}
+        {link_edital && (
           <a
-            href={link_pncp}
+            href={link_edital}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1 gap-1")}
@@ -205,7 +200,7 @@ export function AuctionCard({ auction }: AuctionCardProps) {
           </a>
         )}
 
-        {/* Botão Dar Lance (Leiloeiro) - só aparece se tem link válido E não está encerrado */}
+        {/* Botão Dar Lance - só aparece se tem link válido E não está encerrado */}
         {link_leiloeiro && link_leiloeiro !== 'N/D' && link_leiloeiro !== '' && !isEncerrado && (
           <a
             href={link_leiloeiro}
@@ -217,7 +212,8 @@ export function AuctionCard({ auction }: AuctionCardProps) {
             Dar Lance
           </a>
         )}
-        {/* Indicador de leilão encerrado no lugar do botão */}
+
+        {/* Indicador de leilão encerrado */}
         {isEncerrado && (
           <span className="flex-1 text-center text-sm text-muted-foreground py-2">
             Leilão encerrado
