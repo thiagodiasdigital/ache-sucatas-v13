@@ -2,9 +2,10 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import Map, { Marker, Popup, NavigationControl } from "react-map-gl/maplibre"
 import type { MapRef } from "react-map-gl/maplibre"
-import { MapPin, Map as MapIcon, Filter } from "lucide-react"
+import { MapPin, Map as MapIcon, Filter, X } from "lucide-react"
 import Supercluster from "supercluster"
 import { useAuctions } from "../hooks/useAuctions"
+import { useIsMobile } from "../hooks/useIsMobile"
 import { AuctionCard } from "./AuctionCard"
 import type { Auction } from "../types/database"
 import "maplibre-gl/dist/maplibre-gl.css"
@@ -66,27 +67,54 @@ type ClusterPointProperties = {
 type PointFeature = GeoJSON.Feature<GeoJSON.Point, AuctionPointProperties>
 type ClusterFeature = GeoJSON.Feature<GeoJSON.Point, ClusterPointProperties>
 
-// Active filters indicator component
+// Active filters indicator component (collapsible on mobile)
 function ActiveFiltersIndicator({
   uf,
   cidade,
   valorMin,
   totalResults,
+  isMobile,
 }: {
   uf: string | null
   cidade: string | null
   valorMin: string | null
   totalResults: number
+  isMobile: boolean
 }) {
+  const [isCollapsed, setIsCollapsed] = useState(isMobile)
   const hasFilters = uf || cidade || valorMin
 
   if (!hasFilters) return null
 
-  return (
-    <div className="absolute top-4 left-4 z-10 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 max-w-xs">
-      <div className="flex items-center gap-2 mb-2">
+  // Mobile: show compact badge that expands on tap
+  if (isMobile && isCollapsed) {
+    return (
+      <button
+        onClick={() => setIsCollapsed(false)}
+        className="absolute top-2 left-2 z-10 bg-background/95 backdrop-blur-sm border rounded-full shadow-lg px-3 py-2 min-h-[44px] flex items-center gap-2"
+      >
         <Filter className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Filtros ativos</span>
+        <span className="text-xs font-medium">{totalResults}</span>
+      </button>
+    )
+  }
+
+  return (
+    <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 max-w-[calc(100vw-1rem)] sm:max-w-xs">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Filtros ativos</span>
+        </div>
+        {isMobile && (
+          <button
+            onClick={() => setIsCollapsed(true)}
+            className="p-1 -m-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Fechar"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {uf && (
@@ -198,6 +226,7 @@ function MapContent({
   }
 }) {
   const mapRef = useRef<MapRef>(null)
+  const isMobile = useIsMobile()
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
   const [viewState, setViewState] = useState<ViewState>(initialView)
   const [bounds, setBounds] = useState<[number, number, number, number] | null>(null)
@@ -276,13 +305,14 @@ function MapContent({
   }, [])
 
   return (
-    <div className="h-[600px] w-full rounded-lg overflow-hidden border relative">
+    <div className="h-[400px] sm:h-[500px] md:h-[600px] w-full rounded-lg overflow-hidden border relative">
       {/* Active filters indicator */}
       <ActiveFiltersIndicator
         uf={filters.uf}
         cidade={filters.cidade}
         valorMin={filters.valorMin}
         totalResults={markers.length}
+        isMobile={isMobile}
       />
 
       <Map
@@ -374,21 +404,21 @@ function MapContent({
       </Map>
 
       {/* Legend */}
-      <div className="mt-4 flex items-center gap-6 text-sm text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-sucata" fill="#10B981" />
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <MapPin className="h-4 w-4 text-sucata shrink-0" fill="#10B981" />
           <span>Sucata</span>
         </div>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-documentado" fill="#3B82F6" />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <MapPin className="h-4 w-4 text-documentado shrink-0" fill="#3B82F6" />
           <span>Documentado</span>
         </div>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-gray-500" fill="#6B7280" />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <MapPin className="h-4 w-4 text-gray-500 shrink-0" fill="#6B7280" />
           <span>Outros</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-sucata text-[8px] text-white flex items-center justify-center font-bold">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="w-4 h-4 rounded-full bg-sucata text-[8px] text-white flex items-center justify-center font-bold shrink-0">
             N
           </div>
           <span>Cluster</span>
