@@ -36,7 +36,7 @@ class TestMinerConfigPhase2:
         """QG: force_reprocess nao deve quebrar outros defaults."""
         config = MinerConfig(force_reprocess=True)
         # Verificar que outros defaults ainda funcionam
-        assert config.dias_retroativos == 1
+        assert config.dias_retroativos == 7  # Atualizado: default aumentado para 7 dias
         assert config.paginas_por_termo == 3
         assert config.min_score == 60  # Score minimo para processamento
 
