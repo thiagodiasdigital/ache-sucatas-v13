@@ -140,17 +140,17 @@ export function CalendarView() {
     <div className="flex flex-col items-center">
       {/* Indicador de filtro por mapa */}
       {isMapActive && (
-        <div className="w-full max-w-md mb-4 flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 rounded-lg px-4 py-2">
+        <div className="w-full max-w-md mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <MapIcon className="h-4 w-4" />
+            <MapIcon className="h-4 w-4 shrink-0" />
             <span>
               Mostrando <strong>{auctions.length}</strong> de{" "}
-              <strong>{allAuctions.length}</strong> leilões no viewport
+              <strong>{allAuctions.length}</strong> leilões
             </span>
           </div>
           <button
             onClick={clearBoundsFilter}
-            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium min-h-[44px] px-3 -mx-3 sm:mx-0"
           >
             Mostrar todos
           </button>
@@ -205,6 +205,13 @@ export function CalendarView() {
             background-color: rgba(16, 185, 129, 0.1);
             border-radius: 9999px;
           }
+          /* Mobile touch targets for calendar days */
+          @media (max-width: 767px) {
+            .rdp-custom .rdp-day {
+              min-width: 44px;
+              min-height: 44px;
+            }
+          }
         `}</style>
         <DayPicker
           mode="single"
@@ -237,13 +244,13 @@ export function CalendarView() {
       </div>
 
       {/* Legend */}
-      <div className="mt-6 flex items-center gap-6 text-sm text-muted-foreground">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#10B981" }} />
+          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#10B981" }} />
           <span>Sucata</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#3B82F6" }} />
+          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#3B82F6" }} />
           <span>Documentado</span>
         </div>
       </div>
