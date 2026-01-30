@@ -12,8 +12,9 @@ from typing import List, Optional
 # Carrega variáveis do arquivo .env automaticamente
 try:
     from dotenv import load_dotenv
-    # Procura o .env no diretório deste arquivo
-    env_path = Path(__file__).parent / ".env"
+    # Procura o .env na raiz do projeto (2 níveis acima: connectors/leiloesjudiciais -> .)
+    project_root = Path(__file__).parent.parent.parent
+    env_path = project_root / ".env"
     load_dotenv(env_path)
 except ImportError:
     pass  # python-dotenv não instalado, usa apenas variáveis de ambiente do sistema

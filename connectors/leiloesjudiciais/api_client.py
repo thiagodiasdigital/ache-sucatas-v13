@@ -129,67 +129,52 @@ class LeiloeiroAPIClient:
     def get_lotes(
         self,
         page: int = 1,
-        per_page: int = 50,
-        estado: Optional[str] = None,
-        cidade: Optional[str] = None,
-        valor_min: Optional[float] = None,
-        valor_max: Optional[float] = None,
-        palavra_chave: Optional[str] = None,
-        leilao_id: Optional[int] = None,
+        per_page: int = 42,
+        tipo: int = 1,  # 1=Veículos, 2=Bens Diversos, 3=Imóveis
+        categoria: int = 0,
+        estado: int = 0,
+        cidade: int = 0,
     ) -> APIResponse:
         """
         Busca lotes da API com filtros.
 
-        NOTA: A API leiloesjudiciais não suporta filtro por tipo/categoria.
-        O filtro deve ser feito no código após receber os dados.
-
-        Categorias retornadas (id_categoria):
-        - 1: Veículos (escopo do projeto)
-        - 2: Bens Diversos
-        - 3: Imóveis (excluir)
+        IMPORTANTE: A API usa QUERY PARAMS, não JSON body!
+        O parâmetro 'tipo' é obrigatório para filtrar por categoria:
+        - tipo=1: Veículos (escopo do projeto)
+        - tipo=2: Bens Diversos
+        - tipo=3: Imóveis
 
         Args:
             page: Número da página (1-indexed)
-            per_page: Itens por página (max 100)
-            estado: UF
-            cidade: Nome da cidade
-            valor_min/max: Faixa de valor
-            palavra_chave: Busca textual
-            leilao_id: ID específico de leilão
+            per_page: Itens por página (padrão 42 como o site usa)
+            tipo: Tipo de lote (1=Veículos, 2=Bens, 3=Imóveis)
+            categoria: ID da subcategoria (0=todas)
+            estado: ID do estado (0=todos)
+            cidade: ID da cidade (0=todas)
 
         Returns:
             APIResponse com dados e metadata
         """
         self._apply_rate_limit()
 
-        # Monta payload
-        payload: Dict[str, Any] = {
+        # IMPORTANTE: A API usa query params, não JSON body!
+        params = {
             "pg": page,
             "qtd_por_pagina": min(per_page, 100),
+            "tipo": tipo,
+            "categoria": categoria,
+            "estado": estado,
+            "cidade": cidade,
         }
 
-        # Adiciona filtros opcionais (apenas os que funcionam)
-        if estado:
-            payload["estado"] = estado
-        if cidade:
-            payload["cidade"] = cidade
-        if valor_min is not None:
-            payload["valor_min"] = valor_min
-        if valor_max is not None:
-            payload["valor_max"] = valor_max
-        if palavra_chave:
-            payload["palavra_chave"] = palavra_chave
-        if leilao_id is not None:
-            payload["leilao_id"] = leilao_id
-
-        return self._post_with_retry("get-lotes", payload)
+        return self._post_with_query_params("get-lotes", params)
 
     def fetch_all_pages(
         self,
+        tipo: int = 1,  # 1=Veículos (padrão)
         max_pages: Optional[int] = None,
-        per_page: int = 50,
+        per_page: int = 42,
         progress_callback: Optional[Callable[[int, int, int], None]] = None,
-        **filters
     ) -> tuple[List[Dict], FetchStats]:
         """
         Busca todas as páginas de lotes.
@@ -197,14 +182,11 @@ class LeiloeiroAPIClient:
         IMPORTANTE: Critério de parada seguro - para quando currentPage >= totalPages.
         A API pode retornar a última página repetida se pg > totalPages.
 
-        NOTA: A API não suporta filtro por tipo/categoria server-side.
-        O filtro por id_categoria deve ser feito após receber os dados.
-
         Args:
+            tipo: Tipo de lote (1=Veículos, 2=Bens, 3=Imóveis)
             max_pages: Limite de páginas (None = sem limite)
             per_page: Itens por página
             progress_callback: Callback(page, total_pages, items_so_far)
-            **filters: Filtros adicionais (estado, cidade, etc)
 
         Returns:
             Tupla (lista de lotes, estatísticas)
@@ -217,7 +199,7 @@ class LeiloeiroAPIClient:
         total_pages = 1
         seen_hashes: set = set()  # Para detectar páginas repetidas
 
-        logger.info(f"Iniciando fetch de todas as páginas (max_pages={max_pages})")
+        logger.info(f"Iniciando fetch de todas as páginas (tipo={tipo}, max_pages={max_pages})")
 
         while current_page <= total_pages:
             # Verifica limite de páginas
@@ -225,11 +207,11 @@ class LeiloeiroAPIClient:
                 logger.info(f"Atingido limite de {max_pages} páginas")
                 break
 
-            # Faz request
+            # Faz request com query params
             response = self.get_lotes(
                 page=current_page,
                 per_page=per_page,
-                **filters
+                tipo=tipo,
             )
 
             if not response.success:
@@ -283,9 +265,86 @@ class LeiloeiroAPIClient:
 
         return all_items, self.stats
 
+    def _post_with_query_params(self, endpoint: str, params: Dict) -> APIResponse:
+        """
+        Faz POST com query params (como o site usa) e retry.
+        """
+        url = f"{self.BASE_URL}/{endpoint}"
+        last_error: Optional[str] = None
+
+        for attempt in range(self.max_retries + 1):
+            start_time = time.time()
+
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(
+                        url,
+                        params=params,  # Query params, não JSON body!
+                        headers={
+                            "Accept": "application/json",
+                            "User-Agent": config.USER_AGENT,
+                        }
+                    )
+
+                elapsed_ms = (time.time() - start_time) * 1000
+                self.stats.total_requests += 1
+
+                # Sucesso
+                if response.status_code == 200:
+                    self.stats.successful += 1
+                    return self._parse_response(response.json(), elapsed_ms, response.status_code)
+
+                # Rate limited - retry com backoff
+                if response.status_code in config.RATE_LIMIT_STATUS_CODES:
+                    self.stats.rate_limited += 1
+                    wait_time = self.backoff_factor ** attempt
+                    logger.warning(f"Rate limited (HTTP {response.status_code}), aguardando {wait_time}s")
+                    time.sleep(wait_time)
+                    continue
+
+                # Erro do servidor - retry
+                if response.status_code >= 500:
+                    wait_time = self.backoff_factor ** attempt
+                    logger.warning(f"Server error (HTTP {response.status_code}), retry em {wait_time}s")
+                    time.sleep(wait_time)
+                    continue
+
+                # Erro do cliente - não retry
+                self.stats.failed += 1
+                return APIResponse(
+                    success=False,
+                    error_message=f"HTTP {response.status_code}",
+                    http_status=response.status_code,
+                    response_time_ms=elapsed_ms
+                )
+
+            except httpx.TimeoutException as e:
+                last_error = f"Timeout: {e}"
+                wait_time = self.backoff_factor ** attempt
+                logger.warning(f"{last_error}, retry em {wait_time}s")
+                time.sleep(wait_time)
+
+            except httpx.RequestError as e:
+                last_error = f"Request error: {e}"
+                wait_time = self.backoff_factor ** attempt
+                logger.warning(f"{last_error}, retry em {wait_time}s")
+                time.sleep(wait_time)
+
+            except Exception as e:
+                last_error = f"Unexpected error: {e}"
+                logger.error(last_error)
+                break
+
+        # Esgotou retries
+        self.stats.failed += 1
+        return APIResponse(
+            success=False,
+            error_message=last_error or "Max retries exceeded"
+        )
+
     def _post_with_retry(self, endpoint: str, payload: Dict) -> APIResponse:
         """
-        Faz POST com retry e backoff exponencial.
+        Faz POST com JSON body e retry (método legado).
         """
         url = f"{self.BASE_URL}/{endpoint}"
         last_error: Optional[str] = None

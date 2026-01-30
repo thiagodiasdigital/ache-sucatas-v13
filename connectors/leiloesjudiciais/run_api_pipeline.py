@@ -455,58 +455,64 @@ def _persist_to_supabase(
         logger.warning("Supabase não configurado (SUPABASE_URL/SUPABASE_SERVICE_KEY ausentes)")
         return 0, 0
 
-    # Importa cliente Supabase
-    try:
-        from supabase import create_client, Client
-    except ImportError:
-        logger.error("supabase-py não instalado. Execute: pip install supabase")
-        return 0, len(lots)
+    # Usa httpx diretamente (compatível com novas API keys)
+    import httpx
 
-    # Cria cliente
-    supabase: Client = create_client(config.supabase_url, config.supabase_key)
+    headers = {
+        "apikey": config.supabase_key,
+        "Authorization": f"Bearer {config.supabase_key}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",  # Upsert behavior
+    }
+
+    base_url = f"{config.supabase_url}/rest/v1/leiloeiro_lotes"
 
     inserted = 0
     errors = 0
 
-    for lot in lots:
-        try:
-            data = {
-                "id_interno": lot.id_interno,
-                "lote_id_original": lot.lote_id_original,
-                "leilao_id_original": lot.leilao_id_original,
-                "titulo": lot.titulo,
-                "descricao": lot.descricao,
-                "objeto_resumido": lot.objeto_resumido,
-                "cidade": lot.cidade,
-                "uf": lot.uf,
-                "data_leilao": lot.data_leilao,
-                "data_publicacao": lot.data_publicacao,
-                "valor_avaliacao": lot.valor_avaliacao,
-                "link_leiloeiro": lot.link_leiloeiro,
-                "link_edital": lot.link_edital,
-                "tags": lot.tags,
-                "categoria": lot.categoria,
-                "tipo_leilao": lot.tipo_leilao,
-                "nome_leiloeiro": lot.nome_leiloeiro,
-                "imagens": lot.imagens,
-                "metadata": lot.metadata,
-                "confidence_score": lot.confidence_score,
-            }
+    with httpx.Client(timeout=30) as client:
+        for lot in lots:
+            try:
+                data = {
+                    "id_interno": lot.id_interno,
+                    "lote_id_original": lot.lote_id_original,
+                    "leilao_id_original": lot.leilao_id_original,
+                    "titulo": lot.titulo,
+                    "descricao": lot.descricao,
+                    "objeto_resumido": lot.objeto_resumido,
+                    "cidade": lot.cidade,
+                    "uf": lot.uf,
+                    "data_leilao": lot.data_leilao,
+                    "data_publicacao": lot.data_publicacao,
+                    "valor_avaliacao": lot.valor_avaliacao,
+                    "link_leiloeiro": lot.link_leiloeiro,
+                    "link_edital": lot.link_edital,
+                    "tags": lot.tags,
+                    "categoria": lot.categoria,
+                    "tipo_leilao": lot.tipo_leilao,
+                    "nome_leiloeiro": lot.nome_leiloeiro,
+                    "imagens": lot.imagens,
+                    "metadata": lot.metadata,
+                    "confidence_score": lot.confidence_score,
+                }
 
-            # Upsert na tabela leiloeiro_lotes
-            result = supabase.table("leiloeiro_lotes").upsert(
-                data,
-                on_conflict="id_interno"
-            ).execute()
+                # Upsert via POST com on_conflict
+                response = client.post(
+                    base_url,
+                    headers=headers,
+                    json=data,
+                    params={"on_conflict": "id_interno"}
+                )
 
-            if result.data:
-                inserted += 1
-            else:
+                if response.status_code in (200, 201):
+                    inserted += 1
+                else:
+                    logger.error(f"Erro ao persistir {lot.id_interno}: HTTP {response.status_code} - {response.text[:100]}")
+                    errors += 1
+
+            except Exception as e:
+                logger.error(f"Erro ao persistir {lot.id_interno}: {e}")
                 errors += 1
-
-        except Exception as e:
-            logger.error(f"Erro ao persistir {lot.id_interno}: {e}")
-            errors += 1
 
     return inserted, errors
 

@@ -42,22 +42,21 @@ export function useAuctions() {
   return useQuery<PaginatedAuctionsResponse, Error>({
     queryKey: ["auctions", filters, currentPage, ordenacao, temporalidade],
     queryFn: async () => {
-      // Chamar RPC com paginação e ordenação
+      // Chamar RPC unificada (PNCP + Leiloeiro)
       const { data, error } = await supabase.rpc(
-        "fetch_auctions_paginated" as never,
+        "fetch_auctions_unified" as never,
         {
           p_uf: filters.uf || null,
           p_cidade: filters.cidade || null,
           p_valor_min: filters.valor_min || null,
           p_valor_max: filters.valor_max || null,
-          p_data_publicacao_de: filters.data_publicacao_de || null,
-          p_data_publicacao_ate: filters.data_publicacao_ate || null,
           p_data_leilao_de: filters.data_leilao_de || null,
           p_data_leilao_ate: filters.data_leilao_ate || null,
           p_page: currentPage,
           p_page_size: ITEMS_PER_PAGE,
           p_ordenacao: ordenacao,
           p_temporalidade: temporalidade,
+          p_source: null, // null = ambas fontes (PNCP + Leiloeiro)
         } as never
       )
 
@@ -88,7 +87,10 @@ export function useAvailableUFs() {
   return useQuery({
     queryKey: ["available-ufs"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_available_ufs" as never)
+      const { data, error } = await supabase.rpc(
+        "get_available_ufs_unified" as never,
+        { p_source: null } as never // null = ambas fontes
+      )
 
       if (error) {
         throw new Error(error.message)
@@ -110,8 +112,8 @@ export function useCitiesByUF(uf: string | undefined) {
       if (!uf) return []
 
       const { data, error } = await supabase.rpc(
-        "get_cities_by_uf" as never,
-        { p_uf: uf } as never
+        "get_cities_by_uf_unified" as never,
+        { p_uf: uf, p_source: null } as never // null = ambas fontes
       )
 
       if (error) {
