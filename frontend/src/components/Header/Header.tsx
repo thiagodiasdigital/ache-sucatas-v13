@@ -75,7 +75,7 @@ function SearchableDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]">
           <div className="p-2 border-b">
             <input
               type="text"
