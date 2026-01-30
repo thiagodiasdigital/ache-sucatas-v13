@@ -64,13 +64,15 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
     modalidade_leilao,
     status_temporal,
     storage_path,
+    link_edital: auctionLinkEdital,
   } = auction
 
   // Estado para controlar o modal de lotes
   const [showLotesModal, setShowLotesModal] = useState(false)
 
   const isEncerrado = status_temporal === 'passado'
-  const link_edital = getEditalUrl(storage_path, pncp_id)
+  // Prioridade: storage interno > link_edital da view > fallback PNCP
+  const link_edital = getEditalUrl(storage_path, pncp_id, auctionLinkEdital)
   const categoryImage = getCategoryImage(tags)
 
   return (

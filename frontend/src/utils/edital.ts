@@ -2,7 +2,7 @@
  * Edital URL Utility
  *
  * Gera URLs para visualização de editais.
- * Prioriza o Storage interno, com fallback para PNCP.
+ * Prioriza o Storage interno, com fallback para link_edital ou PNCP.
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -11,33 +11,48 @@ const BUCKET_NAME = 'editais-pdfs'
 /**
  * Gera URL para visualização do edital.
  *
- * Estratégia:
+ * Estratégia de prioridade:
  * 1. Se tem storage_path → URL do Supabase Storage (interno)
- * 2. Se não tem storage_path mas tem pncp_id → URL do PNCP (fallback)
- * 3. Se não tem nenhum → null
+ * 2. Se tem link_edital → URL direta do edital (leiloeiros externos)
+ * 3. Se tem pncp_id → URL do PNCP (fallback)
+ * 4. Se não tem nenhum → null
  *
  * @param storage_path - Caminho do PDF no Supabase Storage
  * @param pncp_id - ID do edital no PNCP (fallback)
+ * @param link_edital - URL direta do edital (usado por leiloeiros externos)
  * @returns URL do edital ou null se indisponível
  *
  * @example
- * getEditalUrl("05182233000176-1-000009/2026/EDITAL.pdf", null)
- * // => "https://xxx.supabase.co/storage/v1/object/public/editais-pdfs/05182233000176-1-000009/2026/EDITAL.pdf"
+ * // Storage interno (PNCP)
+ * getEditalUrl("05182233000176-1-000009/2026/EDITAL.pdf", null, null)
+ * // => "https://xxx.supabase.co/storage/v1/object/public/editais-pdfs/..."
  *
  * @example
- * getEditalUrl(null, "05182233000176-1-000009/2026")
- * // => "https://pncp.gov.br/app/editais/05182233000176/2026/9" (fallback)
+ * // Link direto de leiloeiro externo
+ * getEditalUrl(null, null, "https://leiloesjudiciais.com.br/edital/123.pdf")
+ * // => "https://leiloesjudiciais.com.br/edital/123.pdf"
+ *
+ * @example
+ * // Fallback para PNCP
+ * getEditalUrl(null, "05182233000176-1-000009/2026", null)
+ * // => "https://pncp.gov.br/app/editais/05182233000176/2026/9"
  */
 export const getEditalUrl = (
   storage_path: string | null | undefined,
-  pncp_id: string | null | undefined
+  pncp_id: string | null | undefined,
+  link_edital?: string | null
 ): string | null => {
   // Prioridade 1: Storage interno
   if (storage_path && storage_path.trim() !== '') {
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${storage_path}`
   }
 
-  // Prioridade 2: Fallback para PNCP
+  // Prioridade 2: Link direto do edital (leiloeiros externos)
+  if (link_edital && link_edital.trim() !== '') {
+    return link_edital.trim()
+  }
+
+  // Prioridade 3: Fallback para PNCP
   if (pncp_id && pncp_id.trim() !== '') {
     return getPncpLinkFromId(pncp_id)
   }

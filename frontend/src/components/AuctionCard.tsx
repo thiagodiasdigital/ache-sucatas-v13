@@ -61,12 +61,13 @@ export function AuctionCard({ auction }: AuctionCardProps) {
     modalidade_leilao,
     status_temporal,
     storage_path,
+    link_edital: auctionLinkEdital,
   } = auction
 
   const isEncerrado = status_temporal === 'passado'
 
-  // Link do edital: prioriza storage interno, fallback para fonte externa
-  const link_edital = getEditalUrl(storage_path, pncp_id)
+  // Link do edital: prioriza storage interno > link_edital da view > fallback PNCP
+  const link_edital = getEditalUrl(storage_path, pncp_id, auctionLinkEdital)
 
   const showValue = valor_estimado !== null && valor_estimado > 0
 
