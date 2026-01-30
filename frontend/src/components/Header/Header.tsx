@@ -1,120 +1,17 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useAuth } from "../../contexts/AuthContext"
 import { useAvailableUFs, useCitiesByUF } from "../../hooks/useAuctions"
 import { useIsMobile } from "../../hooks/useIsMobile"
 import { NotificationBell } from "../NotificationBell"
 import { MobileFilterSheet, MobileFilterButton } from "../MobileFilterSheet"
-import { Search, User, LogOut, ChevronDown, X, Activity } from "lucide-react"
-import { cn } from "../../lib/utils"
+import { Search, User, LogOut, X, Activity } from "lucide-react"
 
 // Estados brasileiros para fallback
 const ESTADOS_BR = [
   "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
   "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
 ]
-
-interface SearchableDropdownProps {
-  id: string
-  label: string
-  value: string
-  options: { value: string; label: string }[]
-  onChange: (value: string) => void
-  disabled?: boolean
-  placeholder?: string
-}
-
-function SearchableDropdown({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-  disabled = false,
-  placeholder = "Selecione..."
-}: SearchableDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [search, setSearch] = useState("")
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  const filteredOptions = options.filter(opt =>
-    opt.label.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const selectedOption = options.find(opt => opt.value === value)
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-        setSearch("")
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        id={id}
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className={cn(
-          "header-select flex items-center justify-between gap-2 cursor-pointer",
-          disabled && "opacity-50 cursor-not-allowed bg-gray-100"
-        )}
-        aria-label={label}
-        aria-expanded={isOpen}
-      >
-        <span className="truncate text-gray-700">
-          {selectedOption?.label || placeholder}
-        </span>
-        <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]">
-          <div className="p-2 border-b">
-            <input
-              type="text"
-              placeholder={`Buscar ${label.toLowerCase()}...`}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded focus:outline-none focus:border-blue-500"
-              autoFocus
-            />
-          </div>
-          <ul className="max-h-60 overflow-auto py-1">
-            {filteredOptions.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-gray-500">Nenhum resultado</li>
-            ) : (
-              filteredOptions.map((opt) => (
-                <li key={opt.value}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value)
-                      setIsOpen(false)
-                      setSearch("")
-                    }}
-                    className={cn(
-                      "w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors",
-                      value === opt.value && "bg-blue-100 text-blue-700 font-medium"
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -309,27 +206,37 @@ export function Header() {
                 className="header-search-input rounded-l"
               />
 
-              {/* Dropdown Estado */}
-              <SearchableDropdown
+              {/* Dropdown Estado - Select Nativo */}
+              <select
                 id="header-estado"
-                label="Estado"
                 value={currentUF}
-                options={ufOptions}
-                onChange={(value) => updateFilter("uf", value, { cidade: "" })}
-                placeholder="Estado"
+                onChange={(e) => updateFilter("uf", e.target.value, { cidade: "" })}
                 disabled={loadingUFs}
-              />
+                className="header-select"
+                aria-label="Estado"
+              >
+                {ufOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
 
-              {/* Dropdown Cidade */}
-              <SearchableDropdown
+              {/* Dropdown Cidade - Select Nativo */}
+              <select
                 id="header-cidade"
-                label="Cidade"
                 value={currentCidade}
-                options={cidadeOptions}
-                onChange={(value) => updateFilter("cidade", value)}
-                placeholder="Cidade"
+                onChange={(e) => updateFilter("cidade", e.target.value)}
                 disabled={!currentUF || loadingCidades}
-              />
+                className="header-select"
+                aria-label="Cidade"
+              >
+                {cidadeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
 
               {/* Botão de Busca */}
               <button
