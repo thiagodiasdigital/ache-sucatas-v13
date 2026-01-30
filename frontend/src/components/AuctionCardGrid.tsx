@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { Auction } from "../types/database"
 import { Badge } from "./ui/badge"
 import { formatDate, cn } from "../lib/utils"
-import { getPncpLinkFromId } from "../utils/pncp"
+import { getEditalUrl } from "../utils/edital"
 import { Calendar, MapPin, ExternalLink, FileText, Building2, Monitor, Hash, Eye, Package } from "lucide-react"
 import { LotesModal } from "./LotesModal"
 
@@ -45,7 +45,7 @@ function getTagVariant(tag: string): "sucata" | "documentado" | "secondary" {
  * - Área de destaque visual no topo (substitui foto)
  * - Alta densidade de dados
  * - Hierarquia: Título > Localização > Valor (menor destaque)
- * - Botões: VER PNCP e VER LEILOEIRO
+ * - Botões: VER EDITAL (PDF interno ou fallback PNCP) e VER LEILOEIRO
  */
 export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
   const {
@@ -63,13 +63,14 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
     link_leiloeiro,
     modalidade_leilao,
     status_temporal,
+    storage_path,
   } = auction
 
   // Estado para controlar o modal de lotes
   const [showLotesModal, setShowLotesModal] = useState(false)
 
   const isEncerrado = status_temporal === 'passado'
-  const link_pncp = pncp_id ? getPncpLinkFromId(pncp_id) : null
+  const link_edital = getEditalUrl(storage_path, pncp_id)
   const categoryImage = getCategoryImage(tags)
 
   return (
@@ -195,16 +196,16 @@ export function AuctionCardGrid({ auction }: AuctionCardGridProps) {
 
       {/* Botões de Ação - Estilo Meli - min-h-[44px] para touch targets */}
       <div className="px-3 pb-2 pt-2 border-t border-gray-100 flex gap-2">
-        {/* Botão VER PNCP */}
-        {link_pncp && (
+        {/* Botão VER EDITAL - PDF interno ou fallback */}
+        {link_edital && (
           <a
-            href={link_pncp}
+            href={link_edital}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
-            VER PNCP
+            VER EDITAL
           </a>
         )}
 
