@@ -267,10 +267,10 @@ export function Header() {
   const userName = user?.email?.split("@")[0] || "Usuário"
 
   return (
-    <header className="sticky top-0 z-50">
+    <header className="sticky top-0 z-50 overflow-x-hidden">
       {/* ========== LINHA 1 - TOP BAR ========== */}
       <div
-        className="flex items-center justify-between px-5 gap-4"
+        className="flex items-center justify-between px-3 md:px-5 gap-2 md:gap-4"
         style={{ backgroundColor: "#0C83D6", height: "60px" }}
       >
         {/* Logo + Nome (estilo Mercado Livre) */}
@@ -296,65 +296,67 @@ export function Header() {
           </div>
         </Link>
 
-        {/* Search Container */}
-        <form onSubmit={handleSearch} className="flex-1 flex items-center max-w-3xl mx-4">
-          <div className="flex items-stretch w-full">
-            {/* Input de Busca */}
-            <input
-              type="text"
-              placeholder="Buscar veículos, modelos, marcas..."
-              value={localBusca}
-              onChange={(e) => setLocalBusca(e.target.value)}
-              className="header-search-input rounded-l"
-            />
+        {/* Search Container - DESKTOP ONLY */}
+        {!isMobile && (
+          <form onSubmit={handleSearch} className="flex-1 flex items-center max-w-3xl mx-4">
+            <div className="flex items-stretch w-full">
+              {/* Input de Busca */}
+              <input
+                type="text"
+                placeholder="Buscar veículos, modelos, marcas..."
+                value={localBusca}
+                onChange={(e) => setLocalBusca(e.target.value)}
+                className="header-search-input rounded-l"
+              />
 
-            {/* Dropdown Estado */}
-            <SearchableDropdown
-              id="header-estado"
-              label="Estado"
-              value={currentUF}
-              options={ufOptions}
-              onChange={(value) => updateFilter("uf", value, { cidade: "" })}
-              placeholder="Estado"
-              disabled={loadingUFs}
-            />
+              {/* Dropdown Estado */}
+              <SearchableDropdown
+                id="header-estado"
+                label="Estado"
+                value={currentUF}
+                options={ufOptions}
+                onChange={(value) => updateFilter("uf", value, { cidade: "" })}
+                placeholder="Estado"
+                disabled={loadingUFs}
+              />
 
-            {/* Dropdown Cidade */}
-            <SearchableDropdown
-              id="header-cidade"
-              label="Cidade"
-              value={currentCidade}
-              options={cidadeOptions}
-              onChange={(value) => updateFilter("cidade", value)}
-              placeholder="Cidade"
-              disabled={!currentUF || loadingCidades}
-            />
+              {/* Dropdown Cidade */}
+              <SearchableDropdown
+                id="header-cidade"
+                label="Cidade"
+                value={currentCidade}
+                options={cidadeOptions}
+                onChange={(value) => updateFilter("cidade", value)}
+                placeholder="Cidade"
+                disabled={!currentUF || loadingCidades}
+              />
 
-            {/* Botão de Busca */}
-            <button
-              type="submit"
-              className="header-search-btn rounded-r"
-              aria-label="Buscar"
-            >
-              <Search className="h-5 w-5" />
-            </button>
-          </div>
-        </form>
+              {/* Botão de Busca */}
+              <button
+                type="submit"
+                className="header-search-btn rounded-r"
+                aria-label="Buscar"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* User Actions */}
-        <div className="flex items-center gap-5 text-white flex-shrink-0">
+        <div className="flex items-center gap-3 md:gap-5 text-white flex-shrink-0">
           {/* Notification Bell */}
           <NotificationBell />
 
-          {/* User Name */}
-          <span className="text-sm font-medium hidden sm:block">
+          {/* User Name - Desktop only */}
+          <span className="text-sm font-medium hidden md:block">
             Olá, {userName}
           </span>
 
-          {/* Pipeline Health (Admin) */}
+          {/* Pipeline Health (Admin) - Desktop only */}
           <Link
             to="/pipeline-health"
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="hidden md:block p-1 hover:bg-white/10 rounded transition-colors"
             title="Pipeline Health"
           >
             <Activity className="h-5 w-5" />
@@ -363,7 +365,7 @@ export function Header() {
           {/* Profile Icon */}
           <Link
             to="/perfil"
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-white/10 rounded transition-colors"
             title="Meu Perfil"
           >
             <User className="h-5 w-5" />
@@ -372,7 +374,7 @@ export function Header() {
           {/* Logout Icon */}
           <button
             onClick={() => signOut()}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-white/10 rounded transition-colors"
             title="Sair"
           >
             <LogOut className="h-5 w-5" />
@@ -382,26 +384,77 @@ export function Header() {
 
       {/* ========== LINHA 2 - FILTER BAR (Desktop) / FILTER BUTTON (Mobile) ========== */}
       <div
-        className="flex items-center justify-center gap-2 px-3 border-b border-gray-200"
+        className="flex flex-col md:flex-row items-stretch md:items-center justify-center gap-2 px-3 border-b border-gray-200"
         style={{ backgroundColor: "#E8F4FC", minHeight: "44px" }}
       >
-        {/* Mobile: Botão de Filtros */}
+        {/* Mobile: Busca + UF/Cidade + Filtros */}
         {isMobile && (
-          <div className="flex items-center justify-between w-full py-1">
-            <MobileFilterButton
-              onClick={() => setMobileFilterOpen(true)}
-              activeFiltersCount={activeFiltersCount}
-            />
-            {hasFilters && (
+          <div className="flex flex-col gap-2 w-full py-2">
+            {/* Linha 1: Campo de busca */}
+            <form onSubmit={handleSearch} className="flex items-stretch w-full">
+              <input
+                type="text"
+                placeholder="Buscar veículos, modelos..."
+                value={localBusca}
+                onChange={(e) => setLocalBusca(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-l-lg focus:outline-none focus:border-blue-500 min-h-[44px]"
+              />
               <button
-                type="button"
-                onClick={clearFilters}
-                className="flex items-center gap-1 px-3 py-2 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-h-[44px]"
+                type="submit"
+                className="px-4 bg-blue-600 text-white rounded-r-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Buscar"
               >
-                <X className="h-4 w-4" />
-                Limpar
+                <Search className="h-5 w-5" />
               </button>
-            )}
+            </form>
+
+            {/* Linha 2: UF + Cidade */}
+            <div className="flex gap-2">
+              <select
+                value={currentUF}
+                onChange={(e) => updateFilter("uf", e.target.value, { cidade: "" })}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white min-h-[44px]"
+                disabled={loadingUFs}
+              >
+                <option value="">Estado</option>
+                {(ufs || ESTADOS_BR.map(uf => ({ uf, count: 0 }))).map((item) => (
+                  <option key={typeof item === 'string' ? item : item.uf} value={typeof item === 'string' ? item : item.uf}>
+                    {typeof item === 'string' ? item : `${item.uf} (${item.count})`}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={currentCidade}
+                onChange={(e) => updateFilter("cidade", e.target.value)}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white min-h-[44px]"
+                disabled={!currentUF || loadingCidades}
+              >
+                <option value="">Cidade</option>
+                {cidades?.map((c) => (
+                  <option key={c.cidade} value={c.cidade}>
+                    {c.cidade} ({c.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Linha 3: Botão de Filtros + Limpar */}
+            <div className="flex items-center justify-between">
+              <MobileFilterButton
+                onClick={() => setMobileFilterOpen(true)}
+                activeFiltersCount={activeFiltersCount}
+              />
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex items-center gap-1 px-3 py-2 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-h-[44px]"
+                >
+                  <X className="h-4 w-4" />
+                  Limpar
+                </button>
+              )}
+            </div>
           </div>
         )}
 
