@@ -156,12 +156,13 @@ def run_pipeline(
     logger.info("")
     logger.info("--- FASE 1: FETCH ---")
 
-    # NOTA: A API não suporta filtro por categoria server-side
-    # Busca todos os lotes e filtra no código
-    logger.info("Buscando lotes da API...")
-    all_items, stats = client.fetch_all_pages(
-        max_pages=max_pages,
-        progress_callback=lambda p, total, items: logger.debug(f"  Página {p}/{total}")
+    # Busca tipo=1 (Veículos) + tipo=2 (Bens Diversos para sucatas)
+    # Tipo=3 (Imóveis) é excluído
+    logger.info("Buscando lotes da API (tipos 1 e 2)...")
+    all_items, stats = client.fetch_all_tipos(
+        tipos=[1, 2],  # Veículos + Bens Diversos
+        max_pages_per_tipo=max_pages,
+        progress_callback=lambda t, p, total, items: logger.debug(f"  Tipo {t} - Página {p}/{total}")
     )
 
     fetch_stats = {
@@ -185,26 +186,76 @@ def run_pipeline(
     filtered_items: List[Dict] = []
     pre_rejected: List[Tuple[Dict, str]] = []
 
-    # Contadores por categoria
+    # Contadores por tipo de busca e categoria
+    tipo_counts: Dict[int, int] = {}
     cat_counts: Dict[int, int] = {}
+    sucata_accepted = 0
+
+    # Palavras-chave para identificar veículos em sucatas
+    VEHICLE_KEYWORDS = [
+        "veículo", "veiculo", "carro", "moto", "motocicleta",
+        "caminhão", "caminhao", "ônibus", "onibus", "automóvel",
+        "automovel", "chassi", "placa", "renavam", "trator",
+        "reboque", "carreta", "van", "utilitário", "pickup",
+        # Marcas comuns
+        "fiat", "volkswagen", "vw", "chevrolet", "gm", "ford",
+        "honda", "yamaha", "toyota", "hyundai", "jeep", "nissan",
+        "mercedes", "bmw", "audi", "peugeot", "citroen", "renault",
+        "scania", "volvo", "iveco", "man", "daf", "kia", "mitsubishi",
+    ]
+
+    def is_sucata_veiculo(item: Dict) -> bool:
+        """Verifica se item é sucata de veículo."""
+        titulo = (item.get("nm_titulo_lote") or "").lower()
+        descricao = (item.get("nm_descricao") or "").lower()
+        texto = f"{titulo} {descricao}"
+
+        # Deve ter "sucata" no texto
+        if "sucata" not in texto:
+            return False
+
+        # E deve ter alguma palavra-chave de veículo
+        return any(kw in texto for kw in VEHICLE_KEYWORDS)
 
     for item in all_items:
+        tipo_busca = item.get("_tipo_busca", 1)
         id_categoria = item.get("id_categoria")
+
+        tipo_counts[tipo_busca] = tipo_counts.get(tipo_busca, 0) + 1
         cat_counts[id_categoria] = cat_counts.get(id_categoria, 0) + 1
 
         if filter_vehicles:
-            # Modo estrito: apenas veículos (id_categoria=1)
-            if id_categoria == 3:
+            # Tipo 1 (Veículos): aceita todos
+            if tipo_busca == 1:
+                filtered_items.append(item)
+                continue
+
+            # Tipo 2 (Bens Diversos): aceita apenas sucata + veículo
+            if tipo_busca == 2:
+                if is_sucata_veiculo(item):
+                    filtered_items.append(item)
+                    sucata_accepted += 1
+                else:
+                    pre_rejected.append((item, RejectionCode.CATEGORY_EXCLUDED))
+                continue
+
+            # Tipo 3 (Imóveis): rejeita
+            if tipo_busca == 3:
                 pre_rejected.append((item, RejectionCode.TIPO_3))
                 continue
-            if id_categoria != 1:
-                pre_rejected.append((item, RejectionCode.CATEGORY_EXCLUDED))
-                continue
+
+            # Outros tipos: rejeita
+            pre_rejected.append((item, RejectionCode.CATEGORY_EXCLUDED))
         else:
             # Modo permissivo: aceita todas as categorias
-            pass
+            filtered_items.append(item)
 
-        filtered_items.append(item)
+    # Log dos tipos buscados
+    logger.info("Tipos buscados:")
+    tipo_names = {1: "Veículos", 2: "Bens Diversos", 3: "Imóveis"}
+    for tipo_id, count in sorted(tipo_counts.items()):
+        tipo_name = tipo_names.get(tipo_id, f"Tipo {tipo_id}")
+        logger.info(f"  - {tipo_name} (tipo={tipo_id}): {count} lotes")
 
     # Log das categorias encontradas
     logger.info("Categorias encontradas:")
@@ -212,6 +263,7 @@ def run_pipeline(
         cat_name = {1: "Veículos", 2: "Bens Diversos", 3: "Imóveis"}.get(cat_id, f"Cat {cat_id}")
         logger.info(f"  - {cat_name} (id={cat_id}): {count} lotes")
 
+    logger.info(f"Sucatas de veículos aceitas do tipo 2: {sucata_accepted}")
     logger.info(f"Após pré-filtro: {len(filtered_items)} lotes (rejeitados: {len(pre_rejected)})")
 
     # ========================================================================

@@ -169,6 +169,62 @@ class LeiloeiroAPIClient:
 
         return self._post_with_query_params("get-lotes", params)
 
+    def fetch_all_tipos(
+        self,
+        tipos: List[int] = None,
+        max_pages_per_tipo: Optional[int] = None,
+        per_page: int = 42,
+        progress_callback: Optional[Callable[[int, int, int, int], None]] = None,
+    ) -> tuple[List[Dict], FetchStats]:
+        """
+        Busca todas as páginas de múltiplos tipos.
+
+        Args:
+            tipos: Lista de tipos a buscar (padrão: [1, 2] = Veículos + Bens Diversos)
+            max_pages_per_tipo: Limite de páginas por tipo (None = sem limite)
+            per_page: Itens por página
+            progress_callback: Callback(tipo, page, total_pages, items_so_far)
+
+        Returns:
+            Tupla (lista de lotes, estatísticas)
+        """
+        if tipos is None:
+            tipos = [1, 2]  # Veículos + Bens Diversos (exclui Imóveis)
+
+        all_items: List[Dict] = []
+        combined_stats = FetchStats(started_at=datetime.utcnow().isoformat())
+
+        for tipo in tipos:
+            logger.info(f"Buscando tipo={tipo}...")
+            items, stats = self.fetch_all_pages(
+                tipo=tipo,
+                max_pages=max_pages_per_tipo,
+                per_page=per_page,
+                progress_callback=lambda p, t, i: progress_callback(tipo, p, t, i) if progress_callback else None,
+            )
+
+            # Adiciona tipo ao item para identificação posterior
+            for item in items:
+                item["_tipo_busca"] = tipo
+
+            all_items.extend(items)
+
+            # Agrega estatísticas
+            combined_stats.total_requests += stats.total_requests
+            combined_stats.successful += stats.successful
+            combined_stats.failed += stats.failed
+            combined_stats.rate_limited += stats.rate_limited
+            combined_stats.pages_fetched += stats.pages_fetched
+            combined_stats.items_fetched += len(items)
+            combined_stats.total_time_ms += stats.total_time_ms
+
+            logger.info(f"  tipo={tipo}: {len(items)} lotes")
+
+        combined_stats.finished_at = datetime.utcnow().isoformat()
+        logger.info(f"Total: {len(all_items)} lotes de {len(tipos)} tipos")
+
+        return all_items, combined_stats
+
     def fetch_all_pages(
         self,
         tipo: int = 1,  # 1=Veículos (padrão)
