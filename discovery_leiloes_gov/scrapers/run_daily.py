@@ -22,12 +22,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from detran_mg import DetranMGScraper, VeiculoLeilao
 
+# Import condicional para Sodré Santoro (requer playwright)
+try:
+    from sodre_santoro import SodreSantoroScraper
+    HAS_SODRE_SANTORO = True
+except ImportError:
+    HAS_SODRE_SANTORO = False
+
 # ============================================================
 # CONFIGURACAO
 # ============================================================
 
 OUTPUT_DIR = Path(__file__).parent.parent / "outputs"
-SCRAPERS_ENABLED = ["detran_mg"]  # Scrapers ativos
+SCRAPERS_ENABLED = ["detran_mg", "sodre_santoro"]  # Scrapers ativos
 
 
 # ============================================================
@@ -119,6 +126,57 @@ def run_detran_mg(dry_run: bool = False, persist: bool = False) -> dict:
         }
 
 
+def run_sodre_santoro(dry_run: bool = False, persist: bool = False) -> dict:
+    """Executa scraper Sodré Santoro"""
+    import asyncio
+
+    print("\n" + "=" * 60)
+    print("SODRÉ SANTORO")
+    print("=" * 60)
+
+    if not HAS_SODRE_SANTORO:
+        print("[SKIP] Playwright não instalado - pulando Sodré Santoro")
+        print("       Instale com: pip install playwright && playwright install chromium")
+        return {"scraper": "sodre_santoro", "status": "skipped", "reason": "playwright not installed"}
+
+    if dry_run:
+        print("[DRY-RUN] Scraper Sodré Santoro seria executado")
+        return {"scraper": "sodre_santoro", "status": "dry_run", "veiculos": 0}
+
+    output_dir = OUTPUT_DIR / "sodre_santoro"
+    scraper = SodreSantoroScraper(output_dir=output_dir, headless=True)
+
+    try:
+        # Executar async
+        veiculos = asyncio.run(scraper.run())
+
+        result = {
+            "scraper": "sodre_santoro",
+            "status": "success",
+            "veiculos": len(veiculos),
+            "veiculos_cat": scraper.metrics.get("veiculos_found", 0),
+            "sucatas_cat": scraper.metrics.get("sucatas_found", 0),
+            "leiloes": scraper.metrics.get("leiloes_found", 0),
+            "requests": scraper.metrics["requests_made"],
+            "errors": len(scraper.metrics["errors"])
+        }
+
+        # Persistir se solicitado
+        if persist and veiculos:
+            result["persisted"] = persist_to_supabase(veiculos)
+
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "scraper": "sodre_santoro",
+            "status": "error",
+            "error": str(e)
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Daily Scrapers")
     parser.add_argument("--dry-run", action="store_true",
@@ -146,6 +204,9 @@ def main():
     for scraper_name in scrapers_to_run:
         if scraper_name == "detran_mg":
             result = run_detran_mg(dry_run=args.dry_run, persist=args.persist)
+            results.append(result)
+        elif scraper_name == "sodre_santoro":
+            result = run_sodre_santoro(dry_run=args.dry_run, persist=args.persist)
             results.append(result)
         else:
             print(f"AVISO: Scraper '{scraper_name}' nao implementado")
