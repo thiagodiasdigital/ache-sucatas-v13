@@ -281,12 +281,14 @@ class LeiloeiroAPIClient:
             total_pages = response.total_pages
 
             # Verifica se estamos recebendo páginas repetidas (bug da API)
+            # Usa hash da página inteira (lote_ids de todos os items) para evitar falsos positivos
             if response.data:
-                first_item_hash = self.generate_content_hash(response.data[0])
-                if first_item_hash in seen_hashes:
+                page_ids = tuple(sorted(item.get("lote_id") for item in response.data))
+                page_hash = hash(page_ids)
+                if page_hash in seen_hashes:
                     logger.warning(f"Detectada página repetida em pg={current_page}, parando")
                     break
-                seen_hashes.add(first_item_hash)
+                seen_hashes.add(page_hash)
 
             # Adiciona items
             all_items.extend(response.data)
