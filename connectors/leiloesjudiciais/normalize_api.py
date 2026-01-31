@@ -177,12 +177,52 @@ class APILotNormalizer:
         valor_lance_inicial = self._normalize_valor(api_item.get("vl_lanceinicial"))
         valor_incremento = self._normalize_valor(api_item.get("vl_incremento"))
 
-        # Links
+        # Links - CORREÇÃO: Não concatenar URL hardcoded
+        # Usa resolução centralizada para obter URL canônica do lote
+        from connectors.common.url_resolution import resolve_lote_url, log_resolution, normalize_base_url
+
+        # Busca URL canônica do lote se disponível na API
+        url_lote_api = api_item.get("url_lote") or api_item.get("nm_url_lote") or api_item.get("link")
         url_leiloeiro_raw = api_item.get("nm_url_leiloeiro", "")
-        link_leiloeiro = self._normalize_url(url_leiloeiro_raw) if url_leiloeiro_raw else None
-        # Monta URL completa do lote se possível
-        if link_leiloeiro and leilao_id and lote_id:
-            link_leiloeiro = f"{link_leiloeiro}/lote/{leilao_id}/{lote_id}"
+
+        # Normaliza URLs antes de passar para resolver (garante consistência)
+        url_leiloeiro_normalized = normalize_base_url(url_leiloeiro_raw)
+
+        # Constrói URL de fallback com padrão correto (se tiver dados suficientes)
+        fallback_url = None
+        if url_leiloeiro_normalized and leilao_id and lote_id:
+            # Padrão correto: /leilao/index/leilao_id/{leilao_id}/lote/{lote_id}
+            fallback_url = f"{url_leiloeiro_normalized}/leilao/index/leilao_id/{leilao_id}/lote/{lote_id}"
+
+        # Resolve URL usando estratégia em cascata
+        url_result = resolve_lote_url(
+            candidate_urls=[url_lote_api, url_leiloeiro_normalized],
+            candidate_labels=["api_canonical", "api_canonical"],  # Ambos vêm da API
+            fallback_constructed=fallback_url,  # Fallback com padrão correto
+            validate_http=False,  # Validação HTTP feita em batch no backfill
+        )
+
+        link_leiloeiro = url_result.final_url
+
+        # Armazena metadados de resolução para auditoria
+        url_resolution_metadata = url_result.to_dict()
+
+        # Se resolução falhou, determina causa específica para auditoria
+        if url_result.resolution_method == "failed":
+            # Verifica se url_leiloeiro_normalized é apenas domínio base (sem path)
+            is_base_only = bool(url_leiloeiro_normalized) and not self._url_has_path(url_leiloeiro_normalized)
+
+            if not url_lote_api:
+                # API não retornou URL canônica - causa mais comum
+                url_resolution_metadata["resolution_method"] = "missing_canonical"
+                if is_base_only:
+                    url_resolution_metadata["error"] = "API não retornou URL canônica do lote (apenas base domain disponível)"
+                else:
+                    url_resolution_metadata["error"] = "API não retornou URL canônica do lote"
+            # link_leiloeiro permanece None - não inventar URL
+
+        # Loga se necessário (constructed=True, redirect, ou erro)
+        log_resolution(url_result, context=f"lote:{lote_id}")
 
         link_edital = self._extract_link_edital(api_item.get("anexos", []))
 
@@ -211,6 +251,8 @@ class APILotNormalizer:
             "nm_statuslote": api_item.get("nm_statuslote"),
             "nu_visitas": api_item.get("nu_visitas"),
             "extraction_timestamp": datetime.now(BR_TZ).isoformat(),
+            # AUDITORIA: Metadados de resolução de URL
+            "url_resolution": url_resolution_metadata,
         }
 
         # Calcula confidence score
@@ -371,6 +413,27 @@ class APILotNormalizer:
             return f"https://{url}"
 
         return url
+
+    def _url_has_path(self, url: Optional[str]) -> bool:
+        """
+        Verifica se URL tem path além do domínio base.
+
+        Retorna False para URLs como:
+        - https://example.com
+        - https://example.com/
+
+        Retorna True para URLs como:
+        - https://example.com/leilao/123
+        """
+        if not url:
+            return False
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            path = parsed.path.strip("/")
+            return bool(path)
+        except Exception:
+            return False
 
     def _normalize_cidade(self, cidade: Optional[str]) -> Optional[str]:
         """Normaliza nome da cidade."""
