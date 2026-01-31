@@ -37,6 +37,8 @@ export function useAuctions() {
     data_publicacao_ate: searchParams.get("data_publicacao_ate") || undefined,
     data_leilao_de: searchParams.get("data_leilao_de") || undefined,
     data_leilao_ate: searchParams.get("data_leilao_ate") || undefined,
+    // Busca por texto
+    busca: searchParams.get("busca") || undefined,
   }
 
   return useQuery<PaginatedAuctionsResponse, Error>({
@@ -57,6 +59,7 @@ export function useAuctions() {
           p_ordenacao: ordenacao,
           p_temporalidade: temporalidade,
           p_source: null, // null = ambas fontes (PNCP + Leiloeiro)
+          p_busca: filters.busca || null, // Busca por texto
         } as never
       )
 

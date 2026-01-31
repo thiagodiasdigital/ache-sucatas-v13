@@ -415,6 +415,8 @@ export interface AuctionFilters {
   data_publicacao_ate?: string
   data_leilao_de?: string
   data_leilao_ate?: string
+  // Busca por texto
+  busca?: string
   limit?: number
   offset?: number
 }
