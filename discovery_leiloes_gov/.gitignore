@@ -1,0 +1,6 @@
+# Outputs gerados (nao versionar)
+outputs/
+*.jsonl
+*.pyc
+__pycache__/
+.env

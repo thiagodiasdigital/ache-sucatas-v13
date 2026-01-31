@@ -1,0 +1,378 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created_at": "2026-01-31",
+    "description": "Seeds iniciais para descoberta de fontes de leiloes de veiculos governamentais",
+    "notes": "URLs marcadas como needs_discovery devem ser validadas manualmente"
+  },
+  "categories": {
+    "detran": {
+      "description": "Departamentos Estaduais de Transito",
+      "seeds": [
+        {
+          "uf": "SP",
+          "url": "https://www.detran.sp.gov.br",
+          "status": "needs_discovery",
+          "notes": "Maior DETRAN do pais, leiloes frequentes"
+        },
+        {
+          "uf": "RJ",
+          "url": "https://www.detran.rj.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "MG",
+          "url": "https://www.detran.mg.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "PR",
+          "url": "https://www.detran.pr.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "RS",
+          "url": "https://www.detran.rs.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "SC",
+          "url": "https://www.detran.sc.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "BA",
+          "url": "https://www.detran.ba.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "PE",
+          "url": "https://www.detran.pe.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "CE",
+          "url": "https://www.detran.ce.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "GO",
+          "url": "https://www.detran.go.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "DF",
+          "url": "https://www.detran.df.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "ES",
+          "url": "https://www.detran.es.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "PA",
+          "url": "https://www.detran.pa.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "AM",
+          "url": "https://www.detran.am.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "MT",
+          "url": "https://www.detran.mt.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "MS",
+          "url": "https://www.detran.ms.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "MA",
+          "url": "https://www.detran.ma.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "PB",
+          "url": "https://www.detran.pb.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "RN",
+          "url": "https://www.detran.rn.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "PI",
+          "url": "https://www.detran.pi.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "AL",
+          "url": "https://www.detran.al.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "SE",
+          "url": "https://www.detran.se.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "TO",
+          "url": "https://www.detran.to.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "RO",
+          "url": "https://www.detran.ro.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "AC",
+          "url": "https://www.detran.ac.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "AP",
+          "url": "https://www.detran.ap.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        },
+        {
+          "uf": "RR",
+          "url": "https://www.detran.rr.gov.br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes"
+        }
+      ]
+    },
+    "diario_oficial": {
+      "description": "Diarios Oficiais estaduais e da Uniao",
+      "seeds": [
+        {
+          "nome": "Diario Oficial da Uniao",
+          "url": "https://www.in.gov.br/",
+          "status": "confirmed",
+          "notes": "Portal oficial, publica editais de leilao federal"
+        },
+        {
+          "uf": "SP",
+          "nome": "Diario Oficial SP",
+          "url": "https://www.imprensaoficial.com.br/",
+          "status": "confirmed",
+          "notes": "Imprensa Oficial do Estado de SP"
+        },
+        {
+          "uf": "RJ",
+          "nome": "Diario Oficial RJ",
+          "url": "https://www.ioerj.com.br/",
+          "status": "needs_discovery",
+          "notes": "Verificar portal"
+        },
+        {
+          "uf": "MG",
+          "nome": "Diario Oficial MG",
+          "url": "https://www.iof.mg.gov.br/",
+          "status": "needs_discovery",
+          "notes": "Imprensa Oficial MG"
+        },
+        {
+          "uf": "RS",
+          "nome": "Diario Oficial RS",
+          "url": "https://www.diariooficial.rs.gov.br/",
+          "status": "needs_discovery",
+          "notes": "Verificar portal"
+        },
+        {
+          "uf": "PR",
+          "nome": "Diario Oficial PR",
+          "url": "https://www.imprensaoficial.pr.gov.br/",
+          "status": "needs_discovery",
+          "notes": "Verificar portal"
+        },
+        {
+          "uf": "BA",
+          "nome": "Diario Oficial BA",
+          "url": "https://www.egba.ba.gov.br/",
+          "status": "needs_discovery",
+          "notes": "EGBA - Empresa Grafica da Bahia"
+        }
+      ]
+    },
+    "federal": {
+      "description": "Orgaos federais que realizam leiloes",
+      "seeds": [
+        {
+          "nome": "Receita Federal - SLE",
+          "url": "https://www25.receita.fazenda.gov.br/sle-sociedade/portal",
+          "status": "confirmed",
+          "notes": "Sistema de Leilao Eletronico da RFB - fonte oficial de leiloes"
+        },
+        {
+          "nome": "Receita Federal - Editais",
+          "url": "https://www.gov.br/receitafederal/pt-br/assuntos/leilao",
+          "status": "confirmed",
+          "notes": "Pagina de leiloes no portal GOV.BR"
+        },
+        {
+          "nome": "Policia Federal",
+          "url": "https://www.gov.br/pf/pt-br",
+          "status": "needs_discovery",
+          "notes": "Verificar secao de leiloes/alienacao"
+        },
+        {
+          "nome": "Policia Rodoviaria Federal",
+          "url": "https://www.gov.br/prf/pt-br",
+          "status": "needs_discovery",
+          "notes": "PRF realiza leiloes de veiculos apreendidos"
+        },
+        {
+          "nome": "PNCP",
+          "url": "https://pncp.gov.br/",
+          "status": "confirmed",
+          "notes": "Portal Nacional de Contratacoes Publicas - API disponivel"
+        },
+        {
+          "nome": "ComprasNet",
+          "url": "https://www.gov.br/compras/pt-br",
+          "status": "confirmed",
+          "notes": "Portal de compras do governo federal"
+        }
+      ]
+    },
+    "prefeituras": {
+      "description": "Prefeituras de capitais e municipios grandes (placeholders)",
+      "notes": "URLs especificas de leilao devem ser descobertas manualmente",
+      "seeds": [
+        {
+          "cidade": "Sao Paulo",
+          "uf": "SP",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Rio de Janeiro",
+          "uf": "RJ",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Belo Horizonte",
+          "uf": "MG",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Salvador",
+          "uf": "BA",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Curitiba",
+          "uf": "PR",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Porto Alegre",
+          "uf": "RS",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Recife",
+          "uf": "PE",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Fortaleza",
+          "uf": "CE",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        },
+        {
+          "cidade": "Brasilia",
+          "uf": "DF",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "GDF - Governo do Distrito Federal"
+        },
+        {
+          "cidade": "Campinas",
+          "uf": "SP",
+          "url": null,
+          "status": "needs_discovery",
+          "notes": "Procurar portal de licitacoes/leiloes da prefeitura"
+        }
+      ]
+    },
+    "leiloeiras_oficiais": {
+      "description": "Leiloeiras credenciadas por orgaos publicos",
+      "notes": "Estas sao leiloeiras privadas mas que operam leiloes oficiais",
+      "seeds": [
+        {
+          "nome": "LeiloesJudiciais.com.br",
+          "url": "https://www.leiloesjudiciais.com.br",
+          "api_url": "https://api.leiloesjudiciais.com.br/core/api",
+          "status": "confirmed",
+          "notes": "JA INTEGRADO no projeto - API funcionando"
+        },
+        {
+          "nome": "Sodre Santoro",
+          "url": "https://www.sodresantoro.com.br",
+          "status": "needs_discovery",
+          "notes": "Grande leiloeira, opera leiloes de DETRAN e orgaos publicos"
+        },
+        {
+          "nome": "Superbid",
+          "url": "https://www.superbid.net",
+          "status": "needs_discovery",
+          "notes": "Plataforma de leiloes, verifica se tem API"
+        },
+        {
+          "nome": "Lance Total",
+          "url": "https://www.lancetotal.com.br",
+          "status": "needs_discovery",
+          "notes": "Leiloeira nacional"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,85 @@
+# Keywords para descoberta de leiloes de veiculos governamentais
+# Uma palavra-chave por linha
+
+# Termos principais
+leilao
+leilão
+edital de leilao
+edital de leilão
+leilao de veiculos
+leilão de veículos
+leilao de bens
+leilão de bens
+
+# Veiculos e sucatas
+veiculos apreendidos
+veículos apreendidos
+sucata de veiculo
+sucata de veículo
+sucata veicular
+sucata aproveitavel
+sucata aproveitável
+sucata inservivel
+sucata inservível
+veiculos inserviveis
+veículos inservíveis
+veiculos recuperaveis
+veículos recuperáveis
+
+# Patios e remocao
+patio de veiculos
+pátio de veículos
+patio apreensao
+pátio apreensão
+remocao de veiculos
+remoção de veículos
+deposito de veiculos
+depósito de veículos
+
+# Alienacao e bens
+alienacao
+alienação
+alienacao de bens
+alienação de bens
+bens inserviveis
+bens inservíveis
+bens moveis
+bens móveis
+bens patrimoniais
+
+# Lotes e editais
+lotes
+lote de veiculos
+lote de veículos
+edital
+pregao
+pregão
+hasta publica
+hasta pública
+concorrencia publica
+concorrência pública
+
+# DETRAN especificos
+detran leilao
+detran leilão
+detran veiculos
+detran veículos
+leilao detran
+leilão detran
+veiculos retidos
+veículos retidos
+
+# Receita Federal
+receita federal leilao
+receita federal leilão
+alfandega
+alfândega
+mercadorias apreendidas
+
+# Policia
+policia federal leilao
+polícia federal leilão
+policia rodoviaria
+polícia rodoviária
+dprf veiculos
+dprf veículos

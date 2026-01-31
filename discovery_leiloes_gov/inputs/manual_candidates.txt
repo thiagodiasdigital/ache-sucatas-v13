@@ -1,0 +1,122 @@
+# URLs candidatas coletadas via WebSearch
+# Gerado em: 2026-01-31
+
+# ============================================================
+# DETRAN - SAO PAULO
+# ============================================================
+https://www.detran.sp.gov.br/detransp/en/servicos/leiloes?id=leiloes
+https://www.detran.sp.gov.br/detransp?id=editais_leilao
+https://www.detran.sp.gov.br/wps/portal/portaldetran/detran/legislacao/leiloes/
+
+# ============================================================
+# DETRAN - RIO DE JANEIRO
+# ============================================================
+https://www.detran.rj.gov.br/_documento.asp?cod=11039
+https://www.detran.rj.gov.br/menu/menu-veiculo.html
+
+# ============================================================
+# DETRAN - PARANA
+# ============================================================
+https://www.detran.pr.gov.br/Pagina/Leiloes-publicos
+
+# ============================================================
+# DETRAN - MINAS GERAIS
+# ============================================================
+https://leilao.detran.mg.gov.br/
+
+# ============================================================
+# DETRAN - RIO GRANDE DO SUL
+# ============================================================
+https://www.detran.rs.gov.br/veiculos/servicos/1006
+https://pcsdetran.rs.gov.br/consulta-calendario-leilao
+
+# ============================================================
+# DETRAN - SANTA CATARINA
+# ============================================================
+https://www.detran.sc.gov.br/leiloes/
+https://portal.detran.sc.gov.br/leiloes/veiculos-previstos-para-o-leilao/
+
+# ============================================================
+# DETRAN - BAHIA
+# ============================================================
+http://www.detran.ba.gov.br/leiloes
+
+# ============================================================
+# DETRAN - GOIAS
+# ============================================================
+https://www.detran.go.gov.br/
+
+# ============================================================
+# DETRAN - PERNAMBUCO
+# ============================================================
+https://www.detran.pe.gov.br/veiculos-recolhidos-e-leilao
+https://detran.pe.gov.br/index.php?id=93&option=com_content&view=category
+
+# ============================================================
+# DETRAN - CEARA
+# ============================================================
+https://www.detran.ce.gov.br/category/leilao/
+
+# ============================================================
+# DETRAN - DISTRITO FEDERAL
+# ============================================================
+https://www.detran.df.gov.br/category/leilao/
+
+# ============================================================
+# DETRAN - MATO GROSSO
+# ============================================================
+https://www.detran.mt.gov.br/
+
+# ============================================================
+# DETRAN - PARAIBA
+# ============================================================
+https://detran.pb.gov.br/leilao1
+
+# ============================================================
+# DETRAN - RONDONIA
+# ============================================================
+https://www.detran.ro.gov.br/post/categoria/editais-de-leiloes
+
+# ============================================================
+# PRF - POLICIA RODOVIARIA FEDERAL
+# ============================================================
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf/parana
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf/mato-grosso
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf/amapa
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf/santa-catarina
+https://www.gov.br/prf/pt-br/assuntos/leiloes-prf/minas-gerais
+
+# ============================================================
+# RECEITA FEDERAL
+# ============================================================
+https://www.gov.br/receitafederal/pt-br/assuntos/leilao
+https://www25.receita.fazenda.gov.br/sle-sociedade/portal
+
+# ============================================================
+# PNCP - PORTAL NACIONAL DE CONTRATACOES PUBLICAS
+# ============================================================
+https://pncp.gov.br/
+
+# ============================================================
+# DIARIO OFICIAL DA UNIAO
+# ============================================================
+https://www.in.gov.br/
+
+# ============================================================
+# LEILOEIRAS CREDENCIADAS
+# ============================================================
+https://www.sodresantoro.com.br/
+https://www.superbid.net/
+https://www.leiloesjudiciais.com.br
+https://www.lancecertoleiloes.com.br
+https://www.montenegroleiloes.com.br
+https://www.rjleiloes.com.br
+https://www.dgleiloes.com.br
+
+# ============================================================
+# PREFEITURAS
+# ============================================================
+https://www.ubatuba.sp.gov.br/destaques/leilao26/
+https://www.agenciasp.sp.gov.br/detran-sp-leilao-de-itanhaem-tem-carros-a-partir-de-r-1-800/
+https://www.dmi.sp.gov.br/
