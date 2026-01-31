@@ -43,12 +43,19 @@ try:
 except ImportError:
     HAS_JOAO_EMILIO = False
 
+# Import para Palácio dos Leilões (requer playwright)
+try:
+    from palacio_leiloes import PalacioLeiloesScraper
+    HAS_PALACIO_LEILOES = True
+except ImportError:
+    HAS_PALACIO_LEILOES = False
+
 # ============================================================
 # CONFIGURACAO
 # ============================================================
 
 OUTPUT_DIR = Path(__file__).parent.parent / "outputs"
-SCRAPERS_ENABLED = ["detran_mg", "sodre_santoro", "prf", "joao_emilio"]  # Scrapers ativos
+SCRAPERS_ENABLED = ["detran_mg", "sodre_santoro", "prf", "joao_emilio", "palacio_leiloes"]  # Scrapers ativos
 
 
 # ============================================================
@@ -287,6 +294,55 @@ def run_joao_emilio(dry_run: bool = False, persist: bool = False) -> dict:
         }
 
 
+def run_palacio_leiloes(dry_run: bool = False, persist: bool = False) -> dict:
+    """Executa scraper Palácio dos Leilões"""
+    import asyncio
+
+    print("\n" + "=" * 60)
+    print("PALÁCIO DOS LEILÕES")
+    print("=" * 60)
+
+    if not HAS_PALACIO_LEILOES:
+        print("[SKIP] Playwright não instalado - pulando Palácio dos Leilões")
+        print("       Instale com: pip install playwright && playwright install chromium")
+        return {"scraper": "palacio_leiloes", "status": "skipped", "reason": "playwright not installed"}
+
+    if dry_run:
+        print("[DRY-RUN] Scraper Palácio dos Leilões seria executado")
+        return {"scraper": "palacio_leiloes", "status": "dry_run", "veiculos": 0}
+
+    output_dir = OUTPUT_DIR / "palacio_leiloes"
+    scraper = PalacioLeiloesScraper(output_dir=output_dir, headless=True)
+
+    try:
+        # Executar async
+        veiculos = asyncio.run(scraper.run())
+
+        result = {
+            "scraper": "palacio_leiloes",
+            "status": "success",
+            "veiculos": len(veiculos),
+            "leiloes": scraper.metrics.get("leiloes_found", 0),
+            "requests": scraper.metrics["requests_made"],
+            "errors": len(scraper.metrics["errors"])
+        }
+
+        # Persistir se solicitado
+        if persist and veiculos:
+            result["persisted"] = persist_to_supabase(veiculos)
+
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "scraper": "palacio_leiloes",
+            "status": "error",
+            "error": str(e)
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Daily Scrapers")
     parser.add_argument("--dry-run", action="store_true",
@@ -323,6 +379,9 @@ def main():
             results.append(result)
         elif scraper_name == "joao_emilio":
             result = run_joao_emilio(dry_run=args.dry_run, persist=args.persist)
+            results.append(result)
+        elif scraper_name == "palacio_leiloes":
+            result = run_palacio_leiloes(dry_run=args.dry_run, persist=args.persist)
             results.append(result)
         else:
             print(f"AVISO: Scraper '{scraper_name}' nao implementado")
