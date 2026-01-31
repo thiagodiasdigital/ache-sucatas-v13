@@ -29,12 +29,19 @@ try:
 except ImportError:
     HAS_SODRE_SANTORO = False
 
+# Import para PRF
+try:
+    from prf import PRFScraper
+    HAS_PRF = True
+except ImportError:
+    HAS_PRF = False
+
 # ============================================================
 # CONFIGURACAO
 # ============================================================
 
 OUTPUT_DIR = Path(__file__).parent.parent / "outputs"
-SCRAPERS_ENABLED = ["detran_mg", "sodre_santoro"]  # Scrapers ativos
+SCRAPERS_ENABLED = ["detran_mg", "sodre_santoro", "prf"]  # Scrapers ativos
 
 
 # ============================================================
@@ -177,6 +184,53 @@ def run_sodre_santoro(dry_run: bool = False, persist: bool = False) -> dict:
         }
 
 
+def run_prf(dry_run: bool = False, persist: bool = False) -> dict:
+    """Executa scraper PRF (editais de leilão)"""
+    print("\n" + "=" * 60)
+    print("PRF - POLÍCIA RODOVIÁRIA FEDERAL")
+    print("=" * 60)
+
+    if not HAS_PRF:
+        print("[SKIP] Módulo PRF não encontrado")
+        return {"scraper": "prf", "status": "skipped", "reason": "module not found"}
+
+    if dry_run:
+        print("[DRY-RUN] Scraper PRF seria executado")
+        return {"scraper": "prf", "status": "dry_run", "editais": 0}
+
+    output_dir = OUTPUT_DIR / "prf"
+    scraper = PRFScraper(output_dir=output_dir)
+
+    try:
+        editais = scraper.run()
+
+        result = {
+            "scraper": "prf",
+            "status": "success",
+            "editais": len(editais),
+            "estados": scraper.metrics.get("estados_coletados", 0),
+            "requests": scraper.metrics["requests_made"],
+            "errors": len(scraper.metrics["errors"])
+        }
+
+        # PRF coleta editais, não veículos diretamente
+        # Persistência seria diferente (tabela de editais)
+        if persist and editais:
+            # TODO: Implementar persistência de editais
+            print("[INFO] Persistência de editais PRF não implementada ainda")
+
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "scraper": "prf",
+            "status": "error",
+            "error": str(e)
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Daily Scrapers")
     parser.add_argument("--dry-run", action="store_true",
@@ -207,6 +261,9 @@ def main():
             results.append(result)
         elif scraper_name == "sodre_santoro":
             result = run_sodre_santoro(dry_run=args.dry_run, persist=args.persist)
+            results.append(result)
+        elif scraper_name == "prf":
+            result = run_prf(dry_run=args.dry_run, persist=args.persist)
             results.append(result)
         else:
             print(f"AVISO: Scraper '{scraper_name}' nao implementado")
