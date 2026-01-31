@@ -20,6 +20,10 @@ export function TopFilterBar() {
   const currentValorMin = searchParams.get("valor_min") || ""
   const currentOrdenacao = searchParams.get("ordenacao") || "proximos"
   const currentTemporalidade = searchParams.get("temporalidade") || "futuros"
+  const currentBusca = searchParams.get("busca") || ""
+
+  // Estado local para busca (evita reload a cada tecla)
+  const [localBusca, setLocalBusca] = useState(currentBusca)
 
   // Filtros de data da URL
   const urlDataPublicacaoDe = searchParams.get("data_publicacao_de") || ""
@@ -39,7 +43,8 @@ export function TopFilterBar() {
     setLocalDataPublicacaoAte(urlDataPublicacaoAte)
     setLocalDataLeilaoDe(urlDataLeilaoDe)
     setLocalDataLeilaoAte(urlDataLeilaoAte)
-  }, [urlDataPublicacaoDe, urlDataPublicacaoAte, urlDataLeilaoDe, urlDataLeilaoAte])
+    setLocalBusca(currentBusca)
+  }, [urlDataPublicacaoDe, urlDataPublicacaoAte, urlDataLeilaoDe, urlDataLeilaoAte, currentBusca])
 
   const { data: ufs, isLoading: loadingUFs } = useAvailableUFs()
   const { data: cidades, isLoading: loadingCidades } = useCitiesByUF(
@@ -74,7 +79,19 @@ export function TopFilterBar() {
 
   const hasFilters = currentUF || currentCidade || currentValorMin ||
     urlDataPublicacaoDe || urlDataPublicacaoAte ||
-    urlDataLeilaoDe || urlDataLeilaoAte
+    urlDataLeilaoDe || urlDataLeilaoAte || currentBusca
+
+  // Aplicar busca por texto (chamada no Enter ou blur)
+  const applyBusca = () => {
+    updateFilter("busca", localBusca.trim())
+  }
+
+  // Handler para tecla Enter no campo de busca
+  const handleBuscaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      applyBusca()
+    }
+  }
 
   // Função para aplicar filtro de data (chamada no onBlur ou seleção de data válida)
   const applyDateFilter = (key: string, value: string) => {
@@ -136,6 +153,26 @@ export function TopFilterBar() {
         {/* ========== FIM FILTRO FIXO ========== */}
 
         <div className="flex flex-wrap items-end gap-4">
+          {/* Campo de Busca por Texto */}
+          <div className="flex flex-col gap-1.5 min-w-[250px]">
+            <Label htmlFor="busca" className="flex items-center gap-1">
+              <Search className="h-3 w-3" />
+              Buscar
+            </Label>
+            <Input
+              id="busca"
+              type="text"
+              placeholder="Ex: veículo, caminhão, detran..."
+              value={localBusca}
+              onChange={(e) => setLocalBusca(e.target.value)}
+              onBlur={applyBusca}
+              onKeyDown={handleBuscaKeyDown}
+            />
+          </div>
+
+          {/* Separador visual */}
+          <div className="hidden lg:block h-8 w-px bg-border" />
+
           {/* Filtro UF */}
           <div className="flex flex-col gap-1.5 min-w-[150px]">
             <Label htmlFor="uf">Estado</Label>
