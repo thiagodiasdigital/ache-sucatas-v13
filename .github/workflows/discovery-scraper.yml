@@ -12,9 +12,9 @@ on:
         type: boolean
         default: true
       scrapers:
-        description: 'Scrapers a executar (virgula-separados)'
+        description: 'Scrapers a executar (virgula-separados, vazio=todos)'
         type: string
-        default: 'detran_mg'
+        default: ''
 
 concurrency:
   group: discovery-scrapers
